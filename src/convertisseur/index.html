@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e1117">
+<title>Convertisseur</title>
+<link rel="stylesheet" href="../common.css">
+<style>
+/* Propre au convertisseur. Le reste vient de ../common.css */
+body{padding-bottom:calc(30px + env(safe-area-inset-bottom,0px))}
+.conv-head{display:block}
+.topbar .chips{margin-top:10px}
+main{max-width:720px;margin:0 auto;padding:14px 12px}
+.conv{display:grid;gap:10px}
+.fieldrow{display:grid;grid-template-columns:1fr minmax(120px,50%);gap:8px}
+input.big{font-size:20px;font-weight:600}
+input.res{font-size:20px;font-weight:600;color:var(--ac)}
+.swap{justify-self:center;width:42px;height:42px;border-radius:50%;background:var(--card2);font-size:20px;display:grid;place-items:center}
+.swap:active{transform:rotate(180deg) scale(.94);transition:transform .2s}
+.copy{background:var(--card2);border-radius:var(--r-m);padding:0 14px;font-size:14px;color:var(--mut)}
+.copy:active{transform:scale(.96)}
+
+.card h2{margin:2px 4px 8px;font-size:15px;color:var(--mut);font-weight:600}
+.list{display:grid}
+.li{display:flex;justify-content:space-between;gap:12px;padding:10px 6px;border-top:1px solid var(--line);cursor:pointer;border-radius:8px}
+.li:first-child{border-top:0}
+.li:active{background:var(--card2)}
+.li .n{color:var(--mut);font-size:14px;min-width:0}
+.li .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;word-break:break-all}
+.li.sel .v{color:var(--ac)}
+
+.rates{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--mut)}
+.rates .dot{width:8px;height:8px;border-radius:50%;background:var(--mut2);flex:none}
+.rates .dot.ok{background:var(--ok)}.rates .dot.old{background:var(--warn)}.rates .dot.ko{background:var(--err)}
+.rates button{margin-left:auto;background:var(--card2);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--fg)}
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-in conv-head">
+  <h1 class="brand">Convertisseur</h1>
+  <div class="chips" id="chips"></div>
+</div></header>
+
+<main>
+  <div class="card conv">
+    <div class="fieldrow">
+      <input type="text" id="val" class="big" inputmode="decimal" autocomplete="off" placeholder="Valeur" aria-label="Valeur à convertir">
+      <select id="from" aria-label="Unité de départ"></select>
+    </div>
+    <button class="swap" id="swap" title="Inverser" aria-label="Inverser les unités">⇅</button>
+    <div class="fieldrow">
+      <input type="text" id="res" class="res" readonly aria-label="Résultat">
+      <select id="to" aria-label="Unité d'arrivée"></select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="copy" id="copy">Copier le résultat</button>
+      <div class="hint" id="eq" style="align-self:center"></div>
+    </div>
+    <div class="rates" id="rates" hidden>
+      <span class="dot" id="rdot"></span><span id="rtxt"></span>
+      <button id="rref">Actualiser</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Toutes les conversions</h2>
+    <div class="list" id="all"></div>
+  </div>
+</main>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- Unités ---------- */
+// Chaque unité : [id, nom, symbole, facteur vers l'unité de base] (conversion linéaire),
+// ou { id, name, sym, to(v), from(v) } pour les cas non linéaires (températures).
+const L = (id,name,sym,f)=>({id,name,sym,to:v=>v*f,from:v=>v/f});
+
+const CATS = {
+  longueur:{label:"Longueur",def:["m","km"],units:[
+    L("mm","millimètre","mm",.001),L("cm","centimètre","cm",.01),L("m","mètre","m",1),L("km","kilomètre","km",1000),
+    L("in","pouce","in",.0254),L("ft","pied","ft",.3048),L("yd","yard","yd",.9144),L("mi","mile","mi",1609.344),
+    L("nmi","mille marin","nmi",1852)]},
+  masse:{label:"Masse",def:["kg","lb"],units:[
+    L("mg","milligramme","mg",1e-6),L("g","gramme","g",.001),L("kg","kilogramme","kg",1),L("t","tonne","t",1000),
+    L("oz","once","oz",.028349523125),L("lb","livre","lb",.45359237),L("st","stone","st",6.35029318)]},
+  volume:{label:"Volume",def:["l","gal"],units:[
+    L("ml","millilitre","ml",.001),L("cl","centilitre","cl",.01),L("l","litre","l",1),L("m3","mètre cube","m³",1000),
+    L("tsp","cuillère à café (US)","tsp",.00492892159375),L("tbsp","cuillère à soupe (US)","tbsp",.01478676478125),
+    L("cup","tasse (US)","cup",.2365882365),L("floz","once liquide (US)","fl oz",.0295735295625),
+    L("pt","pinte (US)","pt",.473176473),L("gal","gallon (US)","gal",3.785411784)]},
+  surface:{label:"Surface",def:["m2","ft2"],units:[
+    L("cm2","centimètre carré","cm²",1e-4),L("m2","mètre carré","m²",1),L("a","are","a",100),L("ha","hectare","ha",1e4),
+    L("km2","kilomètre carré","km²",1e6),L("in2","pouce carré","in²",6.4516e-4),L("ft2","pied carré","ft²",.09290304),
+    L("ac","acre","ac",4046.8564224),L("mi2","mile carré","mi²",2589988.110336)]},
+  temperature:{label:"Température",def:["c","f"],units:[
+    {id:"c",name:"degré Celsius",sym:"°C",to:v=>v+273.15,from:v=>v-273.15},
+    {id:"f",name:"degré Fahrenheit",sym:"°F",to:v=>(v-32)*5/9+273.15,from:v=>(v-273.15)*9/5+32},
+    {id:"k",name:"kelvin",sym:"K",to:v=>v,from:v=>v}]},
+  vitesse:{label:"Vitesse",def:["kmh","mph"],units:[
+    L("ms","mètre/seconde","m/s",1),L("kmh","kilomètre/heure","km/h",1/3.6),L("mph","mile/heure","mph",.44704),
+    L("kn","nœud","kn",1852/3600),L("fts","pied/seconde","ft/s",.3048)]},
+  temps:{label:"Temps",def:["h","min"],units:[
+    L("ms_","milliseconde","ms",.001),L("s","seconde","s",1),L("min","minute","min",60),L("h","heure","h",3600),
+    L("d","jour","j",86400),L("w","semaine","sem",604800),L("mo","mois (30,44 j)","mois",2629746),L("y","année (365,25 j)","an",31557600)]},
+  donnees:{label:"Données",def:["Mo","Mio"],units:[
+    L("bit","bit","bit",.125),L("o","octet","o",1),
+    L("Ko","kilooctet","Ko",1e3),L("Mo","mégaoctet","Mo",1e6),L("Go","gigaoctet","Go",1e9),L("To","téraoctet","To",1e12),
+    L("Kio","kibioctet","Kio",1024),L("Mio","mébioctet","Mio",1048576),L("Gio","gibioctet","Gio",1073741824),L("Tio","tébioctet","Tio",1099511627776)]},
+  energie:{label:"Énergie",def:["kwh","kcal"],units:[
+    L("j","joule","J",1),L("kj","kilojoule","kJ",1e3),L("cal","calorie","cal",4.184),L("kcal","kilocalorie","kcal",4184),
+    L("wh","wattheure","Wh",3600),L("kwh","kilowattheure","kWh",3.6e6),L("btu","BTU","BTU",1055.05585262)]},
+  pression:{label:"Pression",def:["bar","psi"],units:[
+    L("pa","pascal","Pa",1),L("hpa","hectopascal","hPa",100),L("kpa","kilopascal","kPa",1000),L("bar","bar","bar",1e5),
+    L("atm","atmosphère","atm",101325),L("psi","psi","psi",6894.757293168),L("mmhg","mm de mercure","mmHg",133.322387415)]},
+  devises:{label:"Devises",def:["EUR","USD"],units:[]}  // remplie dynamiquement
+};
+
+/* ---------- Devises ---------- */
+// Deux sources gratuites sans clé ; on essaie la première, puis la seconde.
+// Résultat normalisé : { base:"EUR", date:"YYYY-MM-DD", rates:{USD:1.08,...} }
+const SOURCES = [
+  {name:"Frankfurter (BCE)",url:"https://api.frankfurter.dev/v1/latest?base=EUR",
+   parse:j=>({date:j.date,rates:Object.assign({EUR:1},j.rates)})},
+  {name:"open.er-api.com",url:"https://open.er-api.com/v6/latest/EUR",
+   parse:j=>{ if(j.result!=="success") throw new Error("réponse invalide");
+     return {date:(j.time_last_update_utc?new Date(j.time_last_update_utc):new Date()).toISOString().slice(0,10),rates:j.rates}; }}
+];
+const RATES_KEY="convertisseur.rates.v1";
+const STATE_KEY="convertisseur.state.v1";
+const STALE_MS=24*3600*1000;
+let rates=null;      // {date,rates,src,fetchedAt}
+let rateStatus="";   // "ok" | "old" | "ko"
+
+const store={
+  get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+
+const cur=new Intl.DisplayNames(["fr"],{type:"currency"});
+function curName(code){try{return cur.of(code)||code}catch(e){return code}}
+
+function buildCurrencyUnits(){
+  const codes=Object.keys(rates.rates).sort();
+  CATS.devises.units=codes.map(c=>{
+    const r=rates.rates[c];
+    return {id:c,name:curName(c),sym:c,to:v=>v/r,from:v=>v*r};
+  });
+}
+
+async function fetchRates(force){
+  const cached=store.get(RATES_KEY);
+  if(cached&&!force&&Date.now()-cached.fetchedAt<STALE_MS){rates=cached;rateStatus="ok";return}
+  for(const s of SOURCES){
+    try{
+      const ctl=new AbortController();const t=setTimeout(()=>ctl.abort(),8000);
+      const r=await fetch(s.url,{signal:ctl.signal,cache:"no-store"});clearTimeout(t);
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const p=s.parse(await r.json());
+      if(!p.rates||!p.rates.USD) throw new Error("taux manquants");
+      rates={date:p.date,rates:p.rates,src:s.name,fetchedAt:Date.now()};
+      store.set(RATES_KEY,rates);rateStatus="ok";return;
+    }catch(e){/* source suivante */}
+  }
+  if(cached){rates=cached;rateStatus="old"}   // hors ligne : dernier taux connu
+  else{rates=null;rateStatus="ko"}
+}
+
+/* ---------- Formatage ---------- */
+function fmt(n){
+  if(!isFinite(n)) return "—";
+  if(n===0) return "0";
+  const a=Math.abs(n);
+  if(a>=1e15||a<1e-7) return n.toExponential(6).replace(".",",").replace(/,?0+e/,"e");
+  const dec=a>=1000?2:a>=1?6:10;
+  const s=new Intl.NumberFormat("fr-FR",{maximumFractionDigits:dec,maximumSignificantDigits:undefined}).format(n);
+  return s;
+}
+function fmtPlain(n){ // pour copier : sans séparateur de milliers
+  if(!isFinite(n)) return "";
+  return String(+n.toPrecision(12)).replace(".",",");
+}
+function parseNum(s){
+  s=s.replace(/[\s  ]/g,"").replace(",",".");
+  if(s===""||s==="-"||s==="+") return NaN;
+  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?Number(s):NaN;
+}
+
+/* ---------- État / UI ---------- */
+const $=id=>document.getElementById(id);
+let st=Object.assign({cat:"longueur",val:"1",from:null,to:null,pair:{}},store.get(STATE_KEY)||{});
+
+const unitsOf=()=>CATS[st.cat].units;
+const unit=id=>unitsOf().find(u=>u.id===id);
+
+function save(){st.pair[st.cat]=[st.from,st.to];store.set(STATE_KEY,{cat:st.cat,val:st.val,pair:st.pair})}
+
+function renderChips(){
+  $("chips").innerHTML=Object.entries(CATS).map(([k,c])=>
+    `<button class="chip${k===st.cat?" on":""}" data-c="${k}">${c.label}</button>`).join("");
+}
+function fillSelects(){
+  const opts=unitsOf().map(u=>`<option value="${u.id}">${u.name} (${u.sym})</option>`).join("");
+  $("from").innerHTML=opts;$("to").innerHTML=opts;
+  $("from").value=st.from;$("to").value=st.to;
+}
+function pickUnits(){
+  const us=unitsOf();
+  const ids=us.map(u=>u.id);
+  const saved=st.pair[st.cat]||CATS[st.cat].def;
+  st.from=ids.includes(saved[0])?saved[0]:ids[0];
+  st.to=ids.includes(saved[1])?saved[1]:(ids[1]||ids[0]);
+}
+
+function setCat(k){
+  st.cat=k;
+  renderChips();
+  if(k==="devises"&&!rates){ showRatesBar(); }
+  pickUnits();fillSelects();update();
+}
+
+function showRatesBar(){
+  const bar=$("rates");bar.hidden=st.cat!=="devises";
+  if(bar.hidden) return;
+  const dot=$("rdot"),txt=$("rtxt");
+  dot.className="dot "+(rateStatus||"");
+  if(rateStatus==="ok") txt.textContent=`Taux du ${rates.date} · ${rates.src}`;
+  else if(rateStatus==="old") txt.textContent=`Hors ligne : derniers taux connus (${rates.date})`;
+  else if(rateStatus==="ko") txt.textContent="Taux indisponibles (réseau ?)";
+  else txt.textContent="Chargement des taux…";
+}
+
+function update(){
+  showRatesBar();
+  const v=parseNum($("val").value);
+  const f=unit(st.from),t=unit(st.to);
+  const res=$("res"),eq=$("eq"),all=$("all");
+  if(st.cat==="devises"&&!rates){
+    res.value="";eq.textContent="";
+    all.innerHTML=`<div class="hint ${rateStatus==="ko"?"err":""}">${rateStatus==="ko"?"Impossible de récupérer les taux de change. Vérifie ta connexion puis clique sur Actualiser.":"Chargement des taux…"}</div>`;
+    return;
+  }
+  if(!f||!t){return}
+  if(isNaN(v)){
+    res.value="";eq.textContent=$("val").value.trim()?"Valeur invalide":"";
+    all.innerHTML="";save();return;
+  }
+  const base=f.to(v);
+  res.value=fmt(t.from(base));
+  eq.textContent=`1 ${f.sym} = ${fmt(t.from(f.to(1)))} ${t.sym}`;
+  all.innerHTML=unitsOf().map(u=>
+    `<div class="li${u.id===st.to?" sel":""}" data-u="${u.id}"><span class="n">${u.name}</span><span class="v">${fmt(u.from(base))} ${u.sym}</span></div>`).join("");
+  save();
+}
+
+/* ---------- Événements ---------- */
+$("chips").addEventListener("click",e=>{const b=e.target.closest("[data-c]");if(b&&b.dataset.c!==st.cat)setCat(b.dataset.c)});
+$("val").addEventListener("input",()=>{st.val=$("val").value;update()});
+$("from").addEventListener("change",()=>{st.from=$("from").value;update()});
+$("to").addEventListener("change",()=>{st.to=$("to").value;update()});
+$("swap").addEventListener("click",()=>{
+  // On reprend le résultat comme nouvelle valeur pour que ⇅ soit réversible.
+  const f=unit(st.from),t=unit(st.to),v=parseNum($("val").value);
+  if(!isNaN(v)&&f&&t){$("val").value=fmtPlain(t.from(f.to(v)));st.val=$("val").value}
+  [st.from,st.to]=[st.to,st.from];
+  $("from").value=st.from;$("to").value=st.to;update();
+});
+$("all").addEventListener("click",e=>{
+  const li=e.target.closest("[data-u]");if(!li)return;
+  st.to=li.dataset.u;$("to").value=st.to;update();
+});
+$("copy").addEventListener("click",async()=>{
+  const f=unit(st.from),t=unit(st.to),v=parseNum($("val").value);
+  if(isNaN(v)||!f||!t) return;
+  const txt=fmtPlain(t.from(f.to(v)));
+  try{await navigator.clipboard.writeText(txt);$("copy").textContent="Copié ✓"}
+  catch(e){$("res").select();document.execCommand&&document.execCommand("copy");$("copy").textContent="Copié ✓"}
+  setTimeout(()=>$("copy").textContent="Copier le résultat",1200);
+});
+$("rref").addEventListener("click",async()=>{
+  showRatesBar();$("rtxt").textContent="Actualisation…";
+  await fetchRates(true);
+  if(rates)buildCurrencyUnits();
+  if(st.cat==="devises"){pickUnits();fillSelects()}
+  update();
+});
+
+/* ---------- Démarrage ---------- */
+(async function init(){
+  $("val").value=st.val;
+  if(!CATS[st.cat]) st.cat="longueur";
+  // Les devises se chargent en arrière-plan : les autres catégories restent utilisables tout de suite.
+  const ready=fetchRates(false).then(()=>{
+    if(rates)buildCurrencyUnits();
+    if(st.cat==="devises"){pickUnits();fillSelects()}
+    update();
+  });
+  if(st.cat==="devises"){renderChips();showRatesBar();update();await ready;}
+  else{setCat(st.cat)}
+})();
+})();
+</script>
+</body>
+</html>
