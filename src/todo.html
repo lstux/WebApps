@@ -3,64 +3,65 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
-<meta name="theme-color" content="#0e1117">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>TODO</title>
-<link rel="stylesheet" href="../common.css">
+<link rel="stylesheet" href="common.css">
 <style>
-/* Propre au TODO : l'arbre, la barre de saisie fixe et les formulaires. Le reste vient de ../common.css */
-body{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}
-main{max-width:720px;margin:0 auto;padding:14px 12px}
-ul{list-style:none;margin:0;padding:0}
+/* TODO : styles spécifiques (arbre, barre fixe, formulaires). Composants du système : .btn, .card, .ring, .cb, .progress, .pct, .sheet */
+body { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+main { max-width: 720px; margin: 0 auto; padding: 14px 12px; }
+ul { list-style: none; margin: 0; padding: 0; }
 
-/* Arbre */
-li.card{padding:4px 6px 6px;overflow:hidden}
-li>ul{margin:0 0 2px 12px;padding-left:6px;border-left:2px solid var(--line)}
-.row{display:flex;align-items:flex-start;padding:3px 0 3px 0}
-.tg{width:24px;height:38px;color:var(--mut);font-size:22px;line-height:38px;transition:transform .15s;flex:none;text-align:center}
-.tg.open{transform:rotate(90deg)}
-.tg.sp{visibility:hidden}
-.body{flex:1;min-width:0;padding:8px 6px 6px 4px;cursor:pointer;border-radius:10px}
-.line1{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px}
-.title{font-weight:550;word-break:break-word;line-height:22px}
-.title.done{color:var(--mut);text-decoration:line-through;text-decoration-thickness:1.5px}
-.desc{color:var(--mut);font-size:14px;white-space:pre-wrap;word-break:break-word;margin-top:2px}
-.progress{margin-top:7px}
+/* Arbre de todos */
+li.card { padding: 4px 6px 6px; overflow: hidden; }
+li > ul { margin: 0 0 2px 12px; padding-left: 6px; border-left: 2px solid var(--line); }
+.row { display: flex; align-items: flex-start; padding: 3px 0; }
+.tg { width: 24px; height: 38px; color: var(--mut); font-size: 22px; line-height: 38px; flex: none; text-align: center; transition: transform .15s; }
+.tg.open { transform: rotate(90deg); }
+.tg.sp { visibility: hidden; }
+.body { flex: 1; min-width: 0; padding: 8px 6px 6px 4px; cursor: pointer; border-radius: var(--r-m); }
+.body:hover { background: var(--hover); }
+.line1 { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.title { font-weight: 550; word-break: break-word; line-height: 22px; }
+.title.done { color: var(--mut); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.desc { color: var(--mut); font-size: 14px; white-space: pre-wrap; word-break: break-word; margin-top: 2px; }
 
-/* Actions */
-.actions{display:flex;flex-wrap:wrap;gap:6px;margin:2px 4px 8px 38px}
-.actions button{background:var(--card2);border-radius:999px;padding:8px 13px;font-size:14px;display:flex;gap:6px;align-items:center}
-.actions button:active{transform:scale(.96)}
-.actions .danger{color:var(--err)}
+/* Actions du todo */
+.actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 4px 8px 38px; }
+.actions button { background: var(--card2); border-radius: 999px; padding: 8px 13px; font-size: 14px; display: flex; gap: 6px; align-items: center; transition: transform .12s; }
+.actions button:active { transform: scale(.96); }
+.actions .danger { color: var(--err); }
 
-/* Formulaires */
-.edit,.add{display:grid;gap:8px;margin:6px 4px 8px}
-.edit{margin-left:10px}
-.edit .btns{display:flex;gap:8px}
-.line{display:flex;gap:8px;align-items:center}
-.add .icon{width:44px;height:44px;border-radius:var(--r-m);background:var(--card2);font-size:20px;flex:none;color:var(--mut)}
-.go{width:44px;height:44px;border-radius:50%;font-size:24px;line-height:1;flex:none;color:var(--on-ac);
-  background:linear-gradient(135deg,var(--ac),var(--ac2));box-shadow:0 4px 12px color-mix(in srgb,var(--ac) 33%,transparent)}
-.go:active{transform:scale(.92)}
-.add.sub{padding:4px 0 2px 10px}
+/* Formulaires d'édition et d'ajout */
+.edit, .add { display: grid; gap: 8px; margin: 6px 4px 8px; }
+.edit { margin-left: 10px; }
+.edit .btns { display: flex; gap: 8px; }
+.line { display: flex; gap: 8px; align-items: center; }
+.add .icon { width: 44px; height: 44px; border-radius: var(--r-m); background: var(--card2); font-size: 20px; flex: none; color: var(--mut); display: grid; place-items: center; }
+.go { width: 44px; height: 44px; border-radius: 50%; font-size: 24px; line-height: 1; flex: none; color: var(--on-ac); background: linear-gradient(135deg, var(--ac), var(--ac2)); border: 0; box-shadow: 0 4px 12px color-mix(in srgb, var(--ac) 33%, transparent); transition: transform .12s; cursor: pointer; }
+.go:active { transform: scale(.92); }
+.add.sub { padding: 4px 0 2px 10px; }
 
-/* Barre de saisie fixe */
-.composer{position:fixed;left:0;right:0;bottom:0;z-index:9;padding:18px 12px calc(10px + env(safe-area-inset-bottom,0px));
-  background:linear-gradient(to top,var(--bg) 62%,transparent)}
-.composer .add{max-width:720px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:8px;box-shadow:var(--shadow);display:flex;flex-direction:column-reverse}
+/* Barre de saisie fixe (composer) */
+.composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; padding: 18px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, var(--bg) 62%, transparent); }
+.composer .add { max-width: 720px; margin: 0 auto; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 8px; box-shadow: var(--shadow); display: flex; flex-direction: column-reverse; }
 
-.empty{text-align:center;color:var(--mut);padding:56px 20px}
-.empty b{display:block;font-size:44px;margin-bottom:6px}
+/* État vide */
+.empty { text-align: center; color: var(--mut); padding: 56px 20px; }
+.empty b { display: block; font-size: 44px; margin-bottom: 6px; }
 
-/* Import */
-.sheet textarea{height:34vh;font-family:var(--f-mono);font-size:16px}
-.sheet input[type=file]{font-size:14px;flex:1;min-width:0;color:var(--mut)}
+/* Import / Export dialog */
+.sheet textarea { height: 34vh; font-family: var(--f-mono); }
+.sheet input[type=file] { flex: 1; min-width: 0; }
 </style>
 </head>
 <body>
 <header class="topbar">
   <div class="topbar-in">
-    <div class="grow"><h1 class="brand">TODO</h1><div class="subtitle" id="sub"></div></div>
+    <div class="grow">
+      <h1 class="brand">TODO</h1>
+      <div class="subtitle" id="sub"></div>
+    </div>
     <div class="ring" id="ring" hidden><span id="ringTxt"></span></div>
     <button class="iconbtn" id="btnMenu" aria-label="Menu">⋯</button>
   </div>
@@ -70,28 +71,32 @@ li>ul{margin:0 0 2px 12px;padding-left:6px;border-left:2px solid var(--line)}
 
 <div class="composer" id="composer"></div>
 
-<dialog class="sheet" id="menuDlg"><div class="inner">
-  <div class="grab"></div>
-  <button class="item" data-act="hide"><span class="ic">👁</span>Masquer les faits<span class="sw" id="hideSw"></span></button>
-  <button class="item" data-act="collapse"><span class="ic">⊟</span>Tout replier</button>
-  <button class="item" data-act="expand"><span class="ic">⊞</span>Tout déplier</button>
-  <button class="item" data-act="import"><span class="ic">⬆</span>Importer…</button>
-  <button class="item" data-act="json"><span class="ic">⬇</span>Exporter en JSON</button>
-  <button class="item" data-act="txt"><span class="ic">📄</span>Exporter en texte</button>
-</div></dialog>
-
-<dialog class="sheet" id="impDlg"><div class="inner">
-  <div class="grab"></div>
-  <h2>Importer</h2>
-  <p>Colle du JSON (export de cette page) ou une liste indentée : <code>*</code> <code>+</code> <code>-</code>, <code>[x]</code> = fait, une ligne sans puce plus indentée = description.</p>
-  <textarea id="impText" placeholder="Colle ici…"></textarea>
-  <div class="btns">
-    <input type="file" id="impFile" accept=".json,.txt,.md,text/*,application/json">
-    <button class="btn" data-act="impcancel">Annuler</button>
-    <button class="btn" data-act="impappend">Ajouter</button>
-    <button class="btn primary" data-act="impreplace">Remplacer tout</button>
+<dialog class="sheet" id="menuDlg">
+  <div class="inner">
+    <div class="grab"></div>
+    <button class="item" data-act="hide"><span class="ic">👁</span> Masquer les faits<span class="sw" id="hideSw"></span></button>
+    <button class="item" data-act="collapse"><span class="ic">⊟</span> Tout replier</button>
+    <button class="item" data-act="expand"><span class="ic">⊞</span> Tout déplier</button>
+    <button class="item" data-act="import"><span class="ic">⬆</span> Importer…</button>
+    <button class="item" data-act="json"><span class="ic">⬇</span> Exporter en JSON</button>
+    <button class="item" data-act="txt"><span class="ic">📄</span> Exporter en texte</button>
   </div>
-</div></dialog>
+</dialog>
+
+<dialog class="sheet" id="impDlg">
+  <div class="inner">
+    <div class="grab"></div>
+    <h2>Importer</h2>
+    <p>Colle du JSON (export de cette page) ou une liste indentée : <code>*</code> <code>+</code> <code>-</code>, <code>[x]</code> = fait, une ligne sans puce plus indentée = description.</p>
+    <textarea id="impText" placeholder="Colle ici…"></textarea>
+    <div class="btns">
+      <input type="file" id="impFile" accept=".json,.txt,.md,text/*,application/json">
+      <button class="btn" data-act="impcancel">Annuler</button>
+      <button class="btn" data-act="impappend">Ajouter</button>
+      <button class="btn primary" data-act="impreplace">Remplacer tout</button>
+    </div>
+  </div>
+</dialog>
 
 <script>
 const KEY = 'todo-tree-v1', UIKEY = 'todo-tree-ui';
@@ -127,7 +132,6 @@ function find(id, list = nodes) {
   }
   return null;
 }
-// Taux d'achèvement : feuilles faites / feuilles totales (tous les descendants)
 function stats(n) {
   if (!n.children.length) return { done: n.done ? 1 : 0, total: 1 };
   let d = 0, t = 0;
@@ -135,17 +139,17 @@ function stats(n) {
   return { done: d, total: t };
 }
 function setDone(n, v) { n.done = v; n.children.forEach(c => setDone(c, v)); }
-const color = pct => `hsl(${Math.round(pct * 1.2)},72%,52%)`; // rouge → vert
+const color = pct => `hsl(${Math.round(pct * 1.2)},72%,52%)`;
 
 function addFormHTML(id, showDesc, sub) {
   return `<form class="add ${sub ? 'sub' : ''}" data-for="${id}">
     <div class="line">
-      <input type="text" class="a-title" placeholder="${sub ? 'Sous-todo…' : 'Nouveau todo…'}" autocomplete="off" enterkeyhint="done">
+      <input type="text" class="field a-title" placeholder="${sub ? 'Sous-todo…' : 'Nouveau todo…'}" autocomplete="off" enterkeyhint="done">
       <button type="button" class="icon" data-act="adddesc" aria-label="Description">≡</button>
       ${sub ? '<button type="button" class="icon" data-act="canceladd" aria-label="Fermer">✕</button>' : ''}
       <button type="submit" class="go" aria-label="Ajouter">＋</button>
     </div>
-    <textarea class="a-desc" rows="2" placeholder="Description (facultatif)" ${showDesc ? '' : 'hidden'}></textarea>
+    <textarea class="field a-desc" rows="2" placeholder="Description (facultatif)" ${showDesc ? '' : 'hidden'}></textarea>
   </form>`;
 }
 
@@ -159,8 +163,8 @@ function nodeHTML(n, top) {
   let h = `<li data-id="${n.id}"${top ? ' class="card"' : ''}>`;
   if (ui.editing === n.id) {
     h += `<form class="edit" data-id="${n.id}">
-      <input type="text" class="e-title" value="${esc(n.title)}" autocomplete="off">
-      <textarea class="e-desc" rows="3" placeholder="Description (facultatif)">${esc(n.desc)}</textarea>
+      <input type="text" class="field e-title" value="${esc(n.title)}" autocomplete="off">
+      <textarea class="field e-desc" rows="3" placeholder="Description (facultatif)">${esc(n.desc)}</textarea>
       <div class="btns"><button type="submit" class="btn primary">Enregistrer</button><button type="button" class="btn" data-act="cancel">Annuler</button></div>
     </form>`;
   } else {
@@ -209,17 +213,14 @@ function render() {
 }
 function commit() { save(); render(); }
 
-// ---- Composer (nouveau todo racine)
 $('#composer').innerHTML = addFormHTML('root', false, false);
 
-// ---- Clics
 document.addEventListener('click', e => {
-  if (e.target.tagName === 'DIALOG') return e.target.close(); // clic sur le fond
+  if (e.target.tagName === 'DIALOG') return e.target.close();
   const b = e.target.closest('[data-act]');
   if (!b) return;
   const act = b.dataset.act;
 
-  // Actions globales (menu, import, formulaires)
   switch (act) {
     case 'hide': hideDone = !hideDone; try { localStorage.setItem(UIKEY, JSON.stringify({ hideDone })); } catch {} syncMenu(); return render();
     case 'collapse': setCollapsed(nodes, true); $('#menuDlg').close(); return commit();
@@ -240,7 +241,6 @@ document.addEventListener('click', e => {
     }
   }
 
-  // Actions sur un todo
   const li = b.closest('li[data-id]');
   const r = li && find(li.dataset.id);
   if (!r) return;
@@ -273,7 +273,6 @@ $('#btnMenu').onclick = () => { syncMenu(); $('#menuDlg').showModal(); };
 function syncMenu() { $('#hideSw').textContent = hideDone ? 'activé' : 'désactivé'; }
 function setCollapsed(list, v) { list.forEach(n => { n.collapsed = v; setCollapsed(n.children, v); }); }
 
-// ---- Formulaires
 document.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target;
@@ -299,7 +298,7 @@ document.addEventListener('submit', e => {
     } else {
       const r = find(f.dataset.for);
       if (r) { r.node.children.push(node); r.node.collapsed = false; }
-      commit(); // le formulaire reste ouvert pour enchaîner
+      commit();
     }
   }
 });
@@ -327,7 +326,6 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// ---- Export
 function strip(list) {
   return list.map(n => {
     const o = { title: n.title };
@@ -353,7 +351,6 @@ function download(name, text, type) {
 }
 const day = () => new Date().toISOString().slice(0, 10);
 
-// ---- Import
 function parseText(t) {
   const root = [], stack = []; let last = null;
   for (const raw of t.replace(/\t/g, '    ').split(/\r?\n/)) {
