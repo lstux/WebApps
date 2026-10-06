@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "title": "Slovingo",
+      "children": [
+        {
+          "title": "Cours sk fr kids",
+          "children": [
+            { "title": "Ajouter des annexes", "desc": "Vocabulaire, conjugaison, grammaire ?" }
+          ]
+        },
+        {
+          "title": "Cours sk fr friends",
+          "children": [
+            { "title": "Relire histoire" },
+            { "title": "Découper" },
+            { "title": "Écrire les fiches" }
+          ]
+        },
+        { "title": "Cours sk fr" },
+        { "title": "Tower control à tester" },
+        {
+          "title": "Points à régler pour rc1",
+          "children": [
+            { "title": "UI" },
+            {
+              "title": "Cours \"modèles\"",
+              "children": [
+                { "title": "Série sk-fr" },
+                { "title": "sk-fr-kids" },
+                { "title": "sk-fr-friends" }
+              ]
+            },
+            { "title": "Docs" },
+            { "title": "Relecture code", "desc": "Simplification, lisibilité… Non IA manageable" }
+          ]
+        },
+        { "title": "Root index page" }
+      ]
+    }
+  ]
+}
