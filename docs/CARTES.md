@@ -67,3 +67,43 @@ Le GeoJSON utilise `[longitude, latitude]` (standard) et le style est écrit en 
 - La recherche de lieu interroge Nominatim uniquement à l'envoi du formulaire (pas de saisie semi-automatique), conformément à sa politique d'usage.
 - Les liens Leaflet du code exporté n'ont pas d'attribut `integrity` ; tu peux l'ajouter depuis la [page de démarrage de Leaflet](https://leafletjs.com/examples/quick-start/).
 - Dans l'aperçu intégré à Claude le réseau est bloqué : ouvre la page `.html` depuis ton ordinateur.
+
+## 🔭 Pistes d'évolution
+
+Classées grossièrement par rapport utilité / effort.
+
+### Échange de données
+- **GPX** (import et export) : le format des traces de randonnée et de GPS ; KML ensuite.
+- **Partage par lien** : la carte compressée dans le fragment d'URL (`#…`), pour envoyer une carte sans fichier.
+- **Plusieurs cartes** enregistrées dans le navigateur (liste, renommer, dupliquer, supprimer), à la façon d'un vrai « manager ».
+- **Export image** (PNG) de la vue courante.
+
+### Éléments
+- **Calques / groupes** : regrouper des éléments, les masquer, leur donner une couleur commune, avec un sélecteur de calques dans la carte exportée.
+- **Formes de base** : cercle (rayon en mètres), rectangle ; polygones avec couleur de remplissage distincte du contour.
+- **Icônes personnalisées** : image par URL ou emoji plus grand ; **regroupement** automatique des points quand ils sont nombreux (`Leaflet.markercluster`).
+- **Bulles enrichies** : liens, images, mise en forme légère (Markdown restreint).
+- **Étiquettes** permanentes (`bindTooltip`) à la place des bulles au clic.
+
+### Trajets
+- **Itinéraire routier** entre deux points ou plus (OSRM ou équivalent), à pied, à vélo ou en voiture.
+- **Profil d'altitude** et dénivelé via un service d'élévation, avec distance cumulée.
+- **Accrochage** aux sommets et aux lignes existantes ; couper / fusionner des trajets ; flèches de sens.
+
+### Fonds de carte
+- **URL de tuiles personnalisée** (avec clé d'API : MapTiler, Thunderforest, IGN Géoportail…).
+- **Couches superposées** (overlays : pistes cyclables, sentiers, cadastre) et services WMS.
+
+### Édition
+- **Sélection multiple**, déplacement et copie d'un groupe d'éléments.
+- **Poignées plus grandes** sur écran tactile et édition au clavier (accessibilité).
+- Barre de **recherche dans les éléments** quand la carte en compte beaucoup.
+
+### Carte exportée
+- **Contrôles optionnels** : plein écran, légende, mini-carte, bouton de géolocalisation, échelle impériale.
+- **Attribut `integrity` (SRI)** sur les liens Leaflet, et variante **hors ligne** avec Leaflet embarqué dans la page.
+- **Chargement paresseux** : n'initialiser la carte que lorsqu'elle devient visible.
+
+### Qualité
+- Tests automatisés de la génération de code et des imports/exports (le test de bout en bout actuel est resté local).
+- Import GeoJSON : conserver les trous des polygones et les `MultiPolygon` (aujourd'hui, seul l'anneau extérieur de chaque polygone est repris).
