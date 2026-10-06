@@ -1,0 +1,1095 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Cartes Leaflet</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+/* Cartes Leaflet — styles spécifiques. Composants du système : .topbar, .btn, .iconbtn, .card, .chips, .sheet, .toast */
+body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.topbar-in { max-width: none; gap: 8px; }
+.topbar-in .iconbtn { --icon-size: 38px; }
+.topbar-in .btn { padding: 9px 14px; }
+
+/* Mise en page : panneau à gauche, carte à droite ; sur mobile, outils, carte, puis le reste */
+.app { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); }
+.panel { overflow-y: auto; padding: 12px 12px 28px; border-right: 1px solid var(--line); }
+.panel .card { margin: 0 0 12px; }
+.stage { position: relative; min-width: 0; min-height: 0; }
+#map { position: absolute; inset: 0; background: var(--card2); }
+.nolib { padding: 24px; color: var(--mut); }
+
+@media (max-width: 899px) {
+  body { display: block; height: auto; overflow: visible; }
+  .app { display: flex; flex-direction: column; padding-bottom: calc(24px + env(safe-area-inset-bottom,0px)); }
+  .panel { display: contents; }
+  .panel .card { margin: 12px 12px 0; }
+  #cTools { order: 1; }
+  .stage { order: 2; height: min(62vh, 520px); min-height: 320px; margin-top: 12px; }
+  #cProps { order: 3; } #cItems { order: 4; } #cMap { order: 5; }
+}
+
+/* Outils */
+.tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tool { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 2px 8px; border-radius: var(--r-m); background: var(--card2); font-size: 12px; font-weight: 550; line-height: 1.2; transition: transform .12s; }
+.tool b { font-size: 20px; font-weight: 400; line-height: 1.25; }
+.tool:active { transform: scale(.96); }
+.tool.on { background: linear-gradient(135deg, var(--ac), var(--ac2)); color: var(--on-ac); }
+#toolHint { min-height: 2.8em; margin: 8px 2px 4px; }
+.lbl { display: block; font-size: 12.5px; font-weight: 550; color: var(--mut); }
+.line { display: flex; gap: 6px; align-items: center; }
+.line .btn { padding: 10px 12px; }
+.sep { margin-top: 12px; }
+.geores { list-style: none; margin: 6px 0 0; padding: 0; }
+.geores button { display: block; width: 100%; text-align: left; padding: 8px; border-radius: var(--r-s); font-size: 14px; }
+.geores button:hover { background: var(--hover); }
+
+/* Cartes du panneau */
+.cardhead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.cardhead h2 { margin: 0; font-size: 16px; flex: 1; }
+.phead { display: flex; align-items: center; gap: 8px; }
+.phead h2 { margin: 0; font-size: 16px; flex: 1; }
+.phead .btn.icon { --icon-size: 36px; font-size: 17px; }
+.fld { display: grid; gap: 4px; margin-top: 10px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.swt { width: 28px; height: 28px; border-radius: 50%; background: var(--c); border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line); }
+.swt.on { box-shadow: 0 0 0 2px var(--ac); }
+input[type=color] { -webkit-appearance: none; appearance: none; width: 28px; height: 28px; padding: 0; border: 0; background: none; border-radius: 50%; cursor: pointer; overflow: hidden; }
+input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type=color]::-webkit-color-swatch { border: 2px solid var(--card); border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
+input[type=color]::-moz-color-swatch { border: 2px solid var(--card); border-radius: 50%; }
+.syms { display: flex; flex-wrap: wrap; gap: 4px; }
+.sym { min-width: 34px; height: 34px; padding: 0 4px; border-radius: var(--r-s); background: var(--card2); font-size: 17px; display: grid; place-items: center; }
+.sym.on { box-shadow: inset 0 0 0 2px var(--ac); }
+.check { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 15px; }
+.check input { width: 20px; height: 20px; accent-color: var(--ac); flex: none; margin: 0; }
+input[type=range] { width: 100%; accent-color: var(--ac); }
+.btnrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.btnrow .btn { padding: 8px 12px; font-size: 14px; }
+.stat { font-size: 13px; color: var(--mut); margin-top: 10px; }
+
+/* Liste des éléments */
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.li { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 8px; border-radius: var(--r-m); }
+.li:hover { background: var(--hover); }
+.li.on { background: var(--ac-soft); }
+.li .mk { flex: none; width: 22px; display: grid; place-items: center; }
+.li .mk i { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px var(--card); }
+.li .mk i.ln { width: 22px; height: 5px; border-radius: 3px; }
+.li .tx { min-width: 0; flex: 1; }
+.li .t { display: block; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.li .s { display: block; font-size: 12.5px; color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { color: var(--mut); font-size: 14px; padding: 6px 4px; }
+
+/* Barre flottante du tracé en cours */
+.drawbar { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 900; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--shadow); max-width: calc(100% - 24px); }
+.drawbar span { font-size: 13px; color: var(--mut); white-space: nowrap; }
+.drawbar .btn { padding: 8px 12px; font-size: 14px; }
+
+/* Carte en édition */
+.leaflet-container.mode-marker, .leaflet-container.mode-path, .leaflet-container.mode-free { cursor: crosshair; }
+.leaflet-container.mode-free { touch-action: none !important; }
+.mode-marker .leaflet-interactive, .mode-path .leaflet-interactive, .mode-free .leaflet-interactive { pointer-events: none !important; }
+.lm-pin.sel svg { filter: drop-shadow(0 0 4px var(--ac)) drop-shadow(0 1px 2px var(--ac)) !important; }
+.lm-sel { filter: drop-shadow(0 0 3px var(--ac)); }
+.lm-vtx { border-radius: 50%; background: var(--card); border: 2px solid var(--ac); box-shadow: var(--shadow); cursor: move; }
+.lm-vtx.first { background: var(--ok); }
+.lm-mid { border-radius: 50%; background: var(--ac); border: 1px solid var(--card); opacity: .55; cursor: copy; }
+.lm-mid:hover { opacity: 1; }
+
+/* Feuilles : import / export */
+#expDlg { max-width: 760px; }
+.sheet textarea { height: 34vh; font-family: var(--f-mono); font-size: 13px; white-space: pre; overflow: auto; }
+.sheet input[type=file] { flex: 1; min-width: 0; }
+.expopts { display: flex; align-items: center; gap: 8px; margin: 10px 8px 0; }
+.expopts label { font-size: 13.5px; color: var(--mut); white-space: nowrap; }
+.expopts input { max-width: 200px; }
+#expTabs { margin: 4px 8px 0; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="grow">
+      <h1 class="brand">Cartes</h1>
+      <div class="subtitle" id="sub">Leaflet</div>
+    </div>
+    <button class="iconbtn" id="btnUndo" aria-label="Annuler" title="Annuler (Ctrl+Z)">↶</button>
+    <button class="iconbtn" id="btnRedo" aria-label="Rétablir" title="Rétablir (Ctrl+Maj+Z)">↷</button>
+    <button class="btn primary" id="btnExport">‹/› Exporter</button>
+    <button class="iconbtn" id="btnMenu" aria-label="Menu">⋯</button>
+  </div>
+</header>
+
+<main class="app">
+  <aside class="panel" id="panel">
+    <section class="card" id="cTools">
+      <div class="tools" id="tools" role="toolbar" aria-label="Outils">
+        <button class="tool on" data-mode="select" title="Sélection (V)" aria-pressed="true"><b>↖</b>Sélection</button>
+        <button class="tool" data-mode="marker" title="Point (P)" aria-pressed="false"><b>📍</b>Point</button>
+        <button class="tool" data-mode="path" title="Trajet (T)" aria-pressed="false"><b>🛣️</b>Trajet</button>
+        <button class="tool" data-mode="free" title="Main levée (M)" aria-pressed="false"><b>✏️</b>Main levée</button>
+      </div>
+      <p class="hint" id="toolHint"></p>
+      <label class="lbl" for="tile">Fond de carte</label>
+      <select id="tile"></select>
+      <form class="line sep" id="geoForm" autocomplete="off">
+        <input type="search" id="geoQ" placeholder="Aller à un lieu…" aria-label="Rechercher un lieu">
+        <button class="btn" type="submit" aria-label="Rechercher" title="Rechercher">🔍</button>
+        <button class="btn" type="button" id="btnLocate" aria-label="Ma position" title="Ma position">◎</button>
+      </form>
+      <ul class="geores" id="geoRes" hidden></ul>
+    </section>
+
+    <section class="card" id="cProps" hidden><div id="props"></div></section>
+
+    <section class="card" id="cItems">
+      <div class="cardhead"><h2>Éléments</h2><span class="muted" id="itemCount"></span></div>
+      <ul class="list" id="list"></ul>
+    </section>
+
+    <section class="card" id="cMap">
+      <div class="cardhead"><h2>Carte</h2></div>
+      <label class="check"><input type="checkbox" data-o="zoomControl"> Boutons de zoom</label>
+      <label class="check"><input type="checkbox" data-o="scale"> Échelle</label>
+      <label class="check"><input type="checkbox" data-o="scrollWheel"> Zoom à la molette <span class="muted">(carte exportée)</span></label>
+      <div class="row2">
+        <label class="fld"><span class="lbl">Hauteur (px)</span><input type="number" data-o="height" min="150" max="1600" step="10"></label>
+        <label class="fld"><span class="lbl">Cadrage exporté</span>
+          <select data-o="framing"><option value="view">Vue actuelle</option><option value="fit">Tout afficher</option></select>
+        </label>
+      </div>
+      <p class="stat" id="viewInfo"></p>
+      <div class="btnrow"><button class="btn" id="btnFit">⤢ Cadrer sur les éléments</button></div>
+    </section>
+  </aside>
+
+  <section class="stage">
+    <div id="map"></div>
+    <div class="drawbar" id="drawbar" hidden>
+      <span id="drawInfo"></span>
+      <button class="btn" data-d="back" title="Retirer le dernier point (Retour arrière)">↶</button>
+      <button class="btn primary" data-d="done">✓ Terminer</button>
+      <button class="btn" data-d="cancel">✕</button>
+    </div>
+  </section>
+</main>
+
+<dialog class="sheet" id="menuDlg">
+  <div class="inner">
+    <div class="grab"></div>
+    <button class="item" data-act="import"><span class="ic">⬆</span> Importer…</button>
+    <button class="item" data-act="fit"><span class="ic">⤢</span> Cadrer sur les éléments</button>
+    <button class="item" data-act="locate"><span class="ic">◎</span> Ma position</button>
+    <button class="item" data-act="clear"><span class="ic">🗑</span> Tout effacer</button>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="impDlg">
+  <div class="inner">
+    <div class="grab"></div>
+    <h2>Importer</h2>
+    <p>Colle un export JSON de cette page ou un fichier GeoJSON (points, lignes, polygones).</p>
+    <textarea id="impText" placeholder="Colle ici…" spellcheck="false"></textarea>
+    <div class="btns">
+      <input type="file" id="impFile" accept=".json,.geojson,application/json,application/geo+json,text/plain">
+      <button class="btn" data-act="impcancel">Annuler</button>
+      <button class="btn" data-act="impappend">Ajouter</button>
+      <button class="btn primary" data-act="impreplace">Remplacer tout</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="expDlg">
+  <div class="inner">
+    <div class="grab"></div>
+    <h2>Exporter</h2>
+    <div class="chips" id="expTabs">
+      <button class="chip on" data-k="fragment">Fragment HTML</button>
+      <button class="chip" data-k="page">Page complète</button>
+      <button class="chip" data-k="json">JSON</button>
+      <button class="chip" data-k="geojson">GeoJSON</button>
+    </div>
+    <div class="expopts" id="expOpts"><label for="expId">Identifiant du conteneur</label><input type="text" id="expId" value="carte" spellcheck="false" autocomplete="off"></div>
+    <p id="expHint" style="margin-top:10px"></p>
+    <textarea id="expText" readonly spellcheck="false"></textarea>
+    <div class="btns">
+      <button class="btn" data-act="expclose">Fermer</button>
+      <button class="btn" data-act="expview" id="btnView">Aperçu</button>
+      <button class="btn" data-act="expdl">Télécharger</button>
+      <button class="btn primary" data-act="expcopy">Copier</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+if (!window.L) {
+  $('#map').innerHTML = '<p class="nolib">Leaflet n’a pas pu être chargé (connexion nécessaire).</p>';
+  return;
+}
+
+/* ---------- Utilitaires ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const num = (v, d) => { v = parseFloat(v); return Number.isFinite(v) ? v : d; };
+const n6 = x => +(+x).toFixed(6);
+const rnd = ll => Array.isArray(ll) ? [n6(ll[0]), n6(ll[1])] : [n6(ll.lat), n6(ll.lng)];
+const nf = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
+const fmtLen = m => m < 1000 ? Math.round(m) + ' m' : nf.format(m / 1000) + ' km';
+const fmtArea = a => a < 1e4 ? Math.round(a) + ' m²' : a < 1e6 ? nf.format(a / 1e4) + ' ha' : nf.format(a / 1e6) + ' km²';
+const plural = (n, w) => n + ' ' + w + (n > 1 ? 's' : '');
+
+let toastTimer;
+function toast(msg, err) {
+  const t = $('#toast');
+  t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, err ? 6000 : 3000);
+}
+
+/* ---------- Constantes ---------- */
+const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+const LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+const KEY = 'leaflet-manager-v1';
+const OSM_A = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const CARTO_A = OSM_A + ' &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const TILES = {
+  osm:      { name: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max: 19, attr: OSM_A },
+  osmfr:    { name: 'OpenStreetMap France', url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', max: 20, attr: '&copy; <a href="https://www.openstreetmap.fr">OpenStreetMap France</a> | ' + OSM_A },
+  positron: { name: 'Clair (CARTO)', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', max: 20, sub: 'abcd', attr: CARTO_A },
+  voyager:  { name: 'Voyager (CARTO)', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', max: 20, sub: 'abcd', attr: CARTO_A },
+  dark:     { name: 'Sombre (CARTO)', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', max: 20, sub: 'abcd', attr: CARTO_A },
+  topo:     { name: 'Relief (OpenTopoMap)', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', max: 17, attr: 'Map data: ' + OSM_A + ', <a href="https://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)' },
+  cyclosm:  { name: 'Vélo (CyclOSM)', url: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', max: 20, attr: '<a href="https://github.com/cyclosm/cyclosm-cartocss-style/releases" title="CyclOSM - Open Bicycle render">CyclOSM</a> | Map data: ' + OSM_A },
+  esri:     { name: 'Satellite (Esri)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', max: 19, attr: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community' }
+};
+const PALETTE = ['#e53935', '#fb8c00', '#fdd835', '#43a047', '#00acc1', '#1e88e5', '#8e24aa', '#6d4c41', '#546e7a', '#212121'];
+const SYMBOLS = ['', '📍', '🏠', '🍴', '☕', '🏨', '🚩', '⭐', '⛰️', '🚉', '🅿️', 'ℹ️'];
+const DEF = {
+  marker: { color: '#e53935', symbol: '' },
+  path: { color: '#1e88e5', weight: 4, opacity: 0.9, dash: false, fill: 0.2 }
+};
+const HINTS = {
+  select: 'Clique un élément pour le modifier ; glisse ses poignées pour le déformer.',
+  marker: 'Clique sur la carte pour poser un point.',
+  path: 'Clique pour ajouter des points. Double-clic ou Entrée : terminer. Échap : annuler.',
+  free: 'Maintiens et glisse pour dessiner. Finis près du départ pour fermer la forme.'
+};
+
+/* ---------- Icône de point ----------
+   Cette fonction est recopiée telle quelle dans le code exporté (Function.toString) :
+   elle ne doit dépendre que de ses arguments et de L. */
+function pin(color, symbol) {
+  var c = String(color || '#e53935').replace(/[^#\w]/g, '');
+  var s = String(symbol || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  var n = parseInt(c.slice(1), 16);
+  var lum = ((n >> 16) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255;
+  var ink = lum > 0.65 ? '#222' : '#fff';
+  var big = Array.from(String(symbol || '')).length <= 2;
+  return L.divIcon({
+    className: 'lm-pin',
+    iconSize: [30, 40],
+    iconAnchor: [15, 39],
+    popupAnchor: [0, -34],
+    html: '<svg width="30" height="40" viewBox="0 0 30 40" style="display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))">' +
+      '<path d="M15 39C15 39 2 24.5 2 14.5a13 13 0 0 1 26 0C28 24.5 15 39 15 39z" fill="' + c + '" stroke="#fff" stroke-width="2"/>' +
+      (s ? '' : '<circle cx="15" cy="14.5" r="4.5" fill="' + ink + '"/>') +
+      '</svg>' +
+      (s ? '<span style="position:absolute;left:0;top:0;width:30px;height:29px;display:flex;align-items:center;justify-content:center;font:' + (big ? 14 : 10) + 'px/1 system-ui,sans-serif;color:' + ink + '">' + s + '</span>' : '')
+  });
+}
+
+/* ---------- Validation des données ---------- */
+const validLL = a => Array.isArray(a) && a.length >= 2 && Number.isFinite(+a[0]) && Number.isFinite(+a[1]) && Math.abs(+a[0]) <= 90 && Math.abs(+a[1]) <= 180;
+const toLL = a => validLL(a) ? [n6(a[0]), n6(a[1])] : null;
+const text = (v, max) => String(v == null ? '' : v).slice(0, max);
+const cleanSym = v => Array.from(String(v == null ? '' : v).trim()).slice(0, 3).join('');
+function normColor(c, d) {
+  c = String(c || '').trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(c)) return c;
+  if (/^#[0-9a-f]{3}$/.test(c)) return '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
+  return d;
+}
+function cleanItem(o) {
+  if (!o || typeof o !== 'object') return null;
+  const base = { id: uid(), type: o.type, title: text(o.title, 200), desc: text(o.desc != null ? o.desc : o.description, 2000) };
+  if (o.type === 'marker') {
+    const pos = toLL(o.pos);
+    if (!pos) return null;
+    return { ...base, pos, color: normColor(o.color, DEF.marker.color), symbol: cleanSym(o.symbol) };
+  }
+  if (o.type === 'path') {
+    const pts = (Array.isArray(o.pts) ? o.pts : []).map(toLL).filter(Boolean);
+    if (pts.length < 2) return null;
+    return { ...base, pts, closed: !!o.closed && pts.length >= 3, color: normColor(o.color, DEF.path.color),
+      weight: clamp(Math.round(num(o.weight, DEF.path.weight)), 1, 20), opacity: clamp(num(o.opacity, DEF.path.opacity), 0.1, 1),
+      dash: !!o.dash, fill: clamp(num(o.fill, DEF.path.fill), 0, 1) };
+  }
+  return null;
+}
+const DEF_OPTS = { tile: 'osm', zoomControl: true, scale: true, scrollWheel: true, height: 420, framing: 'view' };
+function cleanOpts(m) {
+  m = m || {};
+  return { tile: TILES[m.tile] ? m.tile : DEF_OPTS.tile, zoomControl: m.zoomControl !== false, scale: m.scale !== false,
+    scrollWheel: m.scrollWheel !== false, height: clamp(Math.round(num(m.height, DEF_OPTS.height)), 150, 1600), framing: m.framing === 'fit' ? 'fit' : 'view' };
+}
+const cleanView = m => m && validLL(m.center) ? { center: [+m.center[0], +m.center[1]], zoom: clamp(Math.round(num(m.zoom, 6)), 1, 20) } : null;
+
+/* ---------- État, JSON et stockage ---------- */
+const S = {
+  opts: { ...DEF_OPTS }, items: [], sel: null, mode: 'select',
+  view: { center: [46.6, 2.5], zoom: 6 },
+  last: { marker: { ...DEF.marker }, path: { ...DEF.path } }
+};
+const cur = () => S.items.find(i => i.id === S.sel) || null;
+
+function exportItem(it) {
+  return it.type === 'marker'
+    ? { type: 'marker', title: it.title, desc: it.desc, pos: it.pos, color: it.color, symbol: it.symbol }
+    : { type: 'path', title: it.title, desc: it.desc, pts: it.pts, closed: it.closed, color: it.color, weight: it.weight, opacity: it.opacity, dash: it.dash, fill: it.fill };
+}
+const toData = () => ({ app: 'leaflet-manager', version: 1, map: { center: S.view.center, zoom: S.view.zoom, ...S.opts }, items: S.items.map(exportItem) });
+function fromData(d) {
+  const m = d.map || {};
+  return { items: (Array.isArray(d.items) ? d.items : []).map(cleanItem).filter(Boolean), opts: cleanOpts(m), view: cleanView(m), hasMap: !!d.map };
+}
+const prettyJSON = v => JSON.stringify(v, null, 2).replace(/\[\s+(-?[\d.]+),\s+(-?[\d.]+)\s+\]/g, '[$1, $2]');
+let saveFailed = false;
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(toData())); }
+  catch (e) { if (!saveFailed) { saveFailed = true; toast('Sauvegarde locale impossible : ' + e.message, true); } }
+}
+let saveTimer;
+const saveSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); };
+(function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (!d || typeof d !== 'object') return;
+    const r = fromData(d);
+    S.items = r.items; S.opts = r.opts; if (r.view) S.view = r.view;
+  } catch (e) { /* stockage vide ou illisible : on repart de zéro */ }
+})();
+
+/* ---------- Historique (annuler / rétablir) ---------- */
+let hist = [], hi = -1;
+const snap = () => JSON.stringify({ o: S.opts, i: S.items });
+function updUndo() { $('#btnUndo').disabled = hi <= 0; $('#btnRedo').disabled = hi >= hist.length - 1; }
+function commit() {
+  const s = snap();
+  if (hist[hi] !== s) {
+    hist.length = hi + 1; hist.push(s);
+    if (hist.length > 100) hist.shift();
+    hi = hist.length - 1; updUndo();
+  }
+  save();
+}
+function jump(k) {
+  if (k < 0 || k >= hist.length) return;
+  hi = k;
+  const d = JSON.parse(hist[k]);
+  S.opts = d.o; S.items = d.i;
+  cancelDraw(); applyOpts(); renderAll(); updUndo(); save();
+}
+const undo = () => jump(hi - 1), redo = () => jump(hi + 1);
+
+/* ---------- Géométrie ---------- */
+function dist(a, b) {
+  const R = 6371008.8, t = Math.PI / 180, dLa = (b[0] - a[0]) * t, dLo = (b[1] - a[1]) * t;
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * t) * Math.cos(b[0] * t) * Math.sin(dLo / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function plen(pts, closed) {
+  let s = 0;
+  for (let i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]);
+  if (closed && pts.length > 2) s += dist(pts[pts.length - 1], pts[0]);
+  return s;
+}
+function parea(pts) {
+  const R = 6371008.8, k = Math.PI / 180;
+  const la0 = pts.reduce((a, p) => a + p[0], 0) / pts.length, lo0 = pts.reduce((a, p) => a + p[1], 0) / pts.length, c = Math.cos(la0 * k);
+  const P = pts.map(p => [(p[1] - lo0) * k * R * c, (p[0] - la0) * k * R]);
+  let s = 0;
+  for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; s += a[0] * b[1] - b[0] * a[1]; }
+  return Math.abs(s) / 2;
+}
+function segDist2(p, a, b) {
+  let x = a.x, y = a.y, dx = b.x - x, dy = b.y - y;
+  if (dx || dy) {
+    const t = ((p.x - x) * dx + (p.y - y) * dy) / (dx * dx + dy * dy);
+    if (t > 1) { x = b.x; y = b.y; } else if (t > 0) { x += dx * t; y += dy * t; }
+  }
+  dx = p.x - x; dy = p.y - y;
+  return dx * dx + dy * dy;
+}
+/* Douglas-Peucker itératif sur des points en pixels ; renvoie les indices conservés */
+function simplifyIdx(P, tol) {
+  const n = P.length;
+  if (n < 3) return P.map((_, i) => i);
+  const keep = new Uint8Array(n), st = [[0, n - 1]], t2 = tol * tol;
+  keep[0] = keep[n - 1] = 1;
+  while (st.length) {
+    const [a, b] = st.pop();
+    let md = 0, mi = -1;
+    for (let i = a + 1; i < b; i++) { const d = segDist2(P[i], P[a], P[b]); if (d > md) { md = d; mi = i; } }
+    if (mi > 0 && md > t2) { keep[mi] = 1; st.push([a, mi], [mi, b]); }
+  }
+  const out = [];
+  for (let i = 0; i < n; i++) if (keep[i]) out.push(i);
+  return out;
+}
+function bounds() {
+  let b = null;
+  const add = p => { b = b ? [[Math.min(b[0][0], p[0]), Math.min(b[0][1], p[1])], [Math.max(b[1][0], p[0]), Math.max(b[1][1], p[1])]] : [[p[0], p[1]], [p[0], p[1]]]; };
+  S.items.forEach(it => it.type === 'marker' ? add(it.pos) : it.pts.forEach(add));
+  return b;
+}
+
+/* ---------- Carte ---------- */
+const map = L.map('map', { zoomControl: false }).setView(S.view.center, S.view.zoom);
+const mapEl = map.getContainer();
+let tileLayer = null, tileKey = null, zoomCtl = null, scaleCtl = null;
+
+function setTile(key) {
+  if (key === tileKey && tileLayer) return;
+  const t = TILES[key];
+  tileKey = key;
+  if (tileLayer) tileLayer.remove();
+  const o = { maxZoom: t.max, attribution: t.attr };
+  if (t.sub) o.subdomains = t.sub;
+  tileLayer = L.tileLayer(t.url, o).addTo(map);
+  if (map.getZoom() > t.max) map.setZoom(t.max);
+}
+function applyOpts() {
+  const o = S.opts;
+  setTile(o.tile);
+  if (o.zoomControl && !zoomCtl) zoomCtl = L.control.zoom().addTo(map);
+  else if (!o.zoomControl && zoomCtl) { zoomCtl.remove(); zoomCtl = null; }
+  if (o.scale && !scaleCtl) scaleCtl = L.control.scale({ imperial: false }).addTo(map);
+  else if (!o.scale && scaleCtl) { scaleCtl.remove(); scaleCtl = null; }
+  $('#tile').value = o.tile;
+  $$('[data-o]').forEach(i => { if (i.type === 'checkbox') i.checked = !!o[i.dataset.o]; else i.value = o[i.dataset.o]; });
+}
+function updView() {
+  const c = map.getCenter();
+  S.view = { center: [n6(c.lat), n6(c.lng)], zoom: map.getZoom() };
+  $('#viewInfo').textContent = 'Vue : ' + S.view.center[0].toFixed(4) + ', ' + S.view.center[1].toFixed(4) + ' · zoom ' + S.view.zoom;
+}
+map.on('moveend zoomend', () => { updView(); saveSoon(); });
+new ResizeObserver(() => map.invalidateSize()).observe($('#map'));
+
+/* ---------- Couches ---------- */
+const ents = new Map(); /* id -> { l: couche Leaflet, h: poignées d’édition ou null } */
+const dashOf = it => { const n = Math.max(4, Math.round(it.weight * 2)); return n + ' ' + n; };
+function popupHtml(it) {
+  const t = it.title.trim(), d = it.desc.trim();
+  if (!t && !d) return '';
+  return (t ? '<b>' + esc(t) + '</b>' : '') + (t && d ? '<br>' : '') + esc(d).replace(/\n/g, '<br>');
+}
+const liveStyle = it => ({ color: it.color, weight: it.weight, opacity: it.opacity, dashArray: it.dash ? dashOf(it) : null, fillOpacity: it.closed ? it.fill : 0.2 });
+
+function addLayer(it) {
+  let l;
+  if (it.type === 'marker') {
+    l = L.marker(it.pos, { icon: pin(it.color, it.symbol), title: it.title || undefined, draggable: it.id === S.sel && S.mode === 'select', keyboard: false });
+    l.on('drag', e => {
+      it.pos = rnd(e.target.getLatLng());
+      const a = $('#props [data-f=lat]'), b = $('#props [data-f=lng]');
+      if (a) a.value = it.pos[0]; if (b) b.value = it.pos[1];
+    });
+    l.on('dragend', () => { commit(); renderList(); });
+  } else {
+    l = (it.closed ? L.polygon : L.polyline)(it.pts, { ...liveStyle(it), bubblingMouseEvents: false });
+  }
+  l.on('click', () => { if (S.mode === 'select') select(it.id); });
+  const ph = popupHtml(it);
+  if (ph) l.bindPopup(ph);
+  l.addTo(map);
+  ents.set(it.id, { l, h: null });
+}
+function clearHandles(e) { if (e.h) { e.h.g.remove(); e.h = null; } }
+function removeLayer(id) { const e = ents.get(id); if (e) { clearHandles(e); e.l.remove(); ents.delete(id); } }
+function refreshItem(id) {
+  removeLayer(id);
+  const it = S.items.find(i => i.id === id);
+  if (it) addLayer(it);
+  applySel();
+}
+function renderAll() {
+  [...ents.keys()].forEach(removeLayer);
+  S.items.forEach(addLayer);
+  if (S.sel && !cur()) S.sel = null;
+  applySel(); renderList(); renderProps();
+}
+
+/* ---------- Sélection et poignées ---------- */
+function select(id) {
+  const changed = S.sel !== id;
+  S.sel = id;
+  applySel();
+  if (changed) { renderProps(); renderList(); }
+}
+function applySel() {
+  ents.forEach((e, id) => {
+    const on = id === S.sel, el = e.l.getElement && e.l.getElement();
+    if (el) el.classList.toggle(e.l instanceof L.Marker ? 'sel' : 'lm-sel', on);
+    if (e.l.dragging) { if (on && S.mode === 'select') e.l.dragging.enable(); else e.l.dragging.disable(); }
+    if (!on || S.mode !== 'select') clearHandles(e);
+  });
+  const it = cur();
+  if (it && it.type === 'path' && S.mode === 'select') {
+    const e = ents.get(it.id);
+    if (e && !e.h) buildHandles(it, e);
+  }
+}
+function buildHandles(it, e) {
+  clearHandles(e);
+  const g = L.layerGroup().addTo(map), vs = [], ms = [];
+  e.h = { g, vs, ms };
+  const n = it.pts.length, segs = it.closed ? n : n - 1;
+  const setPath = () => e.l.setLatLngs(it.pts);
+  const placeMids = (...idx) => idx.forEach(i => {
+    const m = ms[i];
+    if (!m) return;
+    const a = it.pts[i], b = it.pts[(i + 1) % n];
+    m.setLatLng([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+  });
+  it.pts.forEach((p, i) => {
+    const m = L.marker(p, { icon: L.divIcon({ className: 'lm-vtx' + (i === 0 ? ' first' : ''), iconSize: [16, 16] }), draggable: true, keyboard: false, zIndexOffset: 1000 });
+    m.on('drag', ev => { it.pts[i] = rnd(ev.target.getLatLng()); setPath(); placeMids((i - 1 + n) % n, i); });
+    m.on('dragend', () => { commit(); renderProps(); renderList(); });
+    m.on('contextmenu dblclick', ev => { L.DomEvent.stop(ev.originalEvent || ev); delVertex(it, i); });
+    vs.push(m); g.addLayer(m);
+  });
+  if (n > 300) return; /* trop de points : pas de poignées intermédiaires */
+  for (let i = 0; i < segs; i++) {
+    const a = it.pts[i], b = it.pts[(i + 1) % n];
+    const m = L.marker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { icon: L.divIcon({ className: 'lm-mid', iconSize: [12, 12] }), draggable: true, keyboard: false, zIndexOffset: 900 });
+    let at = -1;
+    m.on('dragstart', () => { at = i + 1; it.pts.splice(at, 0, rnd(m.getLatLng())); });
+    m.on('drag', () => { it.pts[at] = rnd(m.getLatLng()); setPath(); });
+    m.on('dragend', () => { commit(); setTimeout(() => { if (ents.get(it.id) === e) buildHandles(it, e); renderProps(); renderList(); }, 0); });
+    ms.push(m); g.addLayer(m);
+  }
+}
+function delVertex(it, i) {
+  const min = it.closed ? 3 : 2;
+  if (it.pts.length <= min) { toast('Il faut garder au moins ' + min + ' points.', true); return; }
+  it.pts.splice(i, 1);
+  refreshItem(it.id); commit(); renderProps(); renderList();
+}
+
+/* ---------- Création et suppression ---------- */
+function addMarker(ll) {
+  const it = { id: uid(), type: 'marker', title: '', desc: '', pos: rnd(ll.wrap()), ...S.last.marker };
+  S.items.push(it); addLayer(it); select(it.id); commit(); renderList();
+  if (matchMedia('(hover:hover)').matches) { const t = $('#props [data-f=title]'); if (t) t.focus({ preventScroll: true }); }
+}
+function addPath(pts, closed, stay) {
+  const it = { id: uid(), type: 'path', title: '', desc: '', pts, closed: !!closed, ...S.last.path };
+  S.items.push(it);
+  if (!stay) setMode('select');
+  addLayer(it); select(it.id); applySel(); commit(); renderList(); renderProps();
+}
+function removeItem(id) {
+  S.items = S.items.filter(i => i.id !== id);
+  removeLayer(id);
+  if (S.sel === id) S.sel = null;
+  renderList(); renderProps(); commit();
+}
+function zoomTo(it) {
+  if (it.type === 'marker') map.setView(it.pos, Math.max(map.getZoom(), 14));
+  else map.fitBounds(L.latLngBounds(it.pts), { padding: [40, 40], maxZoom: 18 });
+}
+function fitAll() {
+  const b = bounds();
+  if (!b) { toast('Rien à cadrer : la carte est vide.'); return; }
+  if (b[0][0] === b[1][0] && b[0][1] === b[1][1]) map.setView(b[0], 14);
+  else map.fitBounds(b, { padding: [40, 40], maxZoom: 17 });
+}
+
+/* ---------- Modes d’outil ---------- */
+function setMode(m) {
+  if (S.mode === m) return;
+  cancelDraw(); cancelFree();
+  S.mode = m;
+  $$('.tool').forEach(b => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  mapEl.classList.remove('mode-select', 'mode-marker', 'mode-path', 'mode-free');
+  mapEl.classList.add('mode-' + m);
+  if (m === 'free') map.dragging.disable(); else map.dragging.enable();
+  if (m === 'path') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
+  if (m !== 'select' && S.sel) { S.sel = null; renderProps(); renderList(); }
+  applySel();
+  $('#toolHint').textContent = HINTS[m];
+}
+$('#tools').addEventListener('click', e => { const b = e.target.closest('.tool'); if (b) setMode(b.dataset.mode); });
+
+map.on('click', e => {
+  if (S.mode === 'marker') addMarker(e.latlng);
+  else if (S.mode === 'path') drawPoint(e.latlng);
+  else if (S.mode === 'select' && S.sel) select(null);
+});
+
+/* ---------- Tracé point par point ---------- */
+const D = { pts: [], line: null, rub: null };
+function drawInfo() {
+  const bar = $('#drawbar');
+  bar.hidden = !D.pts.length;
+  $('#drawInfo').textContent = plural(D.pts.length, 'point') + (D.pts.length > 1 ? ' · ' + fmtLen(plen(D.pts)) : '');
+}
+function drawPoint(ll) {
+  const last = D.pts[D.pts.length - 1];
+  if (last && map.latLngToContainerPoint(last).distanceTo(map.latLngToContainerPoint(ll)) < 4) return; /* second clic d’un double-clic */
+  D.pts.push(rnd(ll.wrap()));
+  if (!D.line) {
+    D.line = L.polyline([], { color: S.last.path.color, weight: S.last.path.weight, opacity: S.last.path.opacity, interactive: false }).addTo(map);
+    D.rub = L.polyline([], { color: S.last.path.color, weight: 2, dashArray: '4 6', opacity: 0.8, interactive: false }).addTo(map);
+  }
+  D.line.setLatLngs(D.pts); D.rub.setLatLngs([]);
+  drawInfo();
+}
+function drawBack() {
+  D.pts.pop();
+  if (D.line) D.line.setLatLngs(D.pts);
+  if (D.rub) D.rub.setLatLngs([]);
+  if (!D.pts.length) cancelDraw(); else drawInfo();
+}
+function cancelDraw() {
+  if (D.line) { D.line.remove(); D.line = null; }
+  if (D.rub) { D.rub.remove(); D.rub = null; }
+  D.pts = []; $('#drawbar').hidden = true;
+}
+function finishDraw() {
+  if (D.pts.length < 2) { toast('Il faut au moins 2 points pour un trajet.', true); return; }
+  const pts = D.pts.slice();
+  cancelDraw();
+  addPath(pts, false, false);
+}
+map.on('mousemove', e => {
+  if (S.mode === 'path' && D.pts.length && D.rub) D.rub.setLatLngs([D.pts[D.pts.length - 1], e.latlng]);
+});
+map.on('dblclick', () => { if (S.mode === 'path' && D.pts.length) finishDraw(); });
+$('#drawbar').addEventListener('click', e => {
+  const b = e.target.closest('[data-d]');
+  if (!b) return;
+  if (b.dataset.d === 'back') drawBack(); else if (b.dataset.d === 'done') finishDraw(); else cancelDraw();
+});
+
+/* ---------- Main levée ---------- */
+let F = null;
+function cancelFree() { if (F) { F.line.remove(); F = null; } }
+mapEl.addEventListener('pointerdown', e => {
+  if (S.mode !== 'free') return;
+  if (F) { cancelFree(); return; } /* deuxième doigt : on abandonne le trait (zoom) */
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (e.target.closest('.leaflet-control, .leaflet-popup')) return;
+  F = { id: e.pointerId, ll: [map.mouseEventToLatLng(e)], last: map.mouseEventToContainerPoint(e),
+    line: L.polyline([], { color: S.last.path.color, weight: S.last.path.weight, opacity: S.last.path.opacity, interactive: false }).addTo(map) };
+  F.line.addLatLng(F.ll[0]);
+  try { mapEl.setPointerCapture(e.pointerId); } catch (err) { /* sans conséquence */ }
+  e.preventDefault();
+});
+mapEl.addEventListener('pointermove', e => {
+  if (!F || e.pointerId !== F.id) return;
+  const cp = map.mouseEventToContainerPoint(e);
+  if (cp.distanceTo(F.last) < 2) return;
+  F.last = cp;
+  const ll = map.containerPointToLatLng(cp);
+  F.ll.push(ll); F.line.addLatLng(ll);
+});
+function endFree(e) {
+  if (!F || e.pointerId !== F.id) return;
+  const raw = F.ll, z = map.getZoom();
+  cancelFree();
+  if (raw.length < 3) return;
+  const P = raw.map(l => map.project(l, z));
+  let pts = simplifyIdx(P, 2.5).map(i => rnd(raw[i].wrap()));
+  let closed = false;
+  if (pts.length >= 6 && P[0].distanceTo(P[P.length - 1]) < 16) { closed = true; pts.pop(); }
+  if (pts.length < 2) return;
+  addPath(pts, closed, true);
+}
+mapEl.addEventListener('pointerup', endFree);
+mapEl.addEventListener('pointercancel', e => { if (F && e.pointerId === F.id) cancelFree(); });
+
+/* ---------- Liste des éléments ---------- */
+function nameOf(it) {
+  if (it.title.trim()) return it.title.trim();
+  return (it.type === 'marker' ? 'Point ' : 'Trajet ') + (S.items.filter(x => x.type === it.type).indexOf(it) + 1);
+}
+function statOf(it) {
+  if (it.type === 'marker') return it.pos[0].toFixed(4) + ', ' + it.pos[1].toFixed(4);
+  return plural(it.pts.length, 'point') + ' · ' + fmtLen(plen(it.pts, it.closed)) + (it.closed ? ' · polygone' : '');
+}
+function renderList() {
+  const n = S.items.length;
+  $('#itemCount').textContent = n ? String(n) : '';
+  $('#sub').textContent = 'Leaflet · ' + plural(n, 'élément');
+  $('#list').innerHTML = n ? S.items.map(it =>
+    '<li><button class="li' + (it.id === S.sel ? ' on' : '') + '" data-id="' + it.id + '"><span class="mk"><i class="' + (it.type === 'path' ? 'ln' : '') + '" style="--c:' + it.color + '"></i></span>' +
+    '<span class="tx"><span class="t">' + esc(nameOf(it)) + '</span><span class="s">' + esc(statOf(it)) + '</span></span></button></li>').join('')
+    : '<li class="empty">Aucun élément. Choisis un outil, puis clique sur la carte.</li>';
+}
+$('#list').addEventListener('click', e => {
+  const b = e.target.closest('[data-id]');
+  if (!b) return;
+  if (S.mode !== 'select') setMode('select');
+  select(b.dataset.id);
+  const it = cur();
+  if (it) zoomTo(it);
+});
+
+/* ---------- Propriétés de l’élément sélectionné ---------- */
+const fld = (label, inner) => '<label class="fld"><span class="lbl">' + label + '</span>' + inner + '</label>';
+function renderProps() {
+  const it = cur(), card = $('#cProps');
+  card.hidden = !it;
+  if (!it) { $('#props').innerHTML = ''; return; }
+  const isM = it.type === 'marker';
+  let h = '<div class="phead"><h2>' + (isM ? '📍 Point' : '🛣️ Trajet') + '</h2>' +
+    '<button class="btn icon" data-a="zoom" title="Centrer sur l’élément" aria-label="Centrer sur l’élément">🎯</button>' +
+    '<button class="btn icon" data-a="del" title="Supprimer (Suppr)" aria-label="Supprimer">🗑</button></div>';
+  h += fld('Titre', '<input type="text" data-f="title" value="' + esc(it.title) + '" placeholder="' + esc(nameOf(it)) + '" autocomplete="off">');
+  h += fld('Description', '<textarea data-f="desc" rows="3" placeholder="Texte affiché dans la bulle">' + esc(it.desc) + '</textarea>');
+  h += '<div class="fld" role="group" aria-label="Couleur"><span class="lbl">Couleur</span><div class="swatches">' +
+    PALETTE.map(p => '<button type="button" class="swt' + (p === it.color ? ' on' : '') + '" style="--c:' + p + '" data-a="color" data-v="' + p + '" aria-label="Couleur ' + p + '"></button>').join('') +
+    '<input type="color" data-f="color" value="' + it.color + '" aria-label="Autre couleur"></div></div>';
+  if (isM) {
+    h += '<div class="fld" role="group" aria-label="Symbole"><span class="lbl">Symbole</span><div class="syms">' +
+      SYMBOLS.map(s => '<button type="button" class="sym' + (s === it.symbol ? ' on' : '') + '" data-a="sym" data-v="' + esc(s) + '">' + (s ? esc(s) : '∅') + '</button>').join('') + '</div>' +
+      '<input type="text" data-f="symbol" value="' + esc(it.symbol) + '" placeholder="ou une lettre, un chiffre" autocomplete="off"></div>';
+    h += '<div class="row2">' + fld('Latitude', '<input type="number" step="any" data-f="lat" value="' + it.pos[0] + '">') +
+      fld('Longitude', '<input type="number" step="any" data-f="lng" value="' + it.pos[1] + '">') + '</div>';
+  } else {
+    h += fld('Épaisseur : <b data-v="weight">' + it.weight + '</b> px', '<input type="range" min="1" max="20" step="1" data-f="weight" value="' + it.weight + '">');
+    h += fld('Opacité : <b data-v="opacity">' + Math.round(it.opacity * 100) + '</b> %', '<input type="range" min="0.1" max="1" step="0.05" data-f="opacity" value="' + it.opacity + '">');
+    h += '<label class="check"><input type="checkbox" data-f="dash"' + (it.dash ? ' checked' : '') + '> Pointillés</label>';
+    h += '<label class="check"><input type="checkbox" data-f="closed"' + (it.closed ? ' checked' : '') + '> Fermer en polygone</label>';
+    if (it.closed) h += fld('Remplissage : <b data-v="fill">' + Math.round(it.fill * 100) + '</b> %', '<input type="range" min="0" max="1" step="0.05" data-f="fill" value="' + it.fill + '">');
+    h += '<p class="stat">' + plural(it.pts.length, 'point') + ' · longueur ' + fmtLen(plen(it.pts, it.closed)) + (it.closed ? ' · surface ' + fmtArea(parea(it.pts)) : '') + '</p>';
+    h += '<div class="btnrow"><button class="btn" data-a="simplify">Simplifier</button><button class="btn" data-a="reverse">Inverser le sens</button></div>';
+    h += '<p class="hint">Double-clic (ou clic droit) sur une poignée : la supprimer. Glisse un point pâle pour en ajouter un.</p>';
+  }
+  $('#props').innerHTML = h;
+}
+
+function updText(it) {
+  const e = ents.get(it.id);
+  if (!e) return;
+  const ph = popupHtml(it);
+  if (ph) { if (e.l.getPopup()) e.l.setPopupContent(ph); else e.l.bindPopup(ph); } else e.l.unbindPopup();
+  if (it.type === 'marker') { e.l.options.title = it.title; const el = e.l.getElement(); if (el) el.title = it.title; }
+}
+function restyle(it) {
+  const e = ents.get(it.id);
+  if (!e) return;
+  if (it.type === 'marker') { e.l.setIcon(pin(it.color, it.symbol)); applySel(); } else e.l.setStyle(liveStyle(it));
+}
+function setField(it, f, v) {
+  const last = S.last[it.type];
+  switch (f) {
+    case 'title': it.title = text(v, 200); updText(it); break;
+    case 'desc': it.desc = text(v, 2000); updText(it); break;
+    case 'color': it.color = last.color = normColor(v, it.color); restyle(it); break;
+    case 'symbol': it.symbol = last.symbol = cleanSym(v); restyle(it); break;
+    case 'lat': case 'lng': {
+      const x = parseFloat(v), i = f === 'lat' ? 0 : 1;
+      if (!Number.isFinite(x) || Math.abs(x) > (i ? 180 : 90)) return;
+      it.pos[i] = x; ents.get(it.id).l.setLatLng(it.pos); break;
+    }
+    case 'weight': it.weight = last.weight = clamp(Math.round(num(v, it.weight)), 1, 20); restyle(it); break;
+    case 'opacity': it.opacity = last.opacity = clamp(num(v, it.opacity), 0.1, 1); restyle(it); break;
+    case 'fill': it.fill = last.fill = clamp(num(v, it.fill), 0, 1); restyle(it); break;
+    case 'dash': it.dash = last.dash = !!v; restyle(it); break;
+    case 'closed': it.closed = !!v && it.pts.length >= 3; refreshItem(it.id); renderProps(); commit(); break;
+  }
+  const out = $('#props [data-v=' + f + ']');
+  if (out) out.textContent = f === 'weight' ? it.weight : Math.round(it[f] * 100);
+  renderList();
+}
+const props = $('#props');
+props.addEventListener('input', e => {
+  const t = e.target, f = t.dataset.f, it = cur();
+  if (f && it) setField(it, f, t.type === 'checkbox' ? t.checked : t.value);
+});
+props.addEventListener('change', e => { if (e.target.dataset.f && cur()) { commit(); renderList(); } });
+props.addEventListener('click', e => {
+  const b = e.target.closest('[data-a]'), it = cur();
+  if (!b || !it) return;
+  switch (b.dataset.a) {
+    case 'del': removeItem(it.id); break;
+    case 'zoom': zoomTo(it); break;
+    case 'color': setField(it, 'color', b.dataset.v); commit(); renderProps(); break;
+    case 'sym': setField(it, 'symbol', b.dataset.v); commit(); renderProps(); break;
+    case 'reverse': it.pts.reverse(); refreshItem(it.id); commit(); renderProps(); toast('Sens inversé.'); break;
+    case 'simplify': {
+      const z = map.getZoom(), before = it.pts.length;
+      const keep = simplifyIdx(it.pts.map(p => map.project(L.latLng(p), z)), 3);
+      const min = it.closed ? 3 : 2;
+      if (keep.length < min || keep.length === before) { toast(keep.length === before ? 'Rien à simplifier à ce niveau de zoom.' : 'Trop simplifié : zoome pour garder le détail.'); break; }
+      it.pts = keep.map(i => it.pts[i]);
+      refreshItem(it.id); commit(); renderProps(); renderList();
+      toast(before + ' → ' + it.pts.length + ' points');
+      break;
+    }
+  }
+});
+
+/* ---------- Réglages de la carte ---------- */
+$('#tile').innerHTML = Object.entries(TILES).map(([k, t]) => '<option value="' + k + '">' + esc(t.name) + '</option>').join('');
+$('#tile').addEventListener('change', e => { S.opts.tile = e.target.value; setTile(S.opts.tile); commit(); });
+$('#cMap').addEventListener('input', e => {
+  const k = e.target.dataset.o;
+  if (!k) return;
+  S.opts = cleanOpts({ ...S.opts, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
+  if (k === 'zoomControl' || k === 'scale') applyOpts();
+});
+$('#cMap').addEventListener('change', e => { if (e.target.dataset.o) { applyOpts(); commit(); } });
+$('#btnFit').onclick = fitAll;
+
+/* ---------- Recherche de lieu (Nominatim, à la demande) ---------- */
+$('#geoForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const q = $('#geoQ').value.trim(), res = $('#geoRes');
+  if (!q) return;
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=fr&q=' + encodeURIComponent(q));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const list = await r.json();
+    res.hidden = false;
+    res.innerHTML = list.length ? list.map((p, i) => '<li><button type="button" data-i="' + i + '">' + esc(p.display_name) + '</button></li>').join('') : '<li class="empty">Aucun résultat.</li>';
+    res._list = list;
+  } catch (err) { toast('Recherche indisponible : ' + err.message, true); }
+});
+$('#geoRes').addEventListener('click', e => {
+  const b = e.target.closest('[data-i]');
+  if (!b) return;
+  const p = $('#geoRes')._list[+b.dataset.i], bb = p.boundingbox && p.boundingbox.map(Number);
+  if (bb && bb.every(Number.isFinite)) map.fitBounds([[bb[0], bb[2]], [bb[1], bb[3]]], { maxZoom: 17 });
+  else map.setView([+p.lat, +p.lon], 14);
+  $('#geoRes').hidden = true;
+});
+function locate() { map.locate({ setView: true, maxZoom: 16 }); }
+map.on('locationerror', e => toast('Position indisponible : ' + e.message, true));
+$('#btnLocate').onclick = locate;
+
+/* ---------- Import ---------- */
+function geoItems(g, out) {
+  if (!g || typeof g !== 'object') return out;
+  if (g.type === 'FeatureCollection') { (g.features || []).forEach(f => geoItems(f, out)); return out; }
+  if (g.type === 'GeometryCollection') { (g.geometries || []).forEach(x => geoItems(x, out)); return out; }
+  const p = g.type === 'Feature' ? (g.properties || {}) : {}, geo = g.type === 'Feature' ? g.geometry : g;
+  if (!geo) return out;
+  const meta = { title: p.title || p.name || '', desc: p.description || p.desc || '' };
+  const ll = c => Array.isArray(c) ? [c[1], c[0]] : null;
+  const line = (coords, closed) => {
+    let pts = (coords || []).map(ll);
+    if (closed && pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts = pts.slice(0, -1);
+    out.push({ ...meta, type: 'path', pts, closed, color: p.stroke || p.fill, weight: p['stroke-width'], opacity: p['stroke-opacity'], fill: p['fill-opacity'], dash: p.dash });
+  };
+  switch (geo.type) {
+    case 'Point': out.push({ ...meta, type: 'marker', pos: ll(geo.coordinates), color: p['marker-color'], symbol: p.symbol }); break;
+    case 'MultiPoint': (geo.coordinates || []).forEach(c => out.push({ ...meta, type: 'marker', pos: ll(c), color: p['marker-color'], symbol: p.symbol })); break;
+    case 'LineString': line(geo.coordinates, false); break;
+    case 'MultiLineString': (geo.coordinates || []).forEach(c => line(c, false)); break;
+    case 'Polygon': if (geo.coordinates && geo.coordinates[0]) line(geo.coordinates[0], true); break;
+    case 'MultiPolygon': (geo.coordinates || []).forEach(poly => poly && poly[0] && line(poly[0], true)); break;
+  }
+  return out;
+}
+function parseImport(txt) {
+  const d = JSON.parse(txt);
+  if (d && Array.isArray(d.items)) return fromData(d);
+  if (d && typeof d.type === 'string') return { items: geoItems(d, []).map(cleanItem).filter(Boolean), opts: null, view: null, hasMap: false };
+  throw new Error('format non reconnu');
+}
+function doImport(replace) {
+  let r;
+  try { r = parseImport($('#impText').value); } catch (e) { toast('Import impossible : ' + e.message, true); return; }
+  if (!r.items.length && !(replace && r.hasMap)) { toast('Aucun point ni trajet trouvé dans ces données.', true); return; }
+  if (replace) {
+    S.items = r.items; S.sel = null;
+    if (r.opts && r.hasMap) S.opts = r.opts;
+  } else S.items = S.items.concat(r.items);
+  cancelDraw(); applyOpts(); renderAll(); commit();
+  if (replace && r.view) map.setView(r.view.center, r.view.zoom); else fitAll();
+  $('#impDlg').close();
+  toast(plural(r.items.length, 'élément') + ' importé' + (r.items.length > 1 ? 's' : '') + '.');
+}
+$('#impFile').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (f) $('#impText').value = await f.text();
+});
+
+/* ---------- Génération du code ---------- */
+const q = s => JSON.stringify(String(s)).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+const indent = (s, p) => s.split('\n').map(l => l ? p + l : l).join('\n');
+function dedent(src) {
+  const lines = src.split('\n'), rest = lines.slice(1).filter(l => l.trim());
+  const m = rest.length ? Math.min(...rest.map(l => l.match(/^ */)[0].length)) : 0;
+  return [lines[0], ...lines.slice(1).map(l => l.slice(Math.min(m, l.match(/^ */)[0].length)))].join('\n');
+}
+const cleanId = v => String(v || '').replace(/[^\w-]/g, '') || 'carte';
+function ptsCode(pts) {
+  const rows = [];
+  for (let i = 0; i < pts.length; i += 4) rows.push('  ' + pts.slice(i, i + 4).map(p => '[' + n6(p[0]) + ', ' + n6(p[1]) + ']').join(', '));
+  return '[\n' + rows.join(',\n') + '\n]';
+}
+function chain(head, steps) {
+  const lines = [head, ...steps.map(s => '  ' + s)];
+  lines[lines.length - 1] += ';';
+  return lines.join('\n');
+}
+function genBody(id) {
+  const o = S.opts, t = TILES[o.tile], out = [];
+  const b = bounds(), fit = o.framing === 'fit' && b && (b[0][0] !== b[1][0] || b[0][1] !== b[1][1]);
+  const view = '[' + n6(S.view.center[0]) + ', ' + n6(S.view.center[1]) + '], ' + S.view.zoom;
+  out.push('const map = L.map(' + q(id) + ', {\n  zoomControl: ' + o.zoomControl + ',\n  scrollWheelZoom: ' + o.scrollWheel + '\n})' + (fit ? ';' : '.setView(' + view + ');'));
+  if (fit) out.push('map.fitBounds([[' + n6(b[0][0]) + ', ' + n6(b[0][1]) + '], [' + n6(b[1][0]) + ', ' + n6(b[1][1]) + ']], { padding: [24, 24] });');
+  out.push('');
+  out.push('L.tileLayer(' + q(t.url) + ', {\n  maxZoom: ' + t.max + ',\n' + (t.sub ? '  subdomains: ' + q(t.sub) + ',\n' : '') + '  attribution: ' + q(t.attr) + '\n}).addTo(map);');
+  if (o.scale) out.push('L.control.scale({ imperial: false }).addTo(map);');
+  if (S.items.some(i => i.type === 'marker')) out.push('', dedent(pin.toString()));
+  S.items.forEach(it => {
+    const ph = popupHtml(it), steps = ['.addTo(map)'];
+    if (ph) steps.push('.bindPopup(' + q(ph) + ')');
+    out.push('', '// ' + (it.type === 'marker' ? 'Point' : 'Trajet') + (it.title.trim() ? ' : ' + it.title.trim().replace(/\s+/g, ' ') : ''));
+    if (it.type === 'marker') {
+      const opt = ['icon: pin(' + q(it.color) + (it.symbol ? ', ' + q(it.symbol) : '') + ')'];
+      if (it.title) opt.push('title: ' + q(it.title));
+      out.push(chain('L.marker([' + n6(it.pos[0]) + ', ' + n6(it.pos[1]) + '], { ' + opt.join(', ') + ' })', steps));
+    } else {
+      const opt = ['color: ' + q(it.color), 'weight: ' + it.weight, 'opacity: ' + it.opacity];
+      if (it.dash) opt.push('dashArray: ' + q(dashOf(it)));
+      if (it.closed) opt.push('fillOpacity: ' + it.fill);
+      out.push(chain('L.' + (it.closed ? 'polygon' : 'polyline') + '(' + ptsCode(it.pts) + ', { ' + opt.join(', ') + ' })', steps));
+    }
+  });
+  return out.join('\n');
+}
+function genFragment(id) {
+  return '<!-- Leaflet : à charger une seule fois par page (retire ces deux lignes si c’est déjà fait) -->\n' +
+    '<link rel="stylesheet" href="' + LEAFLET_CSS + '">\n' +
+    '<script src="' + LEAFLET_JS + '"><\/script>\n\n' +
+    '<div id="' + id + '" style="width: 100%; height: ' + S.opts.height + 'px;"></div>\n' +
+    '<script>\n(function () {\n' + indent(genBody(id), '  ') + '\n})();\n<\/script>\n';
+}
+function genPage(id) {
+  return '<!doctype html>\n<html lang="fr">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>Ma carte</title>\n' +
+    '  <link rel="stylesheet" href="' + LEAFLET_CSS + '">\n  <style>\n    html, body { height: 100%; margin: 0; }\n    #' + id + ' { height: 100%; }\n  </style>\n</head>\n<body>\n' +
+    '  <div id="' + id + '"></div>\n  <script src="' + LEAFLET_JS + '"><\/script>\n  <script>\n' + indent(genBody(id), '    ') + '\n  <\/script>\n</body>\n</html>\n';
+}
+function genGeoJSON() {
+  return prettyJSON({ type: 'FeatureCollection', features: S.items.map(it => {
+    const props = { title: it.title, description: it.desc };
+    if (it.type === 'marker') return { type: 'Feature', properties: { ...props, 'marker-color': it.color, symbol: it.symbol }, geometry: { type: 'Point', coordinates: [it.pos[1], it.pos[0]] } };
+    const c = it.pts.map(p => [p[1], p[0]]);
+    Object.assign(props, { stroke: it.color, 'stroke-width': it.weight, 'stroke-opacity': it.opacity, dash: it.dash });
+    if (!it.closed) return { type: 'Feature', properties: props, geometry: { type: 'LineString', coordinates: c } };
+    props.fill = it.color; props['fill-opacity'] = it.fill;
+    return { type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [[...c, c[0]]] } };
+  }) });
+}
+
+/* ---------- Fenêtre d’export ---------- */
+const EXP = {
+  fragment: { hint: 'À coller dans ta page HTML, là où la carte doit apparaître. Les deux premières lignes chargent Leaflet : retire-les si ta page le fait déjà.', file: 'carte-fragment.html', type: 'text/html' },
+  page: { hint: 'Une page complète, prête à enregistrer en .html. La carte occupe toute la fenêtre.', file: 'carte.html', type: 'text/html' },
+  json: { hint: 'Sauvegarde de cette page : réimportable avec « Importer ».', file: 'carte.json', type: 'application/json' },
+  geojson: { hint: 'GeoJSON standard (coordonnées longitude, latitude) : lisible par geojson.io, QGIS, etc. Le style est écrit en propriétés « simplestyle ».', file: 'carte.geojson', type: 'application/geo+json' }
+};
+let expKind = 'fragment';
+function renderExport() {
+  const id = cleanId($('#expId').value), e = EXP[expKind];
+  $$('#expTabs .chip').forEach(c => c.classList.toggle('on', c.dataset.k === expKind));
+  $('#expOpts').hidden = expKind === 'json' || expKind === 'geojson';
+  $('#btnView').hidden = !(expKind === 'fragment' || expKind === 'page');
+  $('#expHint').textContent = e.hint;
+  $('#expText').value = expKind === 'fragment' ? genFragment(id) : expKind === 'page' ? genPage(id) : expKind === 'json' ? prettyJSON(toData()) + '\n' : genGeoJSON() + '\n';
+}
+function download(name, txt, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt], { type }));
+  a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+$('#expTabs').addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) { expKind = c.dataset.k; renderExport(); } });
+$('#expId').addEventListener('input', renderExport);
+$('#btnExport').onclick = () => { renderExport(); $('#expDlg').showModal(); };
+
+/* ---------- Menu, feuilles, raccourcis ---------- */
+$('#btnMenu').onclick = () => $('#menuDlg').showModal();
+$('#btnUndo').onclick = undo;
+$('#btnRedo').onclick = redo;
+$$('dialog.sheet').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  switch (b.dataset.act) {
+    case 'import': $('#menuDlg').close(); $('#impText').value = ''; $('#impFile').value = ''; $('#impDlg').showModal(); break;
+    case 'fit': $('#menuDlg').close(); fitAll(); break;
+    case 'locate': $('#menuDlg').close(); locate(); break;
+    case 'clear':
+      $('#menuDlg').close();
+      if (S.items.length && confirm('Effacer les ' + S.items.length + ' éléments de la carte ?')) { S.items = []; S.sel = null; cancelDraw(); renderAll(); commit(); }
+      break;
+    case 'impcancel': $('#impDlg').close(); break;
+    case 'impappend': doImport(false); break;
+    case 'impreplace': doImport(true); break;
+    case 'expclose': $('#expDlg').close(); break;
+    case 'expdl': download(EXP[expKind].file, $('#expText').value, EXP[expKind].type); break;
+    case 'expview': {
+      let html = $('#expText').value;
+      if (expKind === 'fragment') html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0">' + html;
+      window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank');
+      break;
+    }
+    case 'expcopy': {
+      const ta = $('#expText');
+      try { await navigator.clipboard.writeText(ta.value); toast('Copié dans le presse-papiers.'); }
+      catch (err) { ta.select(); toast(document.execCommand('copy') ? 'Copié dans le presse-papiers.' : 'Sélectionné : copie avec Ctrl+C.'); }
+      break;
+    }
+  }
+});
+document.addEventListener('keydown', e => {
+  if (document.querySelector('dialog[open]')) return;
+  const t = e.target, typing = t.matches && t.matches('input,textarea,select,[contenteditable]'), mod = e.ctrlKey || e.metaKey;
+  if (mod && !typing && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+  if (mod && !typing && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redo(); return; }
+  if (typing || mod || e.altKey) return;
+  switch (e.key) {
+    case 'v': case 'V': setMode('select'); break;
+    case 'p': case 'P': setMode('marker'); break;
+    case 't': case 'T': setMode('path'); break;
+    case 'm': case 'M': setMode('free'); break;
+    case 'Enter': if (S.mode === 'path' && D.pts.length) { e.preventDefault(); finishDraw(); } break;
+    case 'Escape':
+      if (D.pts.length) cancelDraw(); else if (F) cancelFree(); else if (S.mode !== 'select') setMode('select'); else if (S.sel) select(null);
+      break;
+    case 'Backspace': case 'Delete':
+      if (S.mode === 'path' && D.pts.length) { e.preventDefault(); drawBack(); }
+      else if (S.sel) { e.preventDefault(); removeItem(S.sel); }
+      break;
+  }
+});
+
+/* ---------- Démarrage ---------- */
+mapEl.classList.add('mode-select');
+$('#toolHint').textContent = HINTS.select;
+applyOpts(); updView(); renderAll();
+hist = [snap()]; hi = 0; updUndo();
+})();
+</script>
+</body>
+</html>

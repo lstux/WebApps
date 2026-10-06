@@ -9,6 +9,7 @@ Liste des outils envisagés pour le repo. Chaque outil reste une page HTML auton
 | Liseuse Markdown | `src/liseuse-markdown.html` | [LISEUSE.md](LISEUSE.md) |
 | TODO (arbre de tâches) | `src/todo/index.html` | [TODO.md](TODO.md) |
 | Convertisseur unités et devises | `src/convertisseur/index.html` | [CONVERTISSEUR.md](CONVERTISSEUR.md) |
+| Cartes Leaflet (gestionnaire de cartes) | `src/leaflet_manager.html` | [CARTES.md](CARTES.md) |
 | Style commun | `src/common.css` | [STYLE.md](STYLE.md) |
 
 ## En cours

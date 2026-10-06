@@ -34,6 +34,16 @@ Un convertisseur d'unités et de devises avec:
 
 📄 **[Documentation](docs/CONVERTISSEUR.md)** · 📦 **[convertisseur/index.html](src/convertisseur/index.html)**
 
+### 🗺️ Cartes Leaflet
+
+Un gestionnaire de cartes Leaflet avec:
+- Points, trajets (poignées pour les déformer) et tracé à main levée
+- Fonds de carte au choix (OpenStreetMap, CARTO, relief, satellite…)
+- Export du code HTML à insérer dans une page (fragment ou page complète), du JSON et du GeoJSON
+- Import JSON / GeoJSON, annuler / rétablir, sauvegarde locale
+
+📄 **[Documentation](docs/CARTES.md)** · 📦 **[leaflet_manager.html](src/leaflet_manager.html)**
+
 ## Prochains outils
 
 La liste des outils envisagés est dans [docs/suggested_apps_nextsteps.md](docs/suggested_apps_nextsteps.md).
@@ -58,6 +68,7 @@ La structure du repo:
 │   ├── LISEUSE.md
 │   ├── TODO.md
 │   ├── CONVERTISSEUR.md
+│   ├── CARTES.md
 │   ├── STYLE.md                   # Style commun : variables et composants
 │   └── suggested_apps_nextsteps.md
 ├── src/                           # Pages HTML
@@ -66,8 +77,9 @@ La structure du repo:
 │   ├── todo/
 │   │   ├── index.html
 │   │   └── slovingo.json
-│   └── convertisseur/
-│       └── index.html
+│   ├── convertisseur/
+│   │   └── index.html
+│   └── leaflet_manager.html
 ├── LICENSE
 └── README.md
 ```
