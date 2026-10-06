@@ -11,7 +11,7 @@ Une page unique pour gérer une liste de todos hiérarchique et illimitée en pr
 - **Stockage local** : données sauvegardées automatiquement dans `localStorage` du navigateur.
 - **Import/Export** : exportez en JSON ou en texte indenté (`*`, `+`, `-`), et importez en remplaçant ou ajoutant.
 - **Mobile-first** : interface optimisée pour les téléphones, avec zones tactiles généreuses et vues adaptées.
-- **Pas de dépendances** : un seul fichier HTML avec CSS et JavaScript inclus.
+- **Pas de dépendances** : une page HTML avec son JavaScript inclus, plus la feuille de style commune `src/common.css` (voir [STYLE.md](STYLE.md)).
 
 ## 🚀 Utilisation
 
@@ -73,7 +73,7 @@ Tout est sauvegardé en `localStorage` de votre navigateur. Changer de navigateu
 
 - Pas de serveur : tout fonctionne hors ligne.
 - Rapide même avec des milliers de todos.
-- Fichier de 23 Ko au total.
+- Page légère (environ 18 Ko, hors feuille de style commune).
 
 ---
 

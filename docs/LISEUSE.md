@@ -52,10 +52,10 @@ Les tâches restent statiques : les cases ne se cochent pas dans la liseuse.
 
 ## Couleurs et thème
 
-- **Clair** : fond crème, texte gris foncé, accents verts et bleus
-- **Sombre** : fond presque noir, texte gris clair, accents plus lumineux
+- **Clair** : fond gris-bleu clair, zone de lecture blanche, accent bleu-violet
+- **Sombre** : fond presque noir, texte gris clair, accent plus lumineux
 
-La barre de lecture utilise un dégradé accent → accent2.
+Les couleurs viennent du style commun `src/common.css` (voir [STYLE.md](STYLE.md)), partagé avec les autres outils. La barre de lecture utilise un dégradé accent → second accent.
 
 ## Notes
 
@@ -67,7 +67,7 @@ La barre de lecture utilise un dégradé accent → accent2.
 
 ## Fichier unique
 
-La page est un fichier `.html` autonome sans dépendances externes autre que les CDN. Tu peux:
+La page est un fichier `.html` autonome, qui dépend seulement de `common.css` (placé à côté d'elle) et des CDN. Tu peux:
 - L'ouvrir directement dans le navigateur
 - La servir avec un serveur web simple
 - L'intégrer dans une autre page (bien que ce soit moins recommandé)
