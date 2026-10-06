@@ -3,9 +3,11 @@
 
   python3 build.py                 copie code/ dans dist/ et génère dist/index.html
                                    (grille de cartes : icône, titre et description de chaque outil)
-  python3 build.py --standalone    chaque page HTML de code/ est écrite dans dist/ avec ses
-                                   fichiers locaux insérés (common.css et common.js dans la page,
-                                   icônes en data:) : une page = un fichier
+  python3 build.py --standalone    chaque page HTML de code/ est écrite dans dist/ avec TOUT ce dont elle
+                                   dépend inséré : common.css et common.js, icônes en data:, et les
+                                   bibliothèques / polices des CDN (téléchargées une fois, gardées dans
+                                   .cache/standalone/). Une page = un fichier, utilisable hors ligne.
+                                   --refresh retélécharge au lieu d'utiliser le cache.
   python3 build.py --pwa           comme le premier, et dist/ devient une application
                                    installable : manifest, service worker (hors ligne)
                                    et icônes générées. Incompatible avec --standalone.
@@ -29,9 +31,11 @@ import shutil
 import struct
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 import zlib
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urljoin, urlparse
 
 ROOT = Path(__file__).resolve().parent
 LINK_RE = re.compile(r"<link\b[^>]*>", re.I)
@@ -58,8 +62,118 @@ ANCHOR_RE = re.compile(r"<a\b[^>]*>", re.I)
 OPEN_SCRIPT_RE = re.compile(r"<script\b[^>]*>", re.I)
 STOP_COLOR_RE = re.compile(r"""stop-color\s*=\s*["'](#[0-9a-fA-F]{6})["']""")
 MIME = {".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-        ".webp": "image/webp", ".gif": "image/gif", ".ico": "image/x-icon"}
+        ".webp": "image/webp", ".gif": "image/gif", ".ico": "image/x-icon",
+        ".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf", ".otf": "font/otf"}
 APP_ICON = "icons/webapps.svg"   # icône de l'index et de l'ensemble ; facultative
+CACHE_DIR = ROOT / ".cache" / "standalone"
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"   # Google Fonts sert du woff2 aux navigateurs récents
+MAX_REMOTE = 8 * 1024 * 1024
+HTTPS_RE = re.compile(r"https://", re.I)
+CSS_URL_RE = re.compile(r"""url\(\s*(['"]?)(.*?)\1\s*\)""", re.I | re.S)
+FONT_FACE_RE = re.compile(r"/\*\s*([\w-]+)\s*\*/\s*(@font-face\s*\{.*?\})", re.S)
+
+
+class Remote:
+    """Télécharge les ressources distantes (bibliothèques, polices) et les garde dans .cache/standalone/ :
+    le premier build a besoin du réseau, les suivants non. refresh=True ignore le cache."""
+
+    def __init__(self, cache=None, refresh=False):
+        self.cache = Path(cache) if cache else CACHE_DIR
+        self.refresh = refresh
+        self.seen = {}          # url -> (octets, type) pour ce build
+        self.fetched = 0        # téléchargés pendant ce build
+        self.bytes = 0          # taille de tout ce qui a été intégré
+
+    @staticmethod
+    def key(url):
+        return hashlib.sha256(url.encode("utf-8")).hexdigest()[:32]
+
+    def get(self, url):
+        if url in self.seen:
+            return self.seen[url]
+        body, meta = self.cache / (self.key(url) + ".bin"), self.cache / (self.key(url) + ".json")
+        if not self.refresh and body.is_file() and meta.is_file():
+            data, ctype = body.read_bytes(), json.loads(meta.read_text(encoding="utf-8")).get("type", "")
+            print(f"    = {url}  (cache, {len(data) // 1024} Ko)")
+        else:
+            data, ctype = self.download(url)
+            self.cache.mkdir(parents=True, exist_ok=True)
+            body.write_bytes(data)
+            meta.write_text(json.dumps({"url": url, "type": ctype}), encoding="utf-8")
+            self.fetched += 1
+            print(f"    ↓ {url}  ({len(data) // 1024} Ko)")
+        self.seen[url] = (data, ctype)
+        self.bytes += len(data)
+        return data, ctype
+
+    @staticmethod
+    def download(url):
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                data = r.read(MAX_REMOTE + 1)
+                ctype = r.headers.get_content_type()
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            sys.exit(f"Téléchargement impossible : {url}\n  {e}\n"
+                     "  --standalone a besoin du réseau la première fois ; ensuite .cache/standalone/ suffit.")
+        if len(data) > MAX_REMOTE:
+            sys.exit(f"{url} dépasse {MAX_REMOTE // 1024 // 1024} Mo : refusé.")
+        if ctype == "text/html":
+            sys.exit(f"{url} renvoie une page HTML, pas le fichier attendu (adresse changée ?).")
+        return data, ctype
+
+
+def decode_text(url, data):
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        sys.exit(f"{url} n'est pas en UTF-8 : insertion impossible.")
+
+
+def safe_js(js):
+    """Prépare un script téléchargé pour vivre dans une balise <script> de la page."""
+    js = re.sub(r"//[#@]\s*sourceMappingURL=\S+\s*$", "", js.strip())
+    js = re.sub(r"</(script)", r"<\\/\1", js, flags=re.I)   # « </script » dans une chaîne fermerait la balise
+    return js.replace("<!--", "<\\!--")
+
+
+def latin_only(css):
+    """Google Fonts renvoie un @font-face par alphabet : on ne garde que « latin » (le français y est entier)."""
+    kept = [block for label, block in FONT_FACE_RE.findall(css) if label == "latin"]
+    return "\n".join(kept) if kept else css
+
+
+def remote_css(remote, url):
+    """Feuille de style distante, prête à être insérée : url() remplacés par des data:."""
+    data, _ = remote.get(url)
+    css = decode_text(url, data)
+    if urlparse(url).hostname == "fonts.googleapis.com":
+        css = latin_only(css)
+
+    def embed(m):
+        ref = m.group(2).strip()
+        if not ref or ref.startswith(("data:", "#")):
+            return m.group(0)
+        target = urljoin(url, ref)
+        if not HTTPS_RE.match(target):
+            return m.group(0)
+        blob, ctype = remote.get(target)
+        ext_mime = MIME.get(Path(urlparse(target).path).suffix.lower())
+        mime = ext_mime if (not ctype or ctype in ("application/octet-stream", "text/plain", "binary/octet-stream")) and ext_mime else ctype
+        return f'url("data:{mime};base64,{base64.b64encode(blob).decode("ascii")}")'
+
+    css = CSS_URL_RE.sub(embed, css)
+    css = re.sub(r"/\*[#@]\s*sourceMappingURL=.*?\*/", "", css).strip()
+    if re.search(r"</style", css, re.I):
+        sys.exit(f"{url} contient « </style » : insertion impossible")
+    return css
+
+
+def bare_script_tag(opening):
+    """Balise <script> ouvrante sans les attributs qui n'ont plus de sens une fois le code dans la page."""
+    for name in ("src", "integrity", "crossorigin", "referrerpolicy", "nonce"):
+        opening = drop_attr(opening, name)
+    return re.sub(r"\s+(?:async|defer|crossorigin)(?=[\s>])", "", opening, flags=re.I)
 
 
 def set_attr(tag, name, value):
@@ -77,9 +191,10 @@ def data_uri(path):
     return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("ascii")
 
 
-def inline_page(page, source_root):
+def inline_page(page, source_root, remote=None):
     """Rend une page autonome : feuilles de style et scripts locaux insérés dans la page, icône et
-    images locales en data:, lien d'accueil (data-home) neutralisé."""
+    images locales en data:, lien d'accueil (data-home) neutralisé. Avec remote (un Remote), les
+    <script src> et <link rel=stylesheet> en https:// sont eux aussi téléchargés et insérés."""
     text = page.read_text(encoding="utf-8")
     name = page.relative_to(source_root)
 
@@ -99,7 +214,15 @@ def inline_page(page, source_root):
         tag = m.group(0)
         a = attrs(tag)
         rels = a.get("rel", "").lower().split()
-        path = local(a.get("href", ""))
+        href = a.get("href", "")
+        if remote and HTTPS_RE.match(href):
+            if "stylesheet" in rels:
+                media = f' media="{html.escape(a["media"])}"' if a.get("media") else ""
+                return f"<style{media}>\n/* {href} */\n{remote_css(remote, href)}\n</style>"
+            if {"preconnect", "dns-prefetch", "preload", "prefetch"} & set(rels):
+                return ""   # indications de connexion devenues inutiles
+            return tag
+        path = local(href)
         if path is None:
             return tag
         if "stylesheet" in rels:
@@ -128,14 +251,20 @@ def inline_page(page, source_root):
     def script(m):
         block = m.group(0)
         opening = OPEN_SCRIPT_RE.match(block).group(0)
-        path = local(attrs(opening).get("src", ""))
+        src = attrs(opening).get("src", "")
         inner = block[len(opening):block.lower().rfind("</script")]
-        if path is None or inner.strip():
+        if inner.strip():
+            return block
+        if remote and HTTPS_RE.match(src):
+            data, _ = remote.get(src)
+            return f"{bare_script_tag(opening)}\n/* {src} */\n{safe_js(decode_text(src, data))}\n</script>"
+        path = local(src)
+        if path is None:
             return block
         js = path.read_text(encoding="utf-8").strip()
         if re.search(r"</script", js, re.I):
             sys.exit(f"{path.name} contient « </script » : insertion impossible")
-        return f"{drop_attr(opening, 'src')}\n/* {path.name} */\n{js}\n</script>"
+        return f"{bare_script_tag(opening)}\n/* {path.name} */\n{js}\n</script>"
 
     def plain(chunk):
         # <link> en dernier : le CSS inséré par link() ne doit pas être relu (ses commentaires contiennent du HTML d'exemple)
@@ -617,6 +746,8 @@ def main():
     ap = argparse.ArgumentParser(description="Construit dist/ à partir de code/.")
     ap.add_argument("--standalone", action="store_true",
                     help="une page HTML par outil, common.css inséré dans la page (pas d'index)")
+    ap.add_argument("--refresh", action="store_true",
+                    help="avec --standalone : retélécharge les bibliothèques et polices au lieu d'utiliser .cache/standalone/")
     ap.add_argument("--pwa", action="store_true",
                     help="application installable : manifest, service worker (hors ligne) et icônes (pas avec --standalone)")
     ap.add_argument("--deploy", action="store_true",
@@ -624,6 +755,8 @@ def main():
     ap.add_argument("--src", default="code", help="dossier des sources (défaut : code)")
     ap.add_argument("--out", default="dist", help="dossier de sortie (défaut : dist)")
     args = ap.parse_args()
+    if args.refresh and not args.standalone:
+        ap.error("--refresh ne sert qu'avec --standalone.")
     if args.pwa and args.standalone:
         ap.error("--pwa ne se combine pas avec --standalone : une PWA a besoin de son manifest, de son service worker "
                  "et de ses icônes à côté des pages, et d'un index pour démarrer.")
@@ -645,13 +778,15 @@ def main():
     clean(out, source)
 
     if args.standalone:
+        remote = Remote(refresh=args.refresh)
         for p in pages:
             rel = p.relative_to(source)
+            print(f"  {rel}")
             dest = out / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(inline_page(p, source), encoding="utf-8")
-            print(f"  {rel}")
-        print(f"{len(pages)} page(s) autonome(s) dans {out.relative_to(ROOT)}/")
+            dest.write_text(inline_page(p, source, remote), encoding="utf-8")
+        print(f"{len(pages)} page(s) autonome(s) dans {out.relative_to(ROOT)}/"
+              + (f" ({len(remote.seen)} ressource(s) distante(s) intégrée(s), {remote.fetched} téléchargée(s))" if remote.seen else ""))
     else:
         shutil.copytree(source, out, dirs_exist_ok=True)
         tools, extras = [], {}

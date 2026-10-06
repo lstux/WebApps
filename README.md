@@ -59,12 +59,25 @@ Chaque outil est une page `.html` unique. Deux façons de l'utiliser :
 
 ```
 python3 build.py                 # dist/ : copie de code/ + index.html qui liste les outils
-python3 build.py --standalone    # dist/ : chaque page avec common.css, common.js et icônes intégrés (un fichier = un outil)
+python3 build.py --standalone    # dist/ : chaque page avec TOUT intégré, bibliothèques et polices des CDN comprises (un fichier = un outil, hors ligne)
+python3 build.py --standalone --refresh   # idem, en retéléchargeant les bibliothèques au lieu d'utiliser le cache
 python3 build.py --pwa           # comme le premier, plus une application installable (voir ci-dessous)
 python3 build.py --pwa --deploy  # construit, puis envoie dist/ sur le serveur (voir « Déploiement »)
 ```
 
-Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent en ligne dans tous les modes. L'index est une grille de cartes : il lit le `<title>`, la `<meta name="description">` et l'icône (`<link rel="icon">`) de chaque page, et reprend les couleurs du dégradé de l'icône pour sa carte.
+Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Dans les modes normal et `--pwa`, les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent des liens (le service worker les garde en cache) ; `--standalone` les intègre. L'index est une grille de cartes : il lit le `<title>`, la `<meta name="description">` et l'icône (`<link rel="icon">`) de chaque page, et reprend les couleurs du dégradé de l'icône pour sa carte.
+
+### Pages autonomes (`--standalone`)
+
+Chaque outil devient **un seul fichier `.html`**, utilisable hors ligne et copiable n'importe où (clé USB, mail, dossier synchronisé…). Le build y insère :
+
+- `common.css` et `common.js`, les icônes (en `data:`) ;
+- les bibliothèques des CDN : Leaflet (script, feuille de style et ses images), marked, DOMPurify, highlight.js, générateur de QR code ;
+- les polices Google de la Liseuse, **limitées à l'alphabet latin** (le français y est complet ; les autres alphabets retombent sur la police du système).
+
+**Le premier build a besoin d'Internet** : les fichiers sont téléchargés puis gardés dans `.cache/standalone/` (non versionné). Les builds suivants se font sans réseau ; `--refresh` retélécharge tout (par exemple pour passer à une nouvelle version d'une bibliothèque : change l'adresse dans la page, relance). Si un téléchargement échoue, le build s'arrête avec un message clair plutôt que de produire une page à moitié en ligne.
+
+Ce qui reste en ligne, par nature : les taux de change du Convertisseur, les tuiles de carte et la recherche de lieu de Cartes, et le chargement d'une adresse ou d'un dépôt GitHub dans la Liseuse. Il n'y a pas d'index (donc pas de lien d'accueil) dans ce mode. Compte environ 40 Ko pour le TODO et le Convertisseur, et quelques centaines de Ko pour les outils qui embarquent une bibliothèque.
 
 ### Application installable (PWA)
 
@@ -111,7 +124,7 @@ Précautions : la configuration est vérifiée **avant** le build ; `host`, `use
 
 - Un navigateur moderne (Chrome, Firefox, Safari, Edge)
 - Pour charger des adresses : ouvre le fichier localement (pas depuis http://)
-- Connexion Internet pour les CDN des bibliothèques et, dans le Convertisseur, pour actualiser les taux de change
+- Connexion Internet pour les CDN des bibliothèques (sauf dans les pages `--standalone`, qui les embarquent) et, dans le Convertisseur, pour actualiser les taux de change
 
 ## Développement
 

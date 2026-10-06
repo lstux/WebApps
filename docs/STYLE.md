@@ -19,7 +19,7 @@ Le `<link>` de `common.css` se place **avant** le `<style>` de la page : à spé
 
 ## Build
 
-`python3 build.py` copie `code/` dans `dist/` et génère un `index.html` ; avec `--standalone`, chaque page devient un fichier unique : `common.css` est inséré dans un `<style>`, `common.js` dans un `<script>`, et l'icône (`<link rel="icon">`) comme les `<img>` locaux passent en `data:`. Le contenu des `<script>` n'est jamais retouché, et les polices ou bibliothèques chargées depuis un site restent des liens. En standalone, le lien d'accueil `data-home` perd son `href` (il n'y a pas d'index à rejoindre). `--pwa` (sans `--standalone`) ajoute manifest, service worker et icônes ; voir le README.
+`python3 build.py` copie `code/` dans `dist/` et génère un `index.html` ; avec `--standalone`, chaque page devient un fichier unique : `common.css` est inséré dans un `<style>`, `common.js` dans un `<script>`, et l'icône (`<link rel="icon">`) comme les `<img>` locaux passent en `data:`. Les `<script src="https://…">`, `<link rel="stylesheet" href="https://…">` (Leaflet, marked, polices Google…) sont téléchargés une fois (cache `.cache/standalone/`, option `--refresh`) et insérés ; les `url()` de ces feuilles passent en `data:`, et les polices Google sont limitées à l'alphabet latin. Le contenu des `<script>` écrits dans les pages n'est jamais retouché. En standalone, le lien d'accueil `data-home` perd son `href` (il n'y a pas d'index à rejoindre). `--pwa` (sans `--standalone`) ajoute manifest, service worker et icônes ; voir le README.
 
 Les couleurs de l'application installée (icônes, `theme-color`, fond de démarrage) sont lues dans `common.css` : `--ac` et `--ac2` pour le dégradé de l'icône, `--ac3` pour son rond jaune, la première et la deuxième valeur de `--bg` pour le clair et le sombre. Changer ces variables suffit à changer l'icône au prochain build. Ces valeurs doivent rester au format `#rrggbb`.
 
@@ -97,4 +97,4 @@ Une page peut ajouter ses propres variables (la Liseuse définit `--f-read` pour
 2. Dessiner `code/icons/mon_outil.svg` en partant d'une icône existante (même tuile et même halo, autre dégradé et autre motif).
 3. Partir de `.topbar` pour l'en-tête (avec `.appicon` et le bouton de thème), `.card` pour les blocs, `.btn` et les champs pour les formulaires.
 4. Mettre dans un `<style>` uniquement ce qui est spécifique à l'outil.
-5. Tester en clair et en sombre, sur un écran étroit (environ 390 px) et sur un écran large, puis lancer `python3 build.py`, `--standalone` et `--pwa`.
+5. Tester en clair et en sombre, sur un écran étroit (environ 390 px) et sur un écran large, puis lancer `python3 build.py`, `--standalone` et `--pwa`. Pour qu'une bibliothèque externe soit embarquée en standalone, la charger avec une balise ordinaire `<script src="https://…">` ou `<link rel="stylesheet" href="https://…">` dans la page (pas depuis du JavaScript).
