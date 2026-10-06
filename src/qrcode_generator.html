@@ -2,382 +2,103 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Générateur de QR code</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="common.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <style>
-  :root{
-    --paper:#F6F3EC;
-    --panel:#FFFFFF;
-    --ink:#1B1B18;
-    --muted:#8A8574;
-    --line:#DEDACB;
-    --accent:#C1442D;
-    --accent-ink:#FFF7F2;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    background:
-      linear-gradient(var(--paper),var(--paper)),
-      repeating-linear-gradient(0deg, rgba(27,27,24,0.05) 0 1px, transparent 1px 28px),
-      repeating-linear-gradient(90deg, rgba(27,27,24,0.05) 0 1px, transparent 1px 28px);
-    color:var(--ink);
-    font-family:'IBM Plex Sans', sans-serif;
-    min-height:100vh;
-  }
-  .wrap{
-    max-width:1080px;
-    margin:0 auto;
-    padding:40px 24px 80px;
-  }
-  header{
-    margin-bottom:32px;
-  }
-  .eyebrow{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px;
-    letter-spacing:0.14em;
-    text-transform:uppercase;
-    color:var(--accent);
-    display:flex;
-    align-items:center;
-    gap:8px;
-    margin-bottom:10px;
-  }
-  .eyebrow .dot{width:6px;height:6px;background:var(--accent);display:inline-block;}
-  h1{
-    font-size:clamp(28px,4vw,40px);
-    margin:0 0 6px;
-    font-weight:700;
-    letter-spacing:-0.01em;
-  }
-  header p{
-    margin:0;
-    color:var(--muted);
-    font-size:15px;
-    max-width:52ch;
-  }
+/* Générateur de QR — styles propres à l'outil.
+   Le reste vient de common.css : .topbar, .card, .btn, .chips, champs, .hint. */
+.topbar-in{max-width:1080px}
+/* 1112 = 1080 de contenu + 2×16 de gouttière, comme .topbar : le titre s'aligne sur les cartes */
+.wrap{max-width:1112px;margin:0 auto;padding:18px 16px calc(40px + env(safe-area-inset-bottom,0px))}
 
-  .layout{
-    display:grid;
-    grid-template-columns:1.1fr 0.9fr;
-    gap:24px;
-    align-items:start;
-  }
-  @media (max-width:820px){
-    .layout{grid-template-columns:1fr;}
-  }
+.layout{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;align-items:start}
+.layout .card{margin-bottom:0;padding:22px}
+@media (max-width:820px){
+  .layout{grid-template-columns:1fr}
+  .layout .card{padding:16px}
+}
 
-  .card{
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:2px;
-  }
+/* ---- formulaire ---- */
+.group{margin-bottom:20px}
+.group:last-child{margin-bottom:0}
+label{display:block;font-size:13px;font-weight:600;color:var(--mut);margin-bottom:6px}
+.tabs{flex-wrap:wrap;overflow:visible;margin-bottom:20px}
+#content{min-height:110px}
+.charcount{text-align:right;font-family:var(--f-mono);font-size:12px;color:var(--mut);margin-top:4px}
 
-  /* ---- form panel ---- */
-  .form-card{padding:28px;}
-  .field{margin-bottom:22px;}
-  .field:last-child{margin-bottom:0;}
-  label{
-    display:block;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    letter-spacing:0.08em;
-    text-transform:uppercase;
-    color:var(--muted);
-    margin-bottom:8px;
-  }
-  .type-tabs{
-    display:flex;
-    flex-wrap:wrap;
-    gap:6px;
-    margin-bottom:22px;
-    border-bottom:1px solid var(--line);
-    padding-bottom:0;
-  }
-  .type-tab{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px;
-    padding:10px 14px 12px;
-    color:var(--muted);
-    border:none;
-    background:none;
-    cursor:pointer;
-    border-bottom:2px solid transparent;
-    margin-bottom:-1px;
-  }
-  .type-tab.active{
-    color:var(--ink);
-    border-bottom-color:var(--accent);
-  }
-  .type-tab[disabled]{
-    cursor:not-allowed;
-    opacity:0.55;
-  }
-  .type-tab .soon{
-    font-size:9px;
-    vertical-align:super;
-    color:var(--accent);
-  }
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:480px){.row:not(.row-2){grid-template-columns:1fr}}
 
-  textarea{
-    width:100%;
-    min-height:110px;
-    resize:vertical;
-    padding:12px 14px;
-    border:1px solid var(--line);
-    border-radius:1px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:14px;
-    color:var(--ink);
-    background:var(--paper);
-  }
-  input[type="text"], input[type="datetime-local"]{
-    width:100%;
-    padding:12px 14px;
-    border:1px solid var(--line);
-    border-radius:1px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:14px;
-    color:var(--ink);
-    background:var(--paper);
-  }
+.check{display:flex;align-items:center;gap:8px;margin:16px 0 0;font-size:15px;font-weight:400;color:var(--fg)}
+.check input{width:18px;height:18px;accent-color:var(--ac)}
 
-  textarea:focus, select:focus, input:focus{
-    outline:2px solid var(--accent);
-    outline-offset:1px;
-  }
+input[type=range]{width:100%;accent-color:var(--ac)}
+.range-head{display:flex;justify-content:space-between;align-items:baseline}
+.range-value{font-family:var(--f-mono);font-size:13px}
 
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-  .charcount{
-    text-align:right;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    color:var(--muted);
-    margin-top:4px;
-  }
+.color-field{display:flex;align-items:center;gap:10px;background:var(--card2);border-radius:var(--r-m);padding:8px 10px}
+input[type=color]{width:32px;height:32px;padding:0;border:1px solid var(--line);border-radius:50%;background:none;cursor:pointer;flex:none}
+.color-hex{font-family:var(--f-mono);font-size:13px;color:var(--mut)}
 
-  select{
-    width:100%;
-    padding:10px 12px;
-    border:1px solid var(--line);
-    background:var(--paper);
-    font-family:'IBM Plex Sans', sans-serif;
-    font-size:14px;
-    color:var(--ink);
-    border-radius:1px;
-  }
-  select:disabled{
-    opacity:0.6;
-    cursor:not-allowed;
-  }
-  input[type="file"]{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px;
-    color:var(--muted);
-  }
-  .logo-row{
-    display:flex;
-    align-items:center;
-    gap:12px;
-  }
-  .logo-row input[type="file"]{flex:1;min-width:0;}
-  .btn-small{
-    flex:0 0 auto;
-    padding:9px 12px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    text-transform:uppercase;
-    letter-spacing:0.04em;
-    border:1px solid var(--line);
-    background:var(--panel);
-    color:var(--ink);
-    cursor:pointer;
-  }
-  .btn-small:hover{
-    border-color:var(--accent);
-    color:var(--accent);
-  }
-  .ec-desc{
-    font-size:12px;
-    color:var(--muted);
-    margin-top:6px;
-  }
+input[type=file]{font-size:14px;color:var(--mut)}
+input[type=file]::file-selector-button{font:inherit;font-weight:550;color:var(--fg);padding:8px 14px;margin-right:10px;
+  border:1px solid var(--line);border-radius:var(--r-m);background:var(--card2);cursor:pointer}
+input[type=file]::file-selector-button:hover{border-color:var(--ac)}
+.logo-row{display:flex;align-items:center;gap:12px}
+.logo-row input[type=file]{flex:1;min-width:0}
+#logo-remove{padding:8px 14px;font-size:14px}
 
-  input[type="range"]{
-    width:100%;
-    accent-color:var(--accent);
-  }
-  .range-value{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px;
-    color:var(--ink);
-  }
-  .range-head{
-    display:flex;
-    justify-content:space-between;
-    align-items:baseline;
-  }
+/* ---- aperçu ---- */
+.preview-card{display:flex;flex-direction:column;align-items:center}
+@media (min-width:821px){.preview-card{position:sticky;top:84px}}
+.frame{position:relative;width:100%;aspect-ratio:1/1;max-width:340px;background:var(--card2);border:1px solid var(--line);
+  border-radius:var(--r-m);display:flex;align-items:center;justify-content:center;padding:18px}
+.frame canvas{width:100%;height:100%;image-rendering:pixelated}
+.empty-state{font-size:14px;color:var(--mut);text-align:center;padding:0 20px}
+.meta{font-family:var(--f-mono);font-size:12px;color:var(--mut);margin-top:14px}
+.actions{display:flex;gap:10px;width:100%;max-width:340px;margin-top:18px}
+.actions .btn{flex:1}
 
-  .color-field{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    border:1px solid var(--line);
-    padding:8px 10px;
-    background:var(--paper);
-  }
-  input[type="color"]{
-    width:32px;height:32px;
-    padding:0;
-    border:1px solid var(--line);
-    border-radius:50%;
-    background:none;
-    cursor:pointer;
-  }
-  .color-hex{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:13px;
-    color:var(--muted);
-  }
-
-  /* ---- preview panel ---- */
-  .preview-card{
-    padding:28px;
-    position:sticky;
-    top:24px;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-  }
-  .frame{
-    position:relative;
-    width:100%;
-    aspect-ratio:1/1;
-    max-width:340px;
-    background:var(--paper);
-    border:1px solid var(--line);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:18px;
-  }
-  .frame canvas{
-    width:100%;
-    height:100%;
-    image-rendering:pixelated;
-  }
-  .finder{
-    position:absolute;
-    width:26px;
-    height:26px;
-    border:5px solid var(--ink);
-    opacity:0.9;
-  }
-  .finder::after{
-    content:"";
-    position:absolute;
-    inset:6px;
-    background:var(--ink);
-  }
-  .finder.tl{top:-2px;left:-2px;}
-  .finder.tr{top:-2px;right:-2px;}
-  .finder.bl{bottom:-2px;left:-2px;}
-
-  .empty-state{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px;
-    color:var(--muted);
-    text-align:center;
-    padding:0 20px;
-  }
-
-  .meta{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    color:var(--muted);
-    margin-top:16px;
-    letter-spacing:0.02em;
-  }
-
-  .actions{
-    display:flex;
-    gap:10px;
-    width:100%;
-    max-width:340px;
-    margin-top:20px;
-  }
-  button.export{
-    flex:1;
-    padding:12px 14px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px;
-    letter-spacing:0.06em;
-    text-transform:uppercase;
-    border:1px solid var(--ink);
-    background:var(--panel);
-    color:var(--ink);
-    cursor:pointer;
-    transition:background 0.12s ease, color 0.12s ease;
-  }
-  button.export.primary{
-    background:var(--ink);
-    color:var(--accent-ink);
-  }
-  button.export:hover:not(:disabled){
-    background:var(--accent);
-    border-color:var(--accent);
-    color:var(--accent-ink);
-  }
-  button.export:disabled{
-    opacity:0.4;
-    cursor:not-allowed;
-  }
-
-  footer{
-    margin-top:36px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    color:var(--muted);
-  }
+footer.hint{margin-top:28px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="eyebrow"><span class="dot"></span>QR // GÉNÉRATEUR</div>
-    <h1>Générateur de QR code</h1>
-    <p>Entrez votre contenu, ajustez les paramètres, l'aperçu se met à jour en direct. Export en PNG ou en SVG.</p>
-  </header>
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="grow">
+      <h1 class="brand">Générateur de QR code</h1>
+      <div class="subtitle">Aperçu en direct · export PNG ou SVG</div>
+    </div>
+  </div>
+</header>
 
+<main class="wrap">
   <div class="layout">
     <!-- Formulaire -->
     <section class="card form-card">
-      <div class="type-tabs">
-        <button class="type-tab active" type="button" data-type="text">Texte</button>
-        <button class="type-tab" type="button" data-type="url">Lien</button>
-        <button class="type-tab" type="button" data-type="wifi">Wi-Fi</button>
-        <button class="type-tab" type="button" data-type="vcard">Contact</button>
-        <button class="type-tab" type="button" data-type="event">Événement</button>
+      <div class="chips tabs">
+        <button class="chip type-tab on" type="button" data-type="text">Texte</button>
+        <button class="chip type-tab" type="button" data-type="url">Lien</button>
+        <button class="chip type-tab" type="button" data-type="wifi">Wi-Fi</button>
+        <button class="chip type-tab" type="button" data-type="vcard">Contact</button>
+        <button class="chip type-tab" type="button" data-type="event">Événement</button>
       </div>
 
-      <div class="field" id="field-text">
+      <div class="group" id="field-text">
         <label for="content">Contenu du QR code</label>
         <textarea id="content" placeholder="Saisissez le texte à encoder…" maxlength="2000"></textarea>
         <div class="charcount"><span id="charcount">0</span> / 2000</div>
       </div>
 
-      <div class="field" id="field-url" style="display:none;">
+      <div class="group" id="field-url" style="display:none;">
         <label for="url-input">Adresse du lien</label>
         <input type="text" id="url-input" placeholder="exemple.com ou https://exemple.com">
-        <div class="ec-desc">« https:// » est ajouté automatiquement si absent.</div>
+        <div class="hint">« https:// » est ajouté automatiquement si absent.</div>
       </div>
 
-      <div class="field" id="field-wifi" style="display:none;">
+      <div class="group" id="field-wifi" style="display:none;">
         <label for="wifi-ssid">Nom du réseau (SSID)</label>
         <input type="text" id="wifi-ssid" placeholder="MonReseauWifi">
         <div class="row" style="margin-top:16px;">
@@ -394,13 +115,13 @@
             <input type="text" id="wifi-password" placeholder="••••••••">
           </div>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:16px;text-transform:none;letter-spacing:normal;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:var(--ink);">
-          <input type="checkbox" id="wifi-hidden" style="width:auto;">
+        <label class="check">
+          <input type="checkbox" id="wifi-hidden">
           Réseau masqué (SSID non diffusé)
         </label>
       </div>
 
-      <div class="field" id="field-vcard" style="display:none;">
+      <div class="group" id="field-vcard" style="display:none;">
         <div class="row">
           <div>
             <label for="vcard-first">Prénom</label>
@@ -433,17 +154,17 @@
         </div>
       </div>
 
-      <div class="field" id="field-event" style="display:none;">
+      <div class="group" id="field-event" style="display:none;">
         <label for="event-title">Titre de l'événement</label>
         <input type="text" id="event-title" placeholder="Réunion de lancement">
         <div class="row" style="margin-top:16px;">
           <div>
             <label for="event-start">Début</label>
-            <input type="datetime-local" id="event-start">
+            <input type="datetime-local" class="field" id="event-start">
           </div>
           <div>
             <label for="event-end">Fin</label>
-            <input type="datetime-local" id="event-end">
+            <input type="datetime-local" class="field" id="event-end">
           </div>
         </div>
         <div style="margin-top:16px;">
@@ -456,7 +177,7 @@
         </div>
       </div>
 
-      <div class="field">
+      <div class="group">
         <label for="ec-level">Niveau de correction d'erreur</label>
         <select id="ec-level">
           <option value="L">L — faible (~7% de récupération)</option>
@@ -464,10 +185,10 @@
           <option value="Q">Q — élevé (~25% de récupération)</option>
           <option value="H">H — maximal (~30% de récupération)</option>
         </select>
-        <div class="ec-desc">Un niveau plus élevé rend le code plus robuste (rayures, logo superposé…) mais plus dense.</div>
+        <div class="hint">Un niveau plus élevé rend le code plus robuste (rayures, logo superposé…) mais plus dense.</div>
       </div>
 
-      <div class="field">
+      <div class="group">
         <div class="range-head">
           <label for="size" style="margin-bottom:0;">Taille d'export (PNG)</label>
           <span class="range-value"><span id="size-value">512</span> px</span>
@@ -475,7 +196,7 @@
         <input type="range" id="size" min="128" max="1024" step="16" value="512">
       </div>
 
-      <div class="field">
+      <div class="group">
         <div class="range-head">
           <label for="margin" style="margin-bottom:0;">Marge (zone de silence)</label>
           <span class="range-value"><span id="margin-value">4</span> modules</span>
@@ -483,15 +204,15 @@
         <input type="range" id="margin" min="0" max="10" step="1" value="4">
       </div>
 
-      <div class="row">
-        <div class="field">
+      <div class="row row-2">
+        <div class="group">
           <label for="fg-color">Couleur des modules</label>
           <div class="color-field">
             <input type="color" id="fg-color" value="#1b1b18">
             <span class="color-hex" id="fg-hex">#1B1B18</span>
           </div>
         </div>
-        <div class="field">
+        <div class="group">
           <label for="bg-color">Couleur de fond</label>
           <div class="color-field">
             <input type="color" id="bg-color" value="#ffffff">
@@ -500,17 +221,17 @@
         </div>
       </div>
 
-      <div class="field">
+      <div class="group">
         <label for="logo-input">Logo (optionnel)</label>
         <div class="logo-row">
           <input type="file" id="logo-input" accept="image/png,image/jpeg,image/webp,image/svg+xml">
-          <button type="button" class="btn-small" id="logo-remove" style="display:none;">Retirer</button>
+          <button type="button" class="btn" id="logo-remove" style="display:none;">Retirer</button>
         </div>
-        <div class="ec-desc">PNG avec fond transparent recommandé, image carrée, 200×200&nbsp;px minimum.</div>
-        <div class="ec-desc" id="logo-ec-note" style="display:none;color:var(--accent);">Niveau de correction d'erreur verrouillé sur <strong>H</strong> tant qu'un logo est actif.</div>
+        <div class="hint">PNG avec fond transparent recommandé, image carrée, 200×200&nbsp;px minimum.</div>
+        <div class="hint" id="logo-ec-note" style="display:none;color:var(--ac);">Niveau de correction d'erreur verrouillé sur <strong>H</strong> tant qu'un logo est actif.</div>
       </div>
 
-      <div class="field" id="field-logo-size" style="display:none;">
+      <div class="group" id="field-logo-size" style="display:none;">
         <div class="range-head">
           <label for="logo-size" style="margin-bottom:0;">Taille du logo</label>
           <span class="range-value"><span id="logo-size-value">20</span> % du QR code</span>
@@ -522,22 +243,19 @@
     <!-- Aperçu -->
     <section class="card preview-card">
       <div class="frame" id="frame">
-        <div class="finder tl"></div>
-        <div class="finder tr"></div>
-        <div class="finder bl"></div>
         <canvas id="qr-canvas" style="display:none;"></canvas>
         <div class="empty-state" id="empty-state">Saisissez du texte<br>pour générer le QR code</div>
       </div>
       <div class="meta" id="meta"></div>
       <div class="actions">
-        <button class="export" id="export-svg" disabled>Export SVG</button>
-        <button class="export primary" id="export-png" disabled>Export PNG</button>
+        <button class="btn" id="export-svg" disabled>Export SVG</button>
+        <button class="btn primary" id="export-png" disabled>Export PNG</button>
       </div>
     </section>
   </div>
 
-  <footer>Génération 100% locale, dans votre navigateur — aucune donnée envoyée.</footer>
-</div>
+  <footer class="hint">Génération 100% locale, dans votre navigateur — aucune donnée envoyée.</footer>
+</main>
 
 <script>
 (function(){
@@ -676,7 +394,7 @@
   function setActiveType(type){
     currentType = type;
     typeTabs.forEach(function(tab){
-      tab.classList.toggle('active', tab.dataset.type === type);
+      tab.classList.toggle('on', tab.dataset.type === type);
     });
     fieldText.style.display = type === 'text' ? 'block' : 'none';
     fieldUrl.style.display = type === 'url' ? 'block' : 'none';
