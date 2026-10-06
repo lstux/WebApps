@@ -6,6 +6,8 @@
 <title>Liseuse Markdown</title>
 <meta name="description" content="Liseuse pour fichiers Markdown : arborescence, recherche, listes de tâches avec progression.">
 <link rel="stylesheet" href="common.css">
+<link rel="icon" type="image/svg+xml" href="icons/markdown_reader.svg">
+<script src="common.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&display=swap">
 <style>
 /* Mise en page : bandeau fin en haut, volet de documents à gauche, colonne de lecture étroite au centre, plan de la section à droite sur grand écran. */
@@ -41,6 +43,8 @@ body{overflow:hidden}
 .grp{display:flex;gap:4px}
 .btn{min-height:36px;padding:6px 13px;font-size:13px;font-weight:500;border-radius:var(--r-s)}
 .btn.icon.menu{display:none}
+.bar .appicon{width:28px;height:28px;border-radius:9px}
+.bar .themebtn svg{width:18px;height:18px}
 svg.i{flex:none;display:block}
 
 /* Volet */
@@ -187,6 +191,7 @@ svg.i{flex:none;display:block}
 <div class="app" id="ls-app">
   <header class="bar">
     <button type="button" class="btn icon menu" id="ls-menu" aria-label="Afficher la liste des documents"></button>
+    <a class="appicon" href="./" data-home aria-label="Accueil WebApps" title="Accueil WebApps"><img src="icons/markdown_reader.svg" alt="" width="28" height="28"></a>
     <div class="crumb" id="ls-crumb"></div>
     <span class="stats" id="ls-stats"></span>
     <div class="ring" id="ls-ring" hidden><span id="ls-ring-txt"></span></div>
@@ -194,7 +199,7 @@ svg.i{flex:none;display:block}
       <button type="button" class="btn icon" id="ls-smaller" aria-label="Réduire le texte">A−</button>
       <button type="button" class="btn icon" id="ls-bigger" aria-label="Agrandir le texte">A+</button>
     </div>
-    <button type="button" class="btn icon" id="ls-theme"></button>
+    <button type="button" class="btn icon themebtn" data-theme-toggle></button>
     <div class="readbar" id="ls-read" aria-hidden="true"><i></i></div>
   </header>
 
@@ -408,15 +413,12 @@ const ICON={
   folder:svg('<path d="M1.75 4.25a1 1 0 0 1 1-1h3.1l1.5 1.5h5.9a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2.75a1 1 0 0 1-1-1z"/>'),
   file:svg('<path d="M4 1.75h5l3.25 3.25v8.25a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-10.5a1 1 0 0 1 1-1z"/><path d="M9 1.75V5h3.25"/>'),
   chev:svg('<path d="M6 4l4 4-4 4"/>',' class="i chev"').replace('class="i" viewBox','viewBox'),
-  menu:svg('<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>'),
-  theme_auto:svg('<circle cx="8" cy="8" r="5.25"/><path d="M8 2.75a5.25 5.25 0 0 1 0 10.5z" fill="currentColor"/>'),
-  theme_light:svg('<circle cx="8" cy="8" r="2.75"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/>'),
-  theme_dark:svg('<path d="M13 9.6A5.5 5.5 0 0 1 6.4 3 5.5 5.5 0 1 0 13 9.6z"/>')
+  menu:svg('<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>')
 };
 
 const el={
   app:$('ls-app'),menu:$('ls-menu'),crumb:$('ls-crumb'),stats:$('ls-stats'),smaller:$('ls-smaller'),bigger:$('ls-bigger'),
-  theme:$('ls-theme'),side:$('ls-side'),openFiles:$('ls-open-files'),openFolder:$('ls-open-folder'),urlForm:$('ls-url-form'),
+  side:$('ls-side'),openFiles:$('ls-open-files'),openFolder:$('ls-open-folder'),urlForm:$('ls-url-form'),
   url:$('ls-url'),q:$('ls-q'),src:$('ls-src'),count:$('ls-count'),tree:$('ls-tree'),stage:$('ls-stage'),doc:$('ls-doc'),
   pager:$('ls-pager'),toc:$('ls-toc'),ring:$('ls-ring'),ringTxt:$('ls-ring-txt'),read:$('ls-read'),toast:$('ls-toast'),drop:$('ls-drop'),scrim:$('ls-scrim'),fileIn:$('ls-file-in'),folderIn:$('ls-folder-in')
 };
@@ -442,19 +444,8 @@ function applySize(){
   el.smaller.disabled=si===0; el.bigger.disabled=si===SIZES.length-1;
   store.set('size',si);
 }
-const THEMES=['auto','light','dark'], THEME_NAME={auto:'automatique',light:'clair',dark:'sombre'};
-let theme=store.get('theme','auto'); if(!THEMES.includes(theme)) theme='auto';
-function applyTheme(initial){
-  const r=document.documentElement;
-  if(theme!=='auto') r.setAttribute('data-theme',theme); else if(!initial) r.removeAttribute('data-theme');
-  el.theme.innerHTML=ICON['theme_'+theme];
-  const l='Thème : '+THEME_NAME[theme]+' (changer)';
-  el.theme.setAttribute('aria-label',l); el.theme.title=l;
-  store.set('theme',theme);
-}
 el.smaller.onclick=()=>{if(si>0){si--;applySize()}};
 el.bigger.onclick=()=>{if(si<SIZES.length-1){si++;applySize()}};
-el.theme.onclick=()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%THEMES.length];applyTheme(false)};
 
 /* ---------- Messages ---------- */
 let toastTimer;
@@ -977,7 +968,7 @@ document.addEventListener('keydown',e=>{
 
 /* ---------- Démarrage : dossier d’exemple ---------- */
 el.url.value=store.get('url','');
-applySize(); applyTheme(true);
+applySize();
 const sample=[...document.querySelectorAll('script[type="text/markdown"]')].map(s=>mk({path:s.dataset.path,text:s.textContent.trim()+'\n'}));
 setSource({label:'Dossier d’exemple',kind:'sample',files:sample});
 })();

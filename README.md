@@ -10,7 +10,7 @@ Une liseuse pour fichiers Markdown avec:
 - Navigation d'arborescence repliable
 - Recherche dans le contenu
 - Listes de tâches avec progression
-- Taille de texte et thème ajustables
+- Taille de texte et thème (auto, clair, sombre) ajustables
 - Support de liens relatifs et d'images
 
 📄 **[Documentation](docs/LISEUSE.md)** · 📦 **[markdown_reader.html](code/markdown_reader.html)**
@@ -52,19 +52,19 @@ La liste des outils envisagés est dans [docs/suggested_apps_nextsteps.md](docs/
 
 Chaque outil est une page `.html` unique. Deux façons de l'utiliser :
 
-- **Directement** : télécharge le dossier `code/` en entier (les pages utilisent la feuille de style commune `code/common.css`, qui doit rester à sa place) et ouvre la page voulue dans ton navigateur.
+- **Directement** : télécharge le dossier `code/` en entier (les pages utilisent `code/common.css`, `code/common.js` et le dossier `code/icons/`, qui doivent rester à leur place) et ouvre la page voulue dans ton navigateur.
 - **Après un build** (voir ci-dessous) : `dist/` contient soit l'ensemble des outils avec une page d'accueil, soit des pages autonomes à copier une par une.
 
 ### Build
 
 ```
 python3 build.py                 # dist/ : copie de code/ + index.html qui liste les outils
-python3 build.py --standalone    # dist/ : chaque page avec common.css intégré (un fichier = un outil)
+python3 build.py --standalone    # dist/ : chaque page avec common.css, common.js et icônes intégrés (un fichier = un outil)
 python3 build.py --pwa           # comme le premier, plus une application installable (voir ci-dessous)
 python3 build.py --pwa --deploy  # construit, puis envoie dist/ sur le serveur (voir « Déploiement »)
 ```
 
-Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent en ligne dans tous les modes. L'index lit le `<title>` et la `<meta name="description">` de chaque page.
+Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent en ligne dans tous les modes. L'index est une grille de cartes : il lit le `<title>`, la `<meta name="description">` et l'icône (`<link rel="icon">`) de chaque page, et reprend les couleurs du dégradé de l'icône pour sa carte.
 
 ### Application installable (PWA)
 
@@ -128,6 +128,8 @@ La structure du repo:
 │   └── suggested_apps_nextsteps.md
 ├── code/                          # Pages HTML
 │   ├── common.css                 # Style partagé par tous les outils
+│   ├── common.js                  # Thème clair / sombre / auto, partagé
+│   ├── icons/                     # Une icône SVG par outil (favicon, en-tête, index) + webapps.svg
 │   ├── leaflet_manager.html
 │   ├── markdown_reader.html
 │   ├── qrcode_generator.html

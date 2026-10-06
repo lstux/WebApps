@@ -6,6 +6,8 @@
 <title>Générateur de QR code</title>
 <meta name="description" content="Génère un QR code téléchargeable à partir d'un texte, d'une adresse, d'un réseau Wi-Fi, etc.">
 <link rel="stylesheet" href="common.css">
+<link rel="icon" type="image/svg+xml" href="icons/qrcode_generator.svg">
+<script src="common.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <style>
 /* Générateur de QR — styles propres à l'outil.
@@ -68,10 +70,12 @@ footer.hint{margin-top:28px}
 <body>
 <header class="topbar">
   <div class="topbar-in">
+    <a class="appicon" href="./" data-home aria-label="Accueil WebApps" title="Accueil WebApps"><img src="icons/qrcode_generator.svg" alt="" width="36" height="36"></a>
     <div class="grow">
       <h1 class="brand">Générateur de QR code</h1>
       <div class="subtitle">Aperçu en direct · export PNG ou SVG</div>
     </div>
+    <button class="iconbtn themebtn" data-theme-toggle></button>
   </div>
 </header>
 

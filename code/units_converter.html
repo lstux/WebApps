@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0e1117">
 <title>Convertisseur</title>
 <meta name="description" content="Convertit unités et devises : toutes les conversions affichées d'un coup.">
 <link rel="stylesheet" href="common.css">
+<link rel="icon" type="image/svg+xml" href="icons/units_converter.svg">
+<script src="common.js"></script>
 <style>
 /* Propre au convertisseur. Le reste vient de common.css */
 body{padding-bottom:calc(30px + env(safe-area-inset-bottom,0px))}
 .conv-head{display:block}
+.headrow{display:flex;align-items:center;gap:12px}
 .topbar .chips{margin-top:10px}
 main{max-width:720px;margin:0 auto;padding:14px 12px}
 .conv{display:grid;gap:10px}
@@ -39,7 +41,11 @@ input.res{font-size:20px;font-weight:600;color:var(--ac)}
 </head>
 <body>
 <header class="topbar"><div class="topbar-in conv-head">
-  <h1 class="brand">Convertisseur</h1>
+  <div class="headrow">
+    <a class="appicon" href="./" data-home aria-label="Accueil WebApps" title="Accueil WebApps"><img src="icons/units_converter.svg" alt="" width="36" height="36"></a>
+    <h1 class="brand grow">Convertisseur</h1>
+    <button class="iconbtn themebtn" data-theme-toggle></button>
+  </div>
   <div class="chips" id="chips"></div>
 </div></header>
 

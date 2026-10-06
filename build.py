@@ -2,9 +2,10 @@
 """Construit le dossier dist/ à partir de code/.
 
   python3 build.py                 copie code/ dans dist/ et génère dist/index.html
-  python3 build.py --standalone    chaque page HTML de code/ est écrite dans dist/
-                                   avec sa feuille de style locale (common.css)
-                                   insérée dans un <style> : une page = un fichier
+                                   (grille de cartes : icône, titre et description de chaque outil)
+  python3 build.py --standalone    chaque page HTML de code/ est écrite dans dist/ avec ses
+                                   fichiers locaux insérés (common.css et common.js dans la page,
+                                   icônes en data:) : une page = un fichier
   python3 build.py --pwa           comme le premier, et dist/ devient une application
                                    installable : manifest, service worker (hors ligne)
                                    et icônes générées. Incompatible avec --standalone.
@@ -15,6 +16,7 @@
 Python 3.8+, bibliothèque standard uniquement.
 """
 import argparse
+import base64
 import configparser
 import hashlib
 import html
@@ -51,48 +53,128 @@ def is_local(href):
     return bool(href) and not re.match(r"^([a-z][a-z0-9+.-]*:|//|#)", href, re.I)
 
 
-def inline_css(page, source_root):
-    """Remplace chaque <link rel="stylesheet" href="local.css"> par un <style>."""
+IMG_RE = re.compile(r"<img\b[^>]*>", re.I)
+ANCHOR_RE = re.compile(r"<a\b[^>]*>", re.I)
+OPEN_SCRIPT_RE = re.compile(r"<script\b[^>]*>", re.I)
+STOP_COLOR_RE = re.compile(r"""stop-color\s*=\s*["'](#[0-9a-fA-F]{6})["']""")
+MIME = {".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".webp": "image/webp", ".gif": "image/gif", ".ico": "image/x-icon"}
+APP_ICON = "icons/webapps.svg"   # icône de l'index et de l'ensemble ; facultative
+
+
+def set_attr(tag, name, value):
+    """Remplace la valeur de l'attribut « name » (entre guillemets) dans une balise."""
+    pat = re.compile(r"""(\b%s\s*=\s*)(["'])(.*?)\2""" % re.escape(name), re.I | re.S)
+    return pat.sub(lambda m: f'{m.group(1)}"{html.escape(value, quote=True)}"', tag, count=1)
+
+
+def drop_attr(tag, name):
+    return re.sub(r"""\s+%s\s*=\s*(["']).*?\1""" % re.escape(name), "", tag, count=1, flags=re.I | re.S)
+
+
+def data_uri(path):
+    mime = MIME[path.suffix.lower()]
+    return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+def inline_page(page, source_root):
+    """Rend une page autonome : feuilles de style et scripts locaux insérés dans la page, icône et
+    images locales en data:, lien d'accueil (data-home) neutralisé."""
     text = page.read_text(encoding="utf-8")
+    name = page.relative_to(source_root)
 
-    def repl(m):
-        a = attrs(m.group(0))
-        rels = a.get("rel", "").lower().split()
-        href = a.get("href", "")
-        if "stylesheet" not in rels or not is_local(href):
-            return m.group(0)
-        css_path = (page.parent / href.split("?")[0].split("#")[0]).resolve()
+    def local(href):
+        if not is_local(href):
+            return None
+        path = (page.parent / href.split("?")[0].split("#")[0]).resolve()
         try:
-            css_path.relative_to(source_root)
+            path.relative_to(source_root)
         except ValueError:
-            sys.exit(f"{page.relative_to(source_root)} : {href} sort du dossier {source_root.name}/")
-        if not css_path.is_file():
-            sys.exit(f"{page.relative_to(source_root)} : feuille de style introuvable : {href}")
-        css = css_path.read_text(encoding="utf-8").strip()
-        if re.search(r"</style", css, re.I):
-            sys.exit(f"{href} contient « </style » : insertion impossible")
-        media = f' media="{html.escape(a["media"])}"' if a.get("media") else ""
-        return f"<style{media}>\n/* {css_path.name} */\n{css}\n</style>"
+            sys.exit(f"{name} : {href} sort du dossier {source_root.name}/")
+        if not path.is_file():
+            sys.exit(f"{name} : fichier introuvable : {href}")
+        return path
 
-    # Les <script> sont laissés tels quels : le JavaScript peut contenir du HTML sous forme de texte
-    # (par exemple le code généré par le gestionnaire de cartes).
+    def link(m):
+        tag = m.group(0)
+        a = attrs(tag)
+        rels = a.get("rel", "").lower().split()
+        path = local(a.get("href", ""))
+        if path is None:
+            return tag
+        if "stylesheet" in rels:
+            css = path.read_text(encoding="utf-8").strip()
+            if re.search(r"</style", css, re.I):
+                sys.exit(f"{a['href']} contient « </style » : insertion impossible")
+            media = f' media="{html.escape(a["media"])}"' if a.get("media") else ""
+            return f"<style{media}>\n/* {path.name} */\n{css}\n</style>"
+        if "icon" in rels or "apple-touch-icon" in rels:
+            if path.suffix.lower() not in MIME:
+                return tag
+            return set_attr(tag, "href", data_uri(path))
+        return tag
+
+    def img(m):
+        tag = m.group(0)
+        path = local(attrs(tag).get("src", ""))
+        if path is None or path.suffix.lower() not in MIME:
+            return tag
+        return set_attr(tag, "src", data_uri(path))
+
+    def anchor(m):
+        tag = m.group(0)
+        return drop_attr(tag, "href") if re.search(r"\sdata-home(?=[\s>=/])", tag, re.I) else tag
+
+    def script(m):
+        block = m.group(0)
+        opening = OPEN_SCRIPT_RE.match(block).group(0)
+        path = local(attrs(opening).get("src", ""))
+        inner = block[len(opening):block.lower().rfind("</script")]
+        if path is None or inner.strip():
+            return block
+        js = path.read_text(encoding="utf-8").strip()
+        if re.search(r"</script", js, re.I):
+            sys.exit(f"{path.name} contient « </script » : insertion impossible")
+        return f"{drop_attr(opening, 'src')}\n/* {path.name} */\n{js}\n</script>"
+
+    def plain(chunk):
+        # <link> en dernier : le CSS inséré par link() ne doit pas être relu (ses commentaires contiennent du HTML d'exemple)
+        return LINK_RE.sub(link, ANCHOR_RE.sub(anchor, IMG_RE.sub(img, chunk)))
+
+    # Le JavaScript peut contenir du HTML sous forme de texte (par exemple le code généré par le gestionnaire
+    # de cartes) : seuls les <script src="local"> sont remplacés, le contenu des scripts n'est jamais retouché.
     out, pos = [], 0
     for m in SCRIPT_RE.finditer(text):
-        out.append(LINK_RE.sub(repl, text[pos:m.start()]))
-        out.append(m.group(0))
+        out.append(plain(text[pos:m.start()]))
+        out.append(script(m))
         pos = m.end()
-    out.append(LINK_RE.sub(repl, text[pos:]))
+    out.append(plain(text[pos:]))
     return "".join(out)
 
 
-def page_info(page):
+def page_info(page, source_root):
+    """Titre, description, icône (chemin relatif à code/) et couleurs du dégradé de l'icône."""
     text = page.read_text(encoding="utf-8")
     text = text.split("</head>", 1)[0]  # titre et description : dans l'en-tête seulement
     t = TITLE_RE.search(text)
     title = html.unescape(re.sub(r"\s+", " ", t.group(1)).strip()) if t else page.stem
     d = META_DESC_RE.search(text)
     desc = attrs(d.group(0)).get("content", "").strip() if d else ""
-    return title, desc
+    icon, colors = None, None
+    for tag in LINK_RE.findall(text):
+        a = attrs(tag)
+        if "icon" in a.get("rel", "").lower().split() and is_local(a.get("href", "")):
+            p = (page.parent / a["href"].split("?")[0].split("#")[0]).resolve()
+            try:
+                icon = p.relative_to(source_root) if p.is_file() else None
+            except ValueError:
+                icon = None
+            break
+    if icon is not None and icon.suffix.lower() == ".svg":
+        stops = STOP_COLOR_RE.findall((source_root / icon).read_text(encoding="utf-8"))
+        if len(stops) >= 2:
+            colors = (stops[0], stops[1])
+    return title, desc, icon, colors
 
 
 INDEX = """<!doctype html>
@@ -100,51 +182,95 @@ INDEX = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>{app_name}</title>
-<meta name="description" content="{app_desc}">
+<title>@@APP_NAME@@</title>
+<meta name="description" content="@@APP_DESC@@">
 <link rel="stylesheet" href="common.css">
+@@HEAD_EXTRA@@<script src="common.js"></script>
 <style>
-main {{ max-width: 720px; margin: 0 auto; padding: 14px 12px calc(28px + env(safe-area-inset-bottom,0px)); }}
-.tools {{ display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }}
-.tool {{ display: block; margin: 0; color: inherit; text-decoration: none; transition: transform .12s, border-color .12s; }}
-.tool:hover {{ border-color: var(--ac); }}
-.tool:active {{ transform: scale(.98); }}
-.tool h2 {{ margin: 0 0 4px; font-size: 18px; }}
-.tool p {{ margin: 0; color: var(--mut); font-size: 14px; }}
-.tool .path {{ margin-top: 8px; font: 12px var(--f-mono); color: var(--mut2); }}
+.hero { max-width: 960px; margin: 0 auto; padding: calc(30px + env(safe-area-inset-top,0px)) 16px 22px; display: flex; align-items: center; gap: 16px; }
+.hero .logo { flex: none; width: 68px; height: 68px; border-radius: 19px; filter: drop-shadow(0 8px 16px color-mix(in srgb,var(--ac) 35%,transparent)); animation: logo-in .8s var(--spring) both; }
+.hero .grow { flex: 1; min-width: 0; }
+.hero .brand { font-size: clamp(34px, 8vw, 48px); letter-spacing: -.04em; }
+.hero p { margin: 4px 0 0; color: var(--mut); }
+.count { display: inline-block; margin-top: 10px; padding: 2px 11px; border-radius: 999px; background: var(--ac-soft); color: var(--ac); font-size: 13px; font-weight: 700; }
+main { max-width: 960px; margin: 0 auto; padding: 4px 16px calc(44px + env(safe-area-inset-bottom,0px)); }
+.tools { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.tool { --c1: var(--ac); --c2: var(--ac2); position: relative; display: flex; align-items: flex-start; gap: 16px; margin: 0; padding: 16px; overflow: hidden; color: inherit; text-decoration: none;
+  animation: rise .6s var(--spring) both; animation-delay: calc(var(--i, 0) * 70ms + 100ms);
+  transition: transform .25s var(--spring), border-color .2s, box-shadow .25s; }
+.tool::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .65; transition: opacity .25s;
+  background: linear-gradient(135deg, color-mix(in srgb,var(--c1) 11%,transparent), color-mix(in srgb,var(--c2) 6%,transparent) 55%, transparent 80%); }
+.tool:hover { transform: translateY(-4px); border-color: color-mix(in srgb,var(--c1) 55%,var(--line));
+  box-shadow: 0 14px 32px color-mix(in srgb,var(--c1) 24%,transparent), var(--shadow); }
+.tool:hover::before { opacity: 1; }
+.tool:active { transform: scale(.98); }
+.ticon { position: relative; flex: none; width: 64px; height: 64px; border-radius: 18px; transition: transform .4s var(--spring);
+  box-shadow: 0 6px 14px color-mix(in srgb,var(--c2) 28%,transparent); }
+.tool:hover .ticon { transform: rotate(-7deg) scale(1.1); }
+.ticon.fb { display: grid; place-items: center; font-size: 28px; font-weight: 800; color: #fff; background: linear-gradient(135deg, var(--c1), var(--c2)); }
+.tbody { position: relative; min-width: 0; flex: 1; padding-top: 2px; }
+.tool h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+.tool:hover h2 { background: linear-gradient(90deg, var(--c1), var(--c2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tool p { margin: 3px 0 0; color: var(--mut); font-size: 14px; line-height: 1.4; }
+.tool .file { margin-top: 8px; font: 12px var(--f-mono); color: var(--mut); opacity: .75; }
+.tool .arrow { position: absolute; top: 14px; right: 16px; font-size: 22px; line-height: 1; color: var(--c1); opacity: 0; transform: translateX(-8px); transition: opacity .2s, transform .3s var(--spring); }
+.tool:hover .arrow, .tool:focus-visible .arrow { opacity: 1; transform: none; }
+@keyframes rise { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+@keyframes logo-in { from { opacity: 0; transform: rotate(-16deg) scale(.55); } }
+@media (max-width: 480px) { .ticon { width: 56px; height: 56px; border-radius: 16px; } .tool .arrow { display: none; } }
 </style>
 </head>
 <body>
-<header class="topbar">
-  <div class="topbar-in">
-    <div class="grow">
-      <h1 class="brand">{app_name}</h1>
-      <div class="subtitle">{count}</div>
-    </div>
+<header class="hero">
+@@LOGO@@  <div class="grow">
+    <h1 class="brand">@@APP_NAME@@</h1>
+    <p>@@APP_DESC@@</p>
+    <span class="count">@@COUNT@@</span>
   </div>
+  <button class="iconbtn themebtn" data-theme-toggle></button>
 </header>
 <main>
   <div class="tools">
-{cards}
+@@CARDS@@
   </div>
 </main>
 </body>
 </html>
 """
-CARD = """    <a class="card tool" href="{href}">
-      <h2>{title}</h2>
-{desc}      <div class="path">{path}</div>
+CARD = """    <a class="card tool" href="@@HREF@@" style="--i:@@I@@@@COLORS@@">
+      @@ICON@@
+      <div class="tbody">
+        <h2>@@TITLE@@</h2>
+@@DESC@@        <div class="file">@@PATH@@</div>
+      </div>
+      <span class="arrow" aria-hidden="true">→</span>
     </a>"""
 
 
-def build_index(out, tools):
+def fill(template, **values):
+    for k, v in values.items():
+        template = template.replace(f"@@{k}@@", v)
+    return template
+
+
+def build_index(out, tools, extras, source):
     cards = []
-    for rel, title, desc in tools:
-        href = html.escape(rel.as_posix().replace(" ", "%20"), quote=True)
-        d = f"      <p>{html.escape(desc)}</p>\n" if desc else ""
-        cards.append(CARD.format(href=href, title=html.escape(title), desc=d, path=html.escape(rel.as_posix())))
+    for i, (rel, title, desc) in enumerate(tools):
+        icon, colors = extras.get(rel, (None, None))
+        if icon is not None:
+            ic = f'<img class="ticon" src="{html.escape(quote(icon.as_posix()), quote=True)}" alt="" width="64" height="64" loading="lazy">'
+        else:
+            ic = f'<span class="ticon fb" aria-hidden="true">{html.escape(title[:1].upper())}</span>'
+        cs = f";--c1:{colors[0]};--c2:{colors[1]}" if colors else ""
+        d = f"        <p>{html.escape(desc)}</p>\n" if desc else ""
+        cards.append(fill(CARD, HREF=html.escape(quote(rel.as_posix()), quote=True), I=str(i), COLORS=cs, ICON=ic,
+                          TITLE=html.escape(title), DESC=d, PATH=html.escape(rel.as_posix())))
     n = len(tools)
-    page = INDEX.format(app_name=APP_NAME, app_desc=html.escape(APP_DESC, quote=True), count=f"{n} outil{'s' if n > 1 else ''}", cards="\n".join(cards))
+    has_logo = (source / APP_ICON).is_file()
+    page = fill(INDEX, APP_NAME=APP_NAME, APP_DESC=html.escape(APP_DESC, quote=True), COUNT=f"{n} outil{'s' if n > 1 else ''}",
+                CARDS="\n".join(cards),
+                HEAD_EXTRA=f'<link rel="icon" type="image/svg+xml" href="{APP_ICON}">\n' if has_logo else "",
+                LOGO=f'  <img class="logo" src="{APP_ICON}" alt="" width="68" height="68">\n' if has_logo else "")
     (out / "index.html").write_text(page, encoding="utf-8")
 
 
@@ -235,8 +361,8 @@ def css_colors(source):
         return m.group(1) if m else default
 
     bgs = re.findall(r"--bg\s*:\s*(#[0-9a-fA-F]{6})\b", css)
-    return {"ac": first("ac", "#5b6cf0"), "ac2": first("ac2", "#a05cf0"),
-            "bg": bgs[0] if bgs else "#f1f3f9", "bg_dark": bgs[1] if len(bgs) > 1 else "#0d1016"}
+    return {"ac": first("ac", "#5b4bff"), "ac2": first("ac2", "#e63b97"), "ac3": first("ac3", "#ffb020"),
+            "bg": bgs[0] if bgs else "#f7f5ff", "bg_dark": bgs[1] if len(bgs) > 1 else "#0f0c22"}
 
 
 def png_bytes(w, h, rows, channels):
@@ -254,10 +380,10 @@ def round_rect_sd(x, y, cx, cy, hx, hy, r):
     return math.hypot(max(qx, 0.0), max(qy, 0.0)) + min(max(qx, qy), 0.0) - r
 
 
-def render_icon(size, c1, c2, rounded, glyph):
-    """Icône « grille d'applications » sur un dégradé. rounded : coins arrondis transparents
+def render_icon(size, c1, c2, c3, rounded, glyph):
+    """Icône « grille d'applications » sur un dégradé (comme icons/webapps.svg). rounded : coins arrondis transparents
     (icône ordinaire) ou plein cadre (icône maskable et icône Apple). glyph : part du côté occupée par le motif."""
-    a, b = hex_rgb(c1), hex_rgb(c2)
+    a, b, sun = hex_rgb(c1), hex_rgb(c2), hex_rgb(c3)
     box = glyph * size
     gap = 0.14 * box
     tile = (box - gap) / 2
@@ -279,13 +405,13 @@ def render_icon(size, c1, c2, rounded, glyph):
                 cov = min(1.0, max(0.0, 0.5 - round_rect_sd(x, y, size / 2, size / 2, size / 2, size / 2, corner)))
             if x0 - 1 <= x <= x0 + box + 1 and x0 - 1 <= y <= x0 + box + 1:
                 for k, (cx, cy) in enumerate(centers):
-                    if k == 3:   # la quatrième case est un rond, plus discret : un « + » en devenir
-                        sd, alpha = math.hypot(x - cx, y - cy) - tile / 2, 0.6
+                    if k == 3:   # la quatrième case est un rond de la troisième couleur : la place d'un futur outil
+                        sd, tint = math.hypot(x - cx, y - cy) - tile / 2, sun
                     else:
-                        sd, alpha = round_rect_sd(x, y, cx, cy, tile / 2, tile / 2, radius), 1.0
-                    w = min(1.0, max(0.0, 0.5 - sd)) * alpha
+                        sd, tint = round_rect_sd(x, y, cx, cy, tile / 2, tile / 2, radius), (255, 255, 255)
+                    w = min(1.0, max(0.0, 0.5 - sd))
                     if w > 0:
-                        r, g, bl = r + (255 - r) * w, g + (255 - g) * w, bl + (255 - bl) * w
+                        r, g, bl = r + (tint[0] - r) * w, g + (tint[1] - g) * w, bl + (tint[2] - bl) * w
             row += bytes((round(r), round(g), round(bl))) if channels == 3 else bytes((round(r), round(g), round(bl), round(cov * 255)))
         rows.append(row)
     return png_bytes(size, size, rows, channels)
@@ -297,7 +423,7 @@ def write_icons(out, colors):
     spec = {"icon-192.png": (192, True, 0.56), "icon-512.png": (512, True, 0.56),
             "icon-maskable-512.png": (512, False, 0.48), "apple-touch-icon.png": (180, False, 0.56)}
     for name, (size, rounded, glyph) in spec.items():
-        (d / name).write_bytes(render_icon(size, colors["ac"], colors["ac2"], rounded, glyph))
+        (d / name).write_bytes(render_icon(size, colors["ac"], colors["ac2"], colors["ac3"], rounded, glyph))
     return list(spec)
 
 
@@ -523,17 +649,19 @@ def main():
             rel = p.relative_to(source)
             dest = out / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(inline_css(p, source), encoding="utf-8")
+            dest.write_text(inline_page(p, source), encoding="utf-8")
             print(f"  {rel}")
         print(f"{len(pages)} page(s) autonome(s) dans {out.relative_to(ROOT)}/")
     else:
         shutil.copytree(source, out, dirs_exist_ok=True)
-        tools = []
+        tools, extras = [], {}
         for p in pages:
-            title, desc = page_info(p)
-            tools.append((p.relative_to(source), title, desc))
+            title, desc, icon, colors = page_info(p, source)
+            rel = p.relative_to(source)
+            tools.append((rel, title, desc))
+            extras[rel] = (icon, colors)
         tools.sort(key=lambda t: t[1].casefold())
-        build_index(out, tools)
+        build_index(out, tools, extras, source)
         print(f"{len(pages)} outil(s) copié(s) dans {out.relative_to(ROOT)}/ + index.html")
         if args.pwa:
             build_pwa(out, source, tools)
