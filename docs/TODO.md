@@ -9,6 +9,7 @@ Une page unique pour gérer une liste de todos hiérarchique et illimitée en pr
 - **Couleur adaptive** : la barre et le pourcentage changent de couleur, du rouge (0%) au vert (100%).
 - **Description facultative** : chaque todo peut avoir un titre et une description multi-ligne.
 - **Stockage local** : données sauvegardées automatiquement dans `localStorage` du navigateur.
+- **Glisser-déposer** : réordonnez et changez de parent depuis la poignée ⠿, à la souris comme au doigt.
 - **Import/Export** : exportez en JSON ou en texte indenté (`*`, `+`, `-`), et importez en remplaçant ou ajoutant.
 - **Mobile-first** : interface optimisée pour les téléphones, avec zones tactiles généreuses et vues adaptées.
 - **Pas de dépendances** : une page HTML avec son JavaScript inclus, plus la feuille de style commune `code/common.css` (voir [STYLE.md](STYLE.md)).
@@ -17,7 +18,7 @@ Une page unique pour gérer une liste de todos hiérarchique et illimitée en pr
 
 ### Démarrer
 
-Ouvrez `index.html` dans un navigateur.
+Ouvrez `code/todo.html` dans un navigateur (la feuille de style `code/common.css` doit rester à côté).
 
 ### Ajouter un todo
 
@@ -38,7 +39,13 @@ Ouvrez `index.html` dans un navigateur.
 ### Organiser
 
 - **Replier/Déplier** : cliquez sur le caret **›** à côté du titre.
-- **Monter/Descendre** : **↑** et **↓** dans le menu du todo.
+- **Glisser-déposer** : attrapez la poignée ⠿ à droite d'un todo (il emporte ses sous-todos) et déposez-le :
+  - sur le **haut** d'une ligne : juste avant elle, au même niveau ;
+  - sur le **bas** d'une ligne : juste après elle, ou comme premier sous-todo si elle est dépliée ;
+  - sur le **milieu** d'une ligne : il devient l'un de ses sous-todos (elle se déplie).
+
+  Une ligne d'insertion ou un cadre indique la destination, et la page défile toute seule près du haut et du bas de l'écran. **Échap**, ou relâcher sur le todo lui-même, annule. Un todo ne peut pas être déposé dans ses propres sous-todos. Sur téléphone, seule la poignée capte le geste : le reste de la ligne continue de faire défiler la page.
+- **Monter/Descendre** : **↑** et **↓** dans le menu du todo (alternative au glisser-déposer, utilisable au clavier).
 - **Supprimer** : **✕** (confirmation si des sous-todos existent).
 - **Menu ⋯** : tout replier/déplier, masquer les faits, importer/exporter.
 
@@ -72,8 +79,8 @@ Tout est sauvegardé en `localStorage` de votre navigateur. Changer de navigateu
 ## ⚡ Performance
 
 - Pas de serveur : tout fonctionne hors ligne.
-- Rapide même avec des milliers de todos.
-- Page légère (environ 18 Ko, hors feuille de style commune).
+- L'affichage est reconstruit en entier à chaque modification : prévu pour des listes de quelques centaines de todos.
+- Page légère (moins de 30 Ko, hors feuille de style commune).
 
 ---
 

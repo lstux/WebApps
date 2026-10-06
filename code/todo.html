@@ -13,6 +13,7 @@ body { padding-bottom: calc(150px + env(safe-area-inset-bottom,0px)); }
 main { max-width: 720px; margin: 0 auto; padding: 14px 12px; }
 
 /* Arbre de todos */
+ul { list-style: none; margin: 0; padding: 0; }
 li > ul { margin: 0 0 2px 12px; padding-left: 6px; border-left: 2px solid var(--line); }
 .row { display: flex; align-items: flex-start; padding: 3px 0; }
 .tg { width: 24px; height: 38px; color: var(--mut); font-size: 22px; line-height: 38px; flex: none; text-align: center; transition: transform .15s; }
@@ -24,6 +25,23 @@ li > ul { margin: 0 0 2px 12px; padding-left: 6px; border-left: 2px solid var(--
 .title { font-weight: 550; word-break: break-word; line-height: 22px; }
 .title.done { color: var(--mut); text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .desc { color: var(--mut); font-size: 14px; white-space: pre-wrap; word-break: break-word; margin-top: 2px; }
+
+/* Poignée et glisser-déposer : la poignée seule capte le geste (touch-action:none), le reste de la page défile normalement */
+.dh { width: 34px; height: 38px; flex: none; display: grid; place-items: center; color: var(--mut2); cursor: grab; border-radius: var(--r-m);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.dh::before { content: ""; width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.6px, transparent 1.8px) 0 0 / 6px 6px; }
+.dh:hover { color: var(--mut); background: var(--hover); }
+body.dragging { user-select: none; -webkit-user-select: none; }
+body.dragging * { cursor: grabbing !important; }
+li.drag-src { opacity: .35; }
+.ghost { position: fixed; left: 0; top: 0; z-index: 40; pointer-events: none; max-width: min(80vw, 360px); padding: 10px 14px; border-radius: var(--r-m);
+  background: var(--card); border: 1px solid var(--ac); box-shadow: 0 10px 30px #0006; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; will-change: transform; }
+.ghost small { color: var(--mut); font-weight: 500; margin-left: 8px; }
+.drop-ind { position: fixed; z-index: 30; pointer-events: none; height: 3px; border-radius: 2px; background: var(--ac); box-shadow: 0 0 0 3px var(--ac-soft); }
+.drop-ind.into { height: auto; border: 2px solid var(--ac); border-radius: var(--r-m); background: color-mix(in srgb, var(--ac) 14%, transparent); box-shadow: none; }
+@keyframes flash { from { background: var(--ac-soft); } to { background: transparent; } }
+.row.dropped { border-radius: var(--r-m); animation: flash 1s ease-out; }
+@media (prefers-reduced-motion: reduce) { .row.dropped { animation: none; } }
 
 /* Actions du todo */
 .actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 4px 8px 38px; }
@@ -175,6 +193,7 @@ function nodeHTML(n, top) {
         ${n.desc ? `<div class="desc">${esc(n.desc)}</div>` : ''}
         ${has ? `<div class="progress" style="--c:${c}"><i style="width:${pct}%"></i></div>` : ''}
       </div>
+      <button class="dh" data-drag aria-label="Déplacer (glisser)" title="Glisser pour déplacer"></button>
     </div>`;
     if (ui.menu === n.id) {
       h += `<div class="actions">
@@ -390,6 +409,116 @@ function doImport(replace) {
     $('#impDlg').close(); commit();
   } catch (err) { alert('Import impossible : ' + err.message); }
 }
+
+// ---- Glisser-déposer : réordonner et changer de parent, depuis la poignée .dh
+// Zones d'une ligne cible : haut = avant, bas = après (ou 1er enfant si elle est dépliée), milieu = devenir son sous-todo.
+function moveNode(id, targetId, pos) {            // pos : before | after | first | into
+  const src = find(id);
+  if (!src || id === targetId || find(targetId, src.node.children)) return false;   // jamais dans son propre sous-arbre
+  src.list.splice(src.i, 1);
+  const t = find(targetId);
+  if (!t) { src.list.splice(src.i, 0, src.node); return false; }
+  if (pos === 'before') t.list.splice(t.i, 0, src.node);
+  else if (pos === 'after') t.list.splice(t.i + 1, 0, src.node);
+  else {
+    t.node.collapsed = false;
+    if (pos === 'first') t.node.children.unshift(src.node); else t.node.children.push(src.node);
+  }
+  return true;
+}
+const countDesc = n => n.children.reduce((a, c) => a + 1 + countDesc(c), 0);
+
+let drag = null;   // { id, li, pid, sx, sy, x, y, started, ghost, target, raf }
+const ind = document.createElement('div');
+ind.className = 'drop-ind'; ind.hidden = true; document.body.append(ind);
+
+function pickTarget(y) {
+  const own = drag.li.getBoundingClientRect();
+  if (y >= own.top && y <= own.bottom) return null;             // au-dessus de sa propre zone : pas de cible, relâcher annule
+  let best = null, bestD = Infinity;
+  for (const row of document.querySelectorAll('#tree li[data-id] > .row')) {
+    if (drag.li.contains(row)) continue;                       // ni lui-même ni ses descendants
+    const r = row.getBoundingClientRect();
+    const d = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+    if (d < bestD) { bestD = d; best = { li: row.parentElement, r }; if (!d) break; }
+  }
+  if (!best) return null;                                       // entre deux cartes ou hors liste : la ligne la plus proche
+  const n = find(best.li.dataset.id).node;
+  const rel = Math.min(1, Math.max(0, (y - best.r.top) / best.r.height));
+  const pos = rel < .36 ? 'before' : rel > .64 ? (n.children.length && !n.collapsed ? 'first' : 'after') : 'into';
+  return { id: n.id, pos, r: best.r };
+}
+function showTarget(t) {
+  if (!t) { ind.hidden = true; return; }
+  const s = ind.style, r = t.r, pad = t.pos === 'first' ? 28 : 0;
+  ind.hidden = false;
+  ind.className = 'drop-ind' + (t.pos === 'into' ? ' into' : '');
+  if (t.pos === 'into') { s.left = r.left + 'px'; s.top = r.top + 'px'; s.width = r.width + 'px'; s.height = r.height + 'px'; }
+  else { s.left = r.left + pad + 'px'; s.width = r.width - pad + 'px'; s.top = (t.pos === 'before' ? r.top : r.bottom) - 1.5 + 'px'; s.height = ''; }
+}
+function dragUpdate() {
+  drag.target = pickTarget(drag.y);
+  showTarget(drag.target);
+  const g = drag.ghost, w = g.offsetWidth, h = g.offsetHeight;   // fantôme au-dessus du doigt, pour ne pas être masqué
+  g.style.transform = `translate(${Math.min(Math.max(drag.x - w * .7, 8), innerWidth - w - 8)}px, ${Math.max(drag.y - h - 14, 8)}px)`;
+}
+function dragStart() {
+  const n = find(drag.id).node, cnt = countDesc(n);
+  drag.started = true;
+  drag.li.classList.add('drag-src');
+  document.body.classList.add('dragging');
+  drag.ghost = document.createElement('div');
+  drag.ghost.className = 'ghost';
+  drag.ghost.innerHTML = esc(n.title) + (cnt ? `<small>+ ${cnt} sous-todo${cnt > 1 ? 's' : ''}</small>` : '');
+  document.body.append(drag.ghost);
+  drag.raf = requestAnimationFrame(dragTick);
+}
+function dragTick() {                                           // défilement automatique près des bords (barre du haut / barre de saisie)
+  if (!drag) return;
+  const top = 120, bottom = innerHeight - 150;
+  const dy = drag.y < top ? -Math.min(22, Math.ceil((top - drag.y) / 6)) : drag.y > bottom ? Math.min(22, Math.ceil((drag.y - bottom) / 6)) : 0;
+  if (dy) { const before = scrollY; scrollBy(0, dy); if (scrollY !== before) dragUpdate(); }
+  drag.raf = requestAnimationFrame(dragTick);
+}
+function dragEnd() {
+  if (!drag) return;
+  cancelAnimationFrame(drag.raf);
+  if (drag.ghost) drag.ghost.remove();
+  drag.li.classList.remove('drag-src');
+  document.body.classList.remove('dragging');
+  ind.hidden = true;
+  drag = null;
+}
+document.addEventListener('pointerdown', e => {
+  const h = e.target.closest('[data-drag]');
+  if (!h || drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const li = h.closest('li[data-id]');
+  if (!li) return;
+  e.preventDefault();
+  try { h.setPointerCapture(e.pointerId); } catch {}
+  drag = { id: li.dataset.id, li, pid: e.pointerId, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY, started: false };
+});
+window.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.pid) return;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (!drag.started) {
+    if (Math.hypot(drag.x - drag.sx, drag.y - drag.sy) < 5) return;   // un simple appui sur la poignée ne déplace rien
+    dragStart();
+  }
+  dragUpdate();
+});
+window.addEventListener('pointerup', e => {
+  if (!drag || e.pointerId !== drag.pid) return;
+  const d = drag, moved = d.started && d.target && moveNode(d.id, d.target.id, d.target.pos);
+  dragEnd();
+  if (!moved) return;
+  commit();
+  const row = document.querySelector(`#tree li[data-id="${d.id}"] > .row`);
+  if (row) row.classList.add('dropped');
+});
+window.addEventListener('pointercancel', e => { if (drag && e.pointerId === drag.pid) dragEnd(); });
+document.addEventListener('keydown', e => { if (drag && e.key === 'Escape') dragEnd(); });
+document.addEventListener('contextmenu', e => { if (e.target.closest('[data-drag]')) e.preventDefault(); });
 
 render();
 </script>

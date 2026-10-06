@@ -20,6 +20,7 @@ Une liseuse pour fichiers Markdown avec:
 Un gestionnaire de tâches hiérarchique avec:
 - Arbre de todos à profondeur illimitée
 - Pourcentage d'achèvement coloré, calculé sur les feuilles
+- Glisser-déposer pour réordonner ou changer de parent (souris et tactile)
 - Import/export JSON et texte indenté
 - Sauvegarde locale, interface mobile-first
 
