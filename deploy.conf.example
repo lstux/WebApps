@@ -1,0 +1,18 @@
+# Réglages de « python3 build.py --deploy ».
+# Copie ce fichier en deploy.conf (ignoré par git) et remplis-le. Aucun mot de passe ici :
+# l'authentification passe par ta clé SSH (ou ton ssh-agent).
+
+[deploy]
+# Nom du serveur, ou alias défini dans ~/.ssh/config (dans ce cas user, keyfile et port deviennent inutiles).
+host    = www.exemple.org
+# Compte SSH sur le serveur (facultatif si l'alias de ~/.ssh/config le définit).
+user    = mon_compte
+# Clé privée à utiliser (facultatif : sinon ssh-agent ou ~/.ssh/config).
+keyfile = ~/.ssh/id_ed25519
+# Port SSH (facultatif, 22 par défaut).
+# port    = 22
+# Chemin RÉEL du dossier publié sur le serveur (celui qui sert https://…/webapps/).
+path    = /var/www/exemple/webapps/
+# yes : supprime sur le serveur les fichiers qui ne sont plus dans dist/ (outil renommé ou retiré).
+# no (défaut) : ne supprime rien. Passe à yes une fois le chemin vérifié.
+delete  = no

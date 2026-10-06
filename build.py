@@ -8,17 +8,24 @@
   python3 build.py --pwa           comme le premier, et dist/ devient une application
                                    installable : manifest, service worker (hors ligne)
                                    et icônes générées. Incompatible avec --standalone.
+  python3 build.py --deploy        après le build, envoie dist/ sur le serveur avec rsync
+                                   (réglages dans deploy.conf, voir deploy.conf.example).
+                                   Se combine avec les autres options : build.py --pwa --deploy
 
 Python 3.8+, bibliothèque standard uniquement.
 """
 import argparse
+import configparser
 import hashlib
 import html
 import json
 import math
+import os
 import re
+import shlex
 import shutil
 import struct
+import subprocess
 import sys
 import zlib
 from pathlib import Path
@@ -380,6 +387,98 @@ def build_pwa(out, source, tools):
     print(f"PWA : manifest, {len(icons)} icônes, sw.js (version {version}, {n} entrées pré-chargées)")
 
 
+# ------------------------------------------------------------------ Déploiement
+
+DEPLOY_CONF = ROOT / "deploy.conf"
+HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+USER_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]*$")
+REMOTE_PATH_RE = re.compile(r"^[A-Za-z0-9_./~+@%=-]+$")
+
+
+def load_deploy_conf(conf=DEPLOY_CONF):
+    """Lit et valide deploy.conf ; quitte avec un message clair au moindre doute."""
+    name = conf.name
+    if not conf.is_file():
+        sys.exit(f"{name} introuvable : copie deploy.conf.example en {name}, remplis-le, puis relance.")
+    cp = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
+    try:
+        cp.read(conf, encoding="utf-8")
+    except configparser.Error as e:
+        sys.exit(f"{name} illisible : {e}")
+    if not cp.has_section("deploy"):
+        sys.exit(f"{name} : la section [deploy] est absente.")
+    c = cp["deploy"]
+
+    def get(key):
+        return c.get(key, "").strip()
+
+    host, user, path = get("host"), get("user"), get("path")
+    if not host:
+        sys.exit(f"{name} : « host » est obligatoire (nom du serveur, ou alias défini dans ~/.ssh/config).")
+    if not HOST_RE.match(host):
+        sys.exit(f"{name} : « host » contient des caractères non acceptés : {host!r}")
+    if user and not USER_RE.match(user):
+        sys.exit(f"{name} : « user » contient des caractères non acceptés : {user!r}")
+    if not path:
+        sys.exit(f"{name} : « path » est obligatoire (chemin réel du dossier publié sur le serveur).")
+    parts = [x for x in path.split("/") if x]
+    if not REMOTE_PATH_RE.match(path) or path.strip("/~.") == "" or ".." in parts:
+        sys.exit(f"{name} : « path » refusé : {path!r} (caractères non acceptés, ou chemin trop général).")
+    try:
+        delete = c.getboolean("delete", fallback=False)
+    except ValueError:
+        sys.exit(f"{name} : « delete » doit valoir yes ou no.")
+    if delete and len(parts) < 2:
+        sys.exit(f"{name} : avec delete = yes, « path » doit avoir au moins deux niveaux (reçu {path!r}).")
+    port = None
+    if get("port"):
+        try:
+            port = int(get("port"))
+            if not 1 <= port <= 65535:
+                raise ValueError
+        except ValueError:
+            sys.exit(f"{name} : « port » doit être un nombre entre 1 et 65535.")
+    keyfile = None
+    if get("keyfile"):
+        keyfile = Path(os.path.expanduser(get("keyfile")))
+        if not keyfile.is_file():
+            sys.exit(f"{name} : clé introuvable : {keyfile}")
+    return {"host": host, "user": user, "path": path, "port": port, "keyfile": keyfile, "delete": delete}
+
+
+def check_deploy_tools():
+    missing = [t for t in ("rsync", "ssh") if not shutil.which(t)]
+    if missing:
+        sys.exit(f"{' et '.join(missing)} introuvable sur ce poste. rsync doit aussi être installé sur le serveur.")
+
+
+def rsync_command(out, cfg):
+    ssh = ["ssh"]
+    if cfg["port"]:
+        ssh += ["-p", str(cfg["port"])]
+    if cfg["keyfile"]:
+        ssh += ["-i", str(cfg["keyfile"]), "-o", "IdentitiesOnly=yes"]
+    target = (cfg["user"] + "@" if cfg["user"] else "") + f'{cfg["host"]}:{cfg["path"]}'
+    # -t garde les dates (les fichiers inchangés ne sont pas renvoyés) ; --chmod rend les fichiers lisibles par le
+    # serveur web quel que soit l'umask du poste ; --delete seulement si deploy.conf le demande.
+    cmd = ["rsync", "-rltvz", "--chmod=D755,F644", "-e", shlex.join(ssh)]
+    if cfg["delete"]:
+        cmd.append("--delete")
+    return cmd + [str(out) + "/", target]
+
+
+def deploy(out, cfg):
+    cmd = rsync_command(out, cfg)
+    print("Déploiement :", shlex.join(cmd))
+    try:
+        rc = subprocess.run(cmd).returncode
+    except OSError as e:
+        sys.exit(f"Impossible de lancer rsync : {e}")
+    if rc:
+        sys.exit(f"rsync a échoué (code {rc}) : l'état du serveur n'est pas garanti, relance après correction.")
+    print(f"Déployé sur {cfg['host']}:{cfg['path']}" + (" (fichiers orphelins supprimés)" if cfg["delete"] else ""))
+
+
 def clean(out, source):
     if out == source or out in source.parents or out == ROOT or out in ROOT.parents:
         sys.exit(f"Dossier de sortie refusé : {out}")
@@ -394,12 +493,19 @@ def main():
                     help="une page HTML par outil, common.css inséré dans la page (pas d'index)")
     ap.add_argument("--pwa", action="store_true",
                     help="application installable : manifest, service worker (hors ligne) et icônes (pas avec --standalone)")
+    ap.add_argument("--deploy", action="store_true",
+                    help="après le build, envoie dist/ sur le serveur avec rsync (réglages dans deploy.conf)")
     ap.add_argument("--src", default="code", help="dossier des sources (défaut : code)")
     ap.add_argument("--out", default="dist", help="dossier de sortie (défaut : dist)")
     args = ap.parse_args()
     if args.pwa and args.standalone:
         ap.error("--pwa ne se combine pas avec --standalone : une PWA a besoin de son manifest, de son service worker "
                  "et de ses icônes à côté des pages, et d'un index pour démarrer.")
+
+    deploy_cfg = None
+    if args.deploy:   # on vérifie la configuration avant de construire : inutile de bâtir pour échouer ensuite
+        deploy_cfg = load_deploy_conf()
+        check_deploy_tools()
 
     source = (ROOT / args.src).resolve()
     out = (ROOT / args.out).resolve()
@@ -431,6 +537,9 @@ def main():
         print(f"{len(pages)} outil(s) copié(s) dans {out.relative_to(ROOT)}/ + index.html")
         if args.pwa:
             build_pwa(out, source, tools)
+
+    if args.deploy:
+        deploy(out, deploy_cfg)
 
 
 if __name__ == "__main__":

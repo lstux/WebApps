@@ -61,6 +61,7 @@ Chaque outil est une page `.html` unique. Deux façons de l'utiliser :
 python3 build.py                 # dist/ : copie de code/ + index.html qui liste les outils
 python3 build.py --standalone    # dist/ : chaque page avec common.css intégré (un fichier = un outil)
 python3 build.py --pwa           # comme le premier, plus une application installable (voir ci-dessous)
+python3 build.py --pwa --deploy  # construit, puis envoie dist/ sur le serveur (voir « Déploiement »)
 ```
 
 Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent en ligne dans tous les modes. L'index lit le `<title>` et la `<meta name="description">` de chaque page.
@@ -76,6 +77,25 @@ Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécut
 Chaque page de `dist/` reçoit en plus le lien vers le manifest, `theme-color`, l'icône Apple et l'enregistrement du service worker ; les fichiers de `code/` ne sont pas modifiés. Tous les chemins sont relatifs : `dist/` peut être publié n'importe où, par exemple sous `https://www.lslinux.org/webapps/`.
 
 Option incompatible avec `--standalone` (un fichier isolé ne peut pas porter son manifest ni son service worker).
+
+### Déploiement
+
+`--deploy` s'ajoute aux autres options : après le build, `dist/` est envoyé sur le serveur avec `rsync` par SSH. Il faut `rsync` et `ssh` sur ton poste, et `rsync` sur le serveur.
+
+1. Copie `deploy.conf.example` en `deploy.conf` (ignoré par git) et remplis-le :
+
+   | Clé | Rôle |
+   |-----|------|
+   | `host` | nom du serveur, ou alias défini dans `~/.ssh/config` (alors `user`, `keyfile` et `port` sont inutiles) |
+   | `user` | compte SSH (facultatif) |
+   | `keyfile` | clé privée à utiliser (facultatif ; sinon ssh-agent ou `~/.ssh/config`) |
+   | `port` | port SSH (facultatif) |
+   | `path` | chemin **réel** du dossier publié sur le serveur, par exemple celui qui sert `https://…/webapps/` |
+   | `delete` | `no` (défaut) : ne supprime rien ; `yes` : supprime sur le serveur ce qui n'est plus dans `dist/` |
+
+2. Lance `python3 build.py --pwa --deploy`.
+
+Précautions : la configuration est vérifiée **avant** le build ; `host`, `user` et `path` n'acceptent que des caractères sûrs ; un `path` trop général (`/`, `~`, `.`, `..`) est refusé, et avec `delete = yes` il faut au moins deux niveaux (`/var/www/site`). Aucun mot de passe n'est stocké : l'authentification passe par ta clé SSH, et la vérification de la clé du serveur n'est jamais désactivée. Les fichiers envoyés sont rendus lisibles par le serveur web (`D755`, `F644`). Si l'envoi échoue, le script s'arrête avec le code de rsync ; relance-le après correction (rsync ne renvoie que ce qui a changé).
 
 À prévoir sur le serveur :
 - **HTTPS** : obligatoire pour un service worker (`localhost` fait exception pour tester) ;
