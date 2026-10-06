@@ -60,9 +60,32 @@ Chaque outil est une page `.html` unique. Deux façons de l'utiliser :
 ```
 python3 build.py                 # dist/ : copie de code/ + index.html qui liste les outils
 python3 build.py --standalone    # dist/ : chaque page avec common.css intégré (un fichier = un outil)
+python3 build.py --pwa           # comme le premier, plus une application installable (voir ci-dessous)
 ```
 
-Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent en ligne dans les deux modes. L'index lit le `<title>` et la `<meta name="description">` de chaque page.
+Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent en ligne dans tous les modes. L'index lit le `<title>` et la `<meta name="description">` de chaque page.
+
+### Application installable (PWA)
+
+`python3 build.py --pwa` ajoute à `dist/` de quoi installer l'ensemble des outils comme une seule application « WebApps » (écran d'accueil du téléphone, fenêtre dédiée sur ordinateur) :
+
+- `manifest.webmanifest` : nom, couleurs, icônes, raccourcis vers chaque outil (appui long sur l'icône) ;
+- `icons/` : icônes PNG générées par `build.py` à partir des couleurs d'accent de `common.css` (aucune image à maintenir) ;
+- `sw.js` : service worker. Les pages sont pré-chargées et fonctionnent **hors ligne** ; elles sont lues sur le réseau d'abord, donc une mise à jour est visible dès qu'on est connecté. Les bibliothèques des CDN (Leaflet, marked, polices…) sont gardées en cache après leur première utilisation. Les tuiles de carte, les taux de change et la recherche de lieu ne sont jamais mis en cache.
+
+Chaque page de `dist/` reçoit en plus le lien vers le manifest, `theme-color`, l'icône Apple et l'enregistrement du service worker ; les fichiers de `code/` ne sont pas modifiés. Tous les chemins sont relatifs : `dist/` peut être publié n'importe où, par exemple sous `https://www.lslinux.org/webapps/`.
+
+Option incompatible avec `--standalone` (un fichier isolé ne peut pas porter son manifest ni son service worker).
+
+À prévoir sur le serveur :
+- **HTTPS** : obligatoire pour un service worker (`localhost` fait exception pour tester) ;
+- le fichier `.webmanifest` doit être servi en `application/manifest+json` (nginx récent : déjà le cas ; Apache : `AddType application/manifest+json .webmanifest`) ;
+- ne pas mettre `sw.js` derrière un long cache HTTP, sinon les mises à jour tardent (`Cache-Control: no-cache` pour ce fichier).
+
+À savoir :
+- sur iPhone et iPad, l'application installée a un **stockage séparé de Safari** : ce qui a été créé dans l'un (TODO, cartes…) n'apparaît pas dans l'autre. Utiliser l'export / import JSON pour passer de l'un à l'autre ;
+- les tuiles de carte, la recherche de lieu et les taux de change demandent une connexion : hors ligne, l'outil s'ouvre et ses données locales restent disponibles ;
+- un nouveau build change l'identifiant du cache (empreinte du contenu) : l'ancien est supprimé à l'activation du nouveau service worker.
 
 ## Exigences
 
@@ -90,7 +113,7 @@ La structure du repo:
 │   ├── qrcode_generator.html
 │   ├── todo.html
 │   └── units_converter.html
-├── build.py                       # Construit dist/ (voir « Build »)
+├── build.py                       # Construit dist/ (voir « Build » et « PWA »)
 ├── dist/                          # Sortie du build (non versionnée)
 ├── LICENSE
 └── README.md

@@ -16,7 +16,9 @@ Le `<link>` se place **avant** le `<style>` de la page : à spécificité égale
 
 ## Build
 
-`python3 build.py` copie `code/` dans `dist/` et génère un `index.html` ; avec `--standalone`, chaque page est écrite avec `common.css` inséré dans un `<style>` à la place du `<link>` (les `<script>` ne sont pas touchés). Seules les feuilles de style locales sont insérées : les polices ou bibliothèques chargées depuis un site restent des liens.
+`python3 build.py` copie `code/` dans `dist/` et génère un `index.html` ; avec `--standalone`, chaque page est écrite avec `common.css` inséré dans un `<style>` à la place du `<link>` (les `<script>` ne sont pas touchés). Seules les feuilles de style locales sont insérées : les polices ou bibliothèques chargées depuis un site restent des liens. `--pwa` (sans `--standalone`) ajoute manifest, service worker et icônes ; voir le README.
+
+Les couleurs de l'application installée (icônes, `theme-color`, fond de démarrage) sont lues dans `common.css` : `--ac` et `--ac2` pour le dégradé de l'icône, la première et la deuxième valeur de `--bg` pour le clair et le sombre. Changer ces variables suffit à changer l'icône au prochain build.
 
 ## Règles
 
