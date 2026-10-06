@@ -1,16 +1,16 @@
 # Prochains outils
 
-Liste des outils envisagés pour le repo. Chaque outil reste une page HTML autonome (JavaScript inline, pas de build) qui inclut le style commun `src/common.css` ; le CSS propre à l'outil reste dans la page. Voir [STYLE.md](STYLE.md).
+Liste des outils envisagés pour le repo. Chaque outil reste une page HTML autonome (JavaScript inline) qui inclut le style commun `code/common.css` ; le CSS propre à l'outil reste dans la page. Voir [STYLE.md](STYLE.md).
 
 ## Fait
 
 | Outil | Fichier | Doc |
 |-------|---------|-----|
-| Liseuse Markdown | `src/liseuse-markdown.html` | [LISEUSE.md](LISEUSE.md) |
-| TODO (arbre de tâches) | `src/todo/index.html` | [TODO.md](TODO.md) |
-| Convertisseur unités et devises | `src/convertisseur/index.html` | [CONVERTISSEUR.md](CONVERTISSEUR.md) |
-| Cartes Leaflet (gestionnaire de cartes) | `src/leaflet_manager.html` | [CARTES.md](CARTES.md) |
-| Style commun | `src/common.css` | [STYLE.md](STYLE.md) |
+| Liseuse Markdown | `code/markdown_reader.html` | [LISEUSE.md](LISEUSE.md) |
+| TODO (arbre de tâches) | `code/todo.html` | [TODO.md](TODO.md) |
+| Convertisseur unités et devises | `code/units_converter.html` | [CONVERTISSEUR.md](CONVERTISSEUR.md) |
+| Cartes Leaflet (gestionnaire de cartes) | `code/leaflet_manager.html` | [CARTES.md](CARTES.md) |
+| Style commun | `code/common.css` | [STYLE.md](STYLE.md) |
 
 ## En cours
 

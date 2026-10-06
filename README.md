@@ -13,7 +13,7 @@ Une liseuse pour fichiers Markdown avec:
 - Taille de texte et thème ajustables
 - Support de liens relatifs et d'images
 
-📄 **[Documentation](docs/LISEUSE.md)** · 📦 **[liseuse-markdown.html](src/liseuse-markdown.html)**
+📄 **[Documentation](docs/LISEUSE.md)** · 📦 **[markdown_reader.html](code/markdown_reader.html)**
 
 ### ✅ TODO
 
@@ -23,7 +23,7 @@ Un gestionnaire de tâches hiérarchique avec:
 - Import/export JSON et texte indenté
 - Sauvegarde locale, interface mobile-first
 
-📄 **[Documentation](docs/TODO.md)** · 📦 **[todo/index.html](src/todo/index.html)**
+📄 **[Documentation](docs/TODO.md)** · 📦 **[todo.html](code/todo.html)**
 
 ### 🔁 Convertisseur
 
@@ -32,7 +32,7 @@ Un convertisseur d'unités et de devises avec:
 - Devises avec taux en ligne, repli sur le dernier taux connu hors ligne
 - Toutes les conversions affichées d'un coup
 
-📄 **[Documentation](docs/CONVERTISSEUR.md)** · 📦 **[convertisseur/index.html](src/convertisseur/index.html)**
+📄 **[Documentation](docs/CONVERTISSEUR.md)** · 📦 **[units_converter.html](code/units_converter.html)**
 
 ### 🗺️ Cartes Leaflet
 
@@ -42,7 +42,7 @@ Un gestionnaire de cartes Leaflet avec:
 - Export du code HTML à insérer dans une page (fragment ou page complète), du JSON et du GeoJSON
 - Import JSON / GeoJSON, annuler / rétablir, sauvegarde locale
 
-📄 **[Documentation](docs/CARTES.md)** · 📦 **[leaflet_manager.html](src/leaflet_manager.html)**
+📄 **[Documentation](docs/CARTES.md)** · 📦 **[leaflet_manager.html](code/leaflet_manager.html)**
 
 ## Prochains outils
 
@@ -50,7 +50,19 @@ La liste des outils envisagés est dans [docs/suggested_apps_nextsteps.md](docs/
 
 ## Installation
 
-Chaque outil est une page `.html` unique. Télécharge le dossier `src/` en entier (les pages utilisent la feuille de style commune `src/common.css`, qui doit rester à sa place) et ouvre la page voulue dans ton navigateur.
+Chaque outil est une page `.html` unique. Deux façons de l'utiliser :
+
+- **Directement** : télécharge le dossier `code/` en entier (les pages utilisent la feuille de style commune `code/common.css`, qui doit rester à sa place) et ouvre la page voulue dans ton navigateur.
+- **Après un build** (voir ci-dessous) : `dist/` contient soit l'ensemble des outils avec une page d'accueil, soit des pages autonomes à copier une par une.
+
+### Build
+
+```
+python3 build.py                 # dist/ : copie de code/ + index.html qui liste les outils
+python3 build.py --standalone    # dist/ : chaque page avec common.css intégré (un fichier = un outil)
+```
+
+Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent en ligne dans les deux modes. L'index lit le `<title>` et la `<meta name="description">` de chaque page.
 
 ## Exigences
 
@@ -71,23 +83,23 @@ La structure du repo:
 │   ├── CARTES.md
 │   ├── STYLE.md                   # Style commun : variables et composants
 │   └── suggested_apps_nextsteps.md
-├── src/                           # Pages HTML
+├── code/                          # Pages HTML
 │   ├── common.css                 # Style partagé par tous les outils
-│   ├── liseuse-markdown.html
-│   ├── todo/
-│   │   ├── index.html
-│   │   └── slovingo.json
-│   ├── convertisseur/
-│   │   └── index.html
-│   └── leaflet_manager.html
+│   ├── leaflet_manager.html
+│   ├── markdown_reader.html
+│   ├── qrcode_generator.html
+│   ├── todo.html
+│   └── units_converter.html
+├── build.py                       # Construit dist/ (voir « Build »)
+├── dist/                          # Sortie du build (non versionnée)
 ├── LICENSE
 └── README.md
 ```
 
 Chaque page est un fichier `.html` autonome :
-- Style commun dans `src/common.css` (voir [docs/STYLE.md](docs/STYLE.md)), CSS spécifique à l'outil inline
+- Style commun dans `code/common.css` (voir [docs/STYLE.md](docs/STYLE.md)), CSS spécifique à l'outil inline
 - JavaScript inline
-- Pas de build step
+- Aucun build n'est nécessaire pour développer : on ouvre `code/<outil>.html` ; `build.py` ne sert qu'à publier
 
 ## License
 

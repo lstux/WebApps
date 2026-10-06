@@ -55,7 +55,7 @@ Les tâches restent statiques : les cases ne se cochent pas dans la liseuse.
 - **Clair** : fond gris-bleu clair, zone de lecture blanche, accent bleu-violet
 - **Sombre** : fond presque noir, texte gris clair, accent plus lumineux
 
-Les couleurs viennent du style commun `src/common.css` (voir [STYLE.md](STYLE.md)), partagé avec les autres outils. La barre de lecture utilise un dégradé accent → second accent.
+Les couleurs viennent du style commun `code/common.css` (voir [STYLE.md](STYLE.md)), partagé avec les autres outils. La barre de lecture utilise un dégradé accent → second accent.
 
 ## Notes
 

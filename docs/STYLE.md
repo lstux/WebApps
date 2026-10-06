@@ -1,18 +1,22 @@
-# Style commun — `src/common.css`
+# Style commun — `code/common.css`
 
-Toutes les pages incluent `src/common.css` pour partager les mêmes couleurs, la même typographie et les mêmes composants. Ce qui est propre à un outil reste dans le bloc `<style>` de sa page.
+Toutes les pages incluent `code/common.css` pour partager les mêmes couleurs, la même typographie et les mêmes composants. Ce qui est propre à un outil reste dans le bloc `<style>` de sa page.
 
 ## Inclure le fichier
 
 ```html
-<!-- page dans src/ -->
+<!-- page dans code/ -->
 <link rel="stylesheet" href="common.css">
 
-<!-- page dans un sous-dossier de src/ -->
+<!-- page dans un sous-dossier de code/ -->
 <link rel="stylesheet" href="../common.css">
 ```
 
 Le `<link>` se place **avant** le `<style>` de la page : à spécificité égale, ce que la page écrit l'emporte sur le fichier commun.
+
+## Build
+
+`python3 build.py` copie `code/` dans `dist/` et génère un `index.html` ; avec `--standalone`, chaque page est écrite avec `common.css` inséré dans un `<style>` à la place du `<link>` (les `<script>` ne sont pas touchés). Seules les feuilles de style locales sont insérées : les polices ou bibliothèques chargées depuis un site restent des liens.
 
 ## Règles
 
@@ -62,7 +66,7 @@ Une page peut ajouter ses propres variables (la Liseuse définit `--f-read` pour
 
 ## Ajouter un nouvel outil
 
-1. Créer `src/mon-outil/index.html` avec le `<link>` vers `../common.css`.
+1. Créer `code/mon_outil.html` avec le `<link>` vers `common.css`, un `<title>` et une `<meta name="description">` (ils alimentent la page d'index générée par `build.py`).
 2. Partir de `.topbar` pour l'en-tête, `.card` pour les blocs, `.btn` et les champs pour les formulaires.
 3. Mettre dans un `<style>` uniquement ce qui est spécifique à l'outil.
 4. Tester en clair et en sombre, sur un écran étroit (environ 390 px) et sur un écran large.

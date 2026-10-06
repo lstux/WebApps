@@ -2,7 +2,7 @@
 
 Une page unique pour composer une carte [Leaflet](https://leafletjs.com) à la souris, puis récupérer le code à coller dans une page HTML pour obtenir exactement la même carte.
 
-📦 `src/leaflet_manager.html` (utilise la feuille de style commune `src/common.css`, voir [STYLE.md](STYLE.md))
+📦 `code/leaflet_manager.html` (utilise la feuille de style commune `code/common.css`, voir [STYLE.md](STYLE.md))
 
 ## 🎯 Caractéristiques
 

@@ -1,9 +1,9 @@
 /* ==========================================================================
    common.css — style commun des outils WebApps
 
-   Inclusion (depuis src/ ou depuis un sous-dossier) :
-     <link rel="stylesheet" href="common.css">      (src/outil.html)
-     <link rel="stylesheet" href="../common.css">   (src/outil/index.html)
+   Inclusion (depuis code/ ou depuis un sous-dossier) :
+     <link rel="stylesheet" href="common.css">      (code/outil.html)
+     <link rel="stylesheet" href="../common.css">   (code/outil/index.html)
 
    Règles du jeu :
    - Les couleurs, rayons et polices viennent des variables ci-dessous ;
