@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Liseuse Markdown</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&display=swap">
+<style>
+/* Mise en page : bandeau fin en haut, volet de documents à gauche, colonne de lecture étroite au centre, plan de la section à droite sur grand écran. */
+:root{
+  --bg:#F2F4F1; --paper:#FBFCFA; --side:#E9ECE8; --line:#D5DAD3; --hover:rgba(27,34,37,.06);
+  --ink:#1B2225; --muted:#5B676B; --accent:#1B6B66; --on-accent:#FFFFFF; --accent-soft:#D3E8E5;
+  --code-bg:#EDF0EB; --err:#A33A2E; --accent2:#2F6FA8;
+  --ok:#2FB872; --on-ok:#FFFFFF; --mut2:#8B94A5; --shadow:0 1px 2px #1a204012,0 6px 18px #1a204010;
+  --syn-kw:#7A3E9D; --syn-str:#1F7A4D; --syn-com:#66737A; --syn-num:#B4530A; --syn-fn:#1F5FA8;
+  --f-ui:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --f-read:'Source Serif 4',Georgia,'Times New Roman',serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --fs:18px; --side-w:288px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1416; --paper:#141A1C; --side:#1A2124; --line:#2A3538; --hover:rgba(220,227,225,.08);
+    --ink:#DCE3E1; --muted:#94A2A6; --accent:#66C7BC; --on-accent:#0B1F1D; --accent-soft:#1F3B38;
+    --code-bg:#1B2326; --err:#F08A7C; --accent2:#7DB4F0;
+  --ok:#3ECF86; --on-ok:#06200F; --mut2:#6B768A; --shadow:0 1px 2px #0006,0 8px 24px #0004;
+    --syn-kw:#C79BE8; --syn-str:#7FD1A0; --syn-com:#7E8D91; --syn-num:#F0A869; --syn-fn:#7DB4F0;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1416; --paper:#141A1C; --side:#1A2124; --line:#2A3538; --hover:rgba(220,227,225,.08);
+  --ink:#DCE3E1; --muted:#94A2A6; --accent:#66C7BC; --on-accent:#0B1F1D; --accent-soft:#1F3B38;
+  --code-bg:#1B2326; --err:#F08A7C; --accent2:#7DB4F0;
+  --ok:#3ECF86; --on-ok:#06200F; --mut2:#6B768A; --shadow:0 1px 2px #0006,0 8px 24px #0004;
+  --syn-kw:#C79BE8; --syn-str:#7FD1A0; --syn-com:#7E8D91; --syn-num:#F0A869; --syn-fn:#7DB4F0;
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);overflow:hidden}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.muted{color:var(--muted)}
+
+.app{height:100%;display:grid;grid-template-columns:var(--side-w) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"bar bar" "side stage"}
+
+/* Bandeau */
+.bar{grid-area:bar;position:relative;display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--bg);min-width:0}
+.readbar{position:absolute;left:0;right:0;bottom:-1px;height:2px;pointer-events:none}
+.readbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.ring{--p:0;--c:var(--accent);position:relative;flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--c) calc(var(--p) * 1%),var(--line) 0)}
+.ring::before{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--bg)}
+.ring span{position:relative;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
+.crumb{flex:1;min-width:0;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crumb strong{color:var(--ink);font-weight:500}
+.crumb .sep{margin:0 .45em;opacity:.55}
+.stats{font-size:12px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.grp{display:flex;gap:4px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:6px 13px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;transition:transform .12s,border-color .12s}
+.btn:hover:not(:disabled){border-color:var(--accent)}
+.btn:active:not(:disabled){transform:scale(.96)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.icon{width:36px;padding:0;border-radius:50%;background:var(--code-bg);border-color:transparent}
+.btn.icon:hover:not(:disabled){border-color:var(--accent)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;color:var(--on-accent);box-shadow:0 3px 10px color-mix(in srgb,var(--accent) 28%,transparent)}
+.btn.primary:hover:not(:disabled){filter:brightness(1.08)}
+.menu{display:none}
+svg.i{flex:none;display:block}
+::selection{background:var(--accent-soft)}
+.tree,.stage,.toc{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+
+/* Volet */
+.side{grid-area:side;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--side);border-right:1px solid var(--line)}
+.side-head{display:flex;flex-direction:column;gap:8px;padding:14px 16px 10px}
+.openers{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.urlrow{display:flex;gap:6px;min-width:0}
+.field{width:100%;min-width:0;min-height:36px;padding:6px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font-size:13px;transition:border-color .12s,box-shadow .12s}
+.field::placeholder{color:var(--muted)}
+.field:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.srcline{display:flex;justify-content:space-between;gap:8px;padding:10px 16px 6px;font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.srcline span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srcline span+span{flex:none}
+.tree{flex:1;min-height:0;overflow:auto;padding:2px 8px 20px}
+.tree ul{list-style:none;margin:0;padding:0}
+.row,.hit{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;border-radius:9px;text-align:left;cursor:pointer;font-size:13.5px;line-height:1.35;color:var(--ink)}
+.row{padding:5px 8px 5px calc(8px + var(--d,0) * 14px)}
+.row:hover,.hit:hover{background:var(--hover)}
+.row svg.i{color:var(--muted)}
+.row .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row.on,.hit.on{background:var(--accent-soft)}
+.row.on svg.i{color:var(--accent)}
+.row.on .nm,.hit.on .t{font-weight:500}
+.dir-row .chev{transition:transform .12s}
+.dir-row[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.hit{flex-direction:column;align-items:stretch;gap:1px;padding:7px 8px}
+.hit .t{font-size:13.5px}
+.hit .p{font-size:11.5px;color:var(--muted)}
+.hit .s{font-size:12px;color:var(--muted);line-height:1.4;overflow-wrap:anywhere}
+.hit mark{background:var(--accent-soft);color:var(--ink);border-radius:2px;padding:0 1px}
+.hit.on mark{background:var(--paper)}
+.empty,.hint{margin:10px 8px;font-size:12.5px;color:var(--muted)}
+
+/* Scène de lecture */
+.stage{grid-area:stage;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;background:var(--paper);scroll-behavior:auto}
+.stage-inner{display:flex;justify-content:center;align-items:flex-start;gap:56px;padding:44px clamp(16px,4vw,48px) 96px}
+.col{flex:1 1 auto;min-width:0;max-width:68ch;font-family:var(--f-read);font-size:var(--fs)}
+.toc{flex:none;width:210px;position:sticky;top:28px;max-height:calc(100vh - 150px);overflow:auto;font-size:13px;line-height:1.4}
+.toc h2{margin:0 0 8px;font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.toc a{display:block;padding:3px 0 3px calc(var(--l,0) * 12px);color:var(--muted);text-decoration:none;overflow-wrap:anywhere}
+.toc a:hover{color:var(--ink)}
+.toc a.on{color:var(--accent);font-weight:500}
+
+/* Typographie du document */
+.doc{line-height:1.7;overflow-wrap:anywhere}
+.doc>:first-child{margin-top:0}
+.doc h1,.doc h2,.doc h3,.doc h4{font-family:var(--f-ui);font-weight:600;line-height:1.25;letter-spacing:-.01em;text-wrap:balance;scroll-margin-top:20px;margin:1.9em 0 .55em}
+.doc h1{font-size:1.95em;letter-spacing:-.022em;margin-top:0}
+.doc h2{font-size:1.38em;padding-bottom:.28em;border-bottom:1px solid var(--line)}
+.doc h3{font-size:1.14em}
+.doc h4,.doc h5,.doc h6{font-size:.82em;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.doc p,.doc ul,.doc ol,.doc blockquote,.doc details{margin:0 0 1.1em}
+.doc ul,.doc ol{padding-left:1.5em}
+.doc li{margin:.25em 0}
+.doc li>ul,.doc li>ol{margin:.25em 0 .4em}
+/* Tâches : même langage visuel que l’outil TODO (cases rondes, pastille %, barre, texte barré) */
+.taskcard{margin:0 0 1.3em;padding:.3em .4em .45em;background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);font-family:var(--f-ui);font-size:.88em;line-height:1.45}
+.thead{display:flex;align-items:center;gap:12px;padding:.5em .6em .3em}
+.thead .pct{margin:0}
+.thead .tbar{flex:1;margin:0}
+.doc .tasks{list-style:none;margin:0;padding:0}
+.doc li.task{margin:0}
+.doc li.task>ul.tasks,.doc li.task>ol.tasks{margin:0 0 .2em 1.1em;padding-left:.6em;border-left:2px solid var(--line)}
+.trow{display:flex;align-items:flex-start;gap:.65em;padding:.4em .6em}
+.cb{position:relative;flex:none;width:1.45em;height:1.45em;margin-top:.14em;border-radius:50%;border:2px solid var(--mut2);transition:background .15s,border-color .15s}
+.cb.on{background:var(--ok);border-color:var(--ok)}
+.cb.on::after{content:"";position:absolute;left:37%;top:15%;width:24%;height:48%;border:solid var(--on-ok);border-width:0 .14em .14em 0;transform:rotate(45deg);animation:pop .2s}
+.cb.part{border-color:var(--accent)}
+.cb.part::after{content:"";position:absolute;left:24%;top:calc(50% - 1.25px);width:52%;height:2.5px;border-radius:2px;background:var(--accent)}
+@keyframes pop{from{transform:rotate(45deg) scale(.3)}to{transform:rotate(45deg) scale(1)}}
+.tbody{flex:1;min-width:0;overflow-wrap:anywhere}
+.tbody p{margin:0 0 .4em}
+.tbody p:last-child{margin-bottom:0}
+.tbody.done{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1.5px}
+.pct{display:inline-flex;align-items:baseline;gap:.35em;margin-left:.6em;padding:1px .6em;border-radius:999px;font-size:.8em;font-weight:700;line-height:1.5;font-variant-numeric:tabular-nums;color:color-mix(in srgb,var(--c) 68%,var(--ink));background:color-mix(in srgb,var(--c) 16%,transparent);border:1px solid color-mix(in srgb,var(--c) 38%,transparent)}
+.pct small{font-weight:500;font-size:.9em;opacity:.85}
+.tbar{height:4px;border-radius:2px;background:var(--line);margin-top:.5em;overflow:hidden}
+.tbar i{display:block;height:100%;border-radius:2px;background:var(--c);transition:width .25s}
+.doc a{color:var(--accent);text-decoration:underline;text-underline-offset:.18em;text-decoration-thickness:1px}
+.doc a:hover{text-decoration-thickness:2px}
+.doc a.dead{color:var(--muted);text-decoration:line-through dotted;cursor:help}
+.doc strong{font-weight:650}
+.doc code{font-family:var(--f-mono);font-size:.86em;background:var(--code-bg);padding:.12em .36em;border-radius:4px}
+.doc kbd{font-family:var(--f-mono);font-size:.8em;padding:.08em .45em;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;background:var(--paper)}
+.doc blockquote{margin-inline:0;padding:.75em 1.15em;border-radius:14px;background:var(--code-bg);color:var(--muted)}
+.doc blockquote>:first-child{margin-top:0}
+.doc blockquote>:last-child{margin-bottom:0}
+.doc hr{border:0;border-top:1px solid var(--line);margin:2.2em 0}
+.doc img{max-width:100%;height:auto;border-radius:4px}
+.doc .missing-img{display:inline-block;padding:.1em .5em;border:1px dashed var(--line);border-radius:4px;font:12.5px var(--f-ui);color:var(--muted)}
+.doc mark{background:var(--accent-soft);color:inherit;padding:0 .15em}
+.doc details{border:1px solid var(--line);border-radius:14px;padding:.55em 1em}
+.doc details>summary{cursor:pointer;font-family:var(--f-ui);font-size:.88em;font-weight:500}
+.doc details[open]>summary{margin-bottom:.5em}
+.doc .fm{font-size:.85em}
+.doc .fm pre{margin:0;overflow-x:auto;font-family:var(--f-mono);font-size:.9em;line-height:1.5}
+.doc .notice{font-family:var(--f-ui);font-size:.85em;color:var(--err)}
+.tablewrap{overflow-x:auto;margin:0 0 1.3em;border:1px solid var(--line);border-radius:14px}
+.doc table{border-collapse:collapse;width:100%;font-family:var(--f-ui);font-size:.82em;font-variant-numeric:tabular-nums}
+.doc th,.doc td{padding:.55em .9em;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:normal}
+.doc th{font-weight:600;border-bottom:2px solid var(--line);white-space:nowrap}
+.doc thead th{background:var(--code-bg)}
+.doc tbody tr:last-child td{border-bottom:0}
+.doc tbody tr:hover td{background:var(--hover)}
+.codewrap{margin:0 0 1.3em;border:1px solid var(--line);border-radius:14px;background:var(--code-bg);overflow:hidden}
+.codebar{display:flex;align-items:center;justify-content:space-between;padding:3px 6px 3px 14px;border-bottom:1px solid var(--line);font-family:var(--f-ui)}
+.codebar .lang{font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.codebar .copy{border:0;background:transparent;color:var(--muted);font-size:12px;padding:4px 8px;border-radius:4px;cursor:pointer}
+.codebar .copy:hover{color:var(--ink);background:var(--hover)}
+.codewrap pre{margin:0;padding:13px 16px;overflow-x:auto;line-height:1.55;background:none}
+.codewrap pre code{background:none;padding:0;font-size:.82em;white-space:pre;overflow-wrap:normal}
+.doc>pre{font-family:var(--f-mono);font-size:.82em;overflow-x:auto;background:var(--code-bg);padding:12px 16px;border-radius:6px}
+.hljs-keyword,.hljs-selector-tag,.hljs-name,.hljs-tag{color:var(--syn-kw)}
+.hljs-string,.hljs-regexp,.hljs-addition{color:var(--syn-str)}
+.hljs-number,.hljs-literal,.hljs-symbol,.hljs-bullet,.hljs-variable,.hljs-template-variable{color:var(--syn-num)}
+.hljs-comment,.hljs-quote{color:var(--syn-com);font-style:italic}
+.hljs-title,.hljs-section,.hljs-built_in,.hljs-type,.hljs-attr,.hljs-attribute,.hljs-selector-class,.hljs-selector-id{color:var(--syn-fn)}
+.hljs-deletion{color:var(--err)}
+
+.pager{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:3.2em;padding-top:1.4em;border-top:1px solid var(--line);font-family:var(--f-ui)}
+.pager:empty{display:none}
+.pg{display:flex;flex-direction:column;gap:2px;min-width:0;padding:12px 16px;border:1px solid var(--line);border-radius:16px;background:var(--paper);text-align:left;cursor:pointer;font-size:14px;font-weight:500;transition:transform .12s,box-shadow .12s,border-color .12s}
+.pg:hover{border-color:var(--accent);box-shadow:var(--shadow)}
+.pg:active{transform:scale(.98)}
+.pg small{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.pg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pg.next{align-items:flex-end;text-align:right;grid-column:2}
+
+/* Superpositions */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:60;max-width:min(560px,calc(100vw - 32px));padding:10px 14px;border-radius:8px;background:var(--ink);color:var(--paper);font-size:13px;font-weight:500;line-height:1.45;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.toast.err{background:var(--err);color:var(--paper)}
+.drop{position:fixed;inset:12px;z-index:70;display:flex;align-items:center;justify-content:center;border:2px dashed var(--accent);border-radius:12px;background:color-mix(in srgb,var(--accent-soft) 88%,transparent);color:var(--ink);font-size:18px;font-weight:500;pointer-events:none}
+.scrim{display:none}
+
+@media (max-width:1180px){ .toc{display:none} }
+@media (max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-areas:"bar" "stage"}
+  .menu{display:inline-flex}
+  .side{position:fixed;top:env(safe-area-inset-top,0px);bottom:env(safe-area-inset-bottom,0px);left:0;width:min(88vw,340px);z-index:40;transform:translateX(-104%);visibility:hidden;box-shadow:0 0 32px rgba(0,0,0,.28)}
+  .nav-open .side{transform:none;visibility:visible}
+  .nav-open .scrim{display:block;position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.4)}
+  .field{font-size:16px}
+  .stage-inner{padding-top:28px}
+}
+@media (max-width:700px){ .stats{display:none} }
+@media (prefers-reduced-motion:no-preference){
+  .side{transition:transform .2s ease,visibility .2s}
+}
+@media (prefers-reduced-motion:reduce){
+  .cb.on::after{animation:none}
+  .btn,.pg,.tbar i{transition:none}
+}
+</style>
+
+</head>
+<body>
+<div class="app" id="ls-app">
+  <header class="bar">
+    <button type="button" class="btn icon menu" id="ls-menu" aria-label="Afficher la liste des documents"></button>
+    <div class="crumb" id="ls-crumb"></div>
+    <span class="stats" id="ls-stats"></span>
+    <div class="ring" id="ls-ring" hidden><span id="ls-ring-txt"></span></div>
+    <div class="grp">
+      <button type="button" class="btn icon" id="ls-smaller" aria-label="Réduire le texte">A−</button>
+      <button type="button" class="btn icon" id="ls-bigger" aria-label="Agrandir le texte">A+</button>
+    </div>
+    <button type="button" class="btn icon" id="ls-theme"></button>
+    <div class="readbar" id="ls-read" aria-hidden="true"><i></i></div>
+  </header>
+
+  <aside class="side" id="ls-side" aria-label="Documents">
+    <div class="side-head">
+      <div class="openers">
+        <button type="button" class="btn primary" id="ls-open-files"></button>
+        <button type="button" class="btn primary" id="ls-open-folder"></button>
+      </div>
+      <form class="urlrow" id="ls-url-form" autocomplete="off">
+        <label class="sr" for="ls-url">Adresse d’un fichier Markdown ou d’un dépôt GitHub</label>
+        <input class="field" id="ls-url" type="text" inputmode="url" spellcheck="false" placeholder="Adresse d’un .md ou d’un dépôt GitHub">
+        <button type="submit" class="btn">Charger</button>
+      </form>
+      <label class="sr" for="ls-q">Rechercher dans les documents</label>
+      <input class="field" id="ls-q" type="search" spellcheck="false" placeholder="Rechercher   ( / )">
+    </div>
+    <div class="srcline"><span id="ls-src"></span><span id="ls-count"></span></div>
+    <nav class="tree" id="ls-tree" aria-label="Arborescence des documents"></nav>
+  </aside>
+
+  <main class="stage" id="ls-stage">
+    <div class="stage-inner">
+      <div class="col">
+        <article class="doc" id="ls-doc"></article>
+        <nav class="pager" id="ls-pager" aria-label="Navigation entre documents"></nav>
+      </div>
+      <nav class="toc" id="ls-toc" aria-label="Plan du document" hidden></nav>
+    </div>
+  </main>
+
+  <div class="scrim" id="ls-scrim"></div>
+  <div class="drop" id="ls-drop" hidden>Dépose un fichier .md ou un dossier</div>
+  <div class="toast" id="ls-toast" role="status" aria-live="polite" hidden></div>
+  <input type="file" id="ls-file-in" accept=".md,.markdown,.mdown,.mkd,.mdx,text/markdown" multiple hidden>
+  <input type="file" id="ls-folder-in" webkitdirectory multiple hidden>
+</div>
+
+<!-- Dossier d’exemple : remplacé dès que tu ouvres tes propres documents -->
+<script type="text/markdown" data-path="Bienvenue.md">
+# Liseuse Markdown
+
+Une page unique qui affiche des fichiers Markdown comme on lit un livre : colonne étroite, typographie soignée, liste des documents à gauche, plan de la section à droite.
+
+> Ce dossier est un exemple. Ouvre tes propres fichiers pour le remplacer.
+
+## Ouvrir des documents
+
+- **Fichiers** : un ou plusieurs fichiers `.md` de ton ordinateur.
+- **Dossier** : tous les `.md` du dossier et de ses sous-dossiers apparaissent dans l’arborescence. Les images et les liens relatifs entre documents fonctionnent.
+- **Adresse** : l’URL d’un fichier `.md`, ou celle d’un dépôt GitHub (`https://github.com/utilisateur/depot`) pour parcourir tous ses documents.
+- **Glisser-déposer** : dépose un fichier ou un dossier n’importe où sur la page.
+- **Coller** : `Ctrl`+`V` affiche le Markdown présent dans le presse-papiers.
+
+Rien n’est envoyé nulle part : les fichiers sont lus dans le navigateur.
+
+## Raccourcis
+
+| Touche | Action |
+| --- | --- |
+| <kbd>/</kbd> | Aller à la recherche |
+| <kbd>[</kbd> et <kbd>]</kbd> | Document précédent, document suivant |
+| <kbd>Échap</kbd> | Effacer la recherche |
+
+## Pour aller plus loin
+
+Voir la [liste des éléments Markdown pris en charge](Syntaxe.md), ou le [journal d’exemple](notes/Journal/2026-10-06.md).
+
+### Limites des adresses
+
+Un serveur n’est lisible que s’il autorise les requêtes venant d’une autre origine (CORS). C’est le cas de `raw.githubusercontent.com` et de l’API GitHub, pas de tous les sites. Dans l’aperçu intégré à Claude, les requêtes réseau sont bloquées : pour charger des adresses, enregistre la page en `.html` et ouvre-la depuis ton ordinateur.
+</script>
+
+<script type="text/markdown" data-path="Syntaxe.md">
+# Éléments pris en charge
+
+Le rendu suit GitHub Flavored Markdown. Retour à l’[accueil](Bienvenue.md#ouvrir-des-documents).
+
+## Texte
+
+On peut mettre en *italique*, en **gras**, ~~barrer~~ ou écrire du `code en ligne`. Un [lien externe](https://commonmark.org) s’ouvre dans un nouvel onglet.
+
+> Une citation. Elle sert souvent à mettre une idée à distance du reste du texte.
+
+## Listes
+
+1. Première étape
+2. Deuxième étape
+   - un point
+   - un autre point
+3. Troisième étape
+
+Les tâches suivent le style de l’outil TODO. Une tâche qui contient des sous-tâches affiche sa progression et se coche toute seule quand elles sont faites.
+
+- [ ] Prendre en main la liseuse
+  - [x] Lire le document
+  - [x] Ouvrir un dossier
+  - [ ] Essayer la recherche
+- [x] Choisir la taille du texte
+- [ ] Régler le thème
+
+## Code
+
+```js
+// Compte les mots d’un texte
+function mots(texte) {
+  return texte.trim().split(/\s+/).filter(Boolean).length;
+}
+```
+
+```css
+.doc a { color: var(--accent); text-underline-offset: .18em; }
+```
+
+```
+Un bloc sans langage reste en texte brut.
+```
+
+## Tableau
+
+| Effet | Écriture | Rendu |
+| --- | --- | --- |
+| Gras | `**texte**` | **texte** |
+| Italique | `*texte*` | *texte* |
+| Lien | `[titre](adresse)` | [titre](#tableau) |
+
+## HTML intégré
+
+<details>
+<summary>Un bloc repliable</summary>
+
+Le HTML sûr est conservé, les scripts sont retirés.
+
+</details>
+
+---
+
+Fin du document.
+</script>
+
+<script type="text/markdown" data-path="notes/Idées.md">
+# Idées
+
+Pistes pour la suite, par ordre d’envie.
+
+- Mémoriser la position de lecture de chaque document
+- Exporter le document affiché en PDF
+- Afficher les équations
+- Un raccourci pour replier tous les dossiers d’un coup
+- Un mode « focus » sans volet ni plan
+
+## À vérifier
+
+- [ ] Dossiers de plus de 500 fichiers
+- [ ] Liens relatifs avec des espaces dans le nom
+</script>
+
+<script type="text/markdown" data-path="notes/Journal/2026-10-06.md">
+---
+titre: Journal
+date: 2026-10-06
+---
+
+# Mardi 6 octobre
+
+Matin consacré à la liseuse. Le panneau de gauche affiche maintenant l’arborescence complète, avec les dossiers repliables.
+
+## Fait
+
+- [x] Rendu Markdown
+- [x] Chargement d’un dossier
+- [x] Recherche dans le texte
+
+## Reste
+
+- [ ] Tester sur un vrai dépôt de notes
+- [ ] Relire les [raccourcis](../../Bienvenue.md#raccourcis)
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ---------- Constantes et petits utilitaires ---------- */
+const MD_RE=/\.(md|markdown|mdown|mkd|mdx)$/i;
+const IMG_RE=/\.(png|jpe?g|gif|svg|webp|avif|bmp)$/i;
+const IGNORE=new Set(['.git','node_modules','.obsidian','.trash']);
+const natural=new Intl.Collator('fr',{numeric:true,sensitivity:'base'});
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fold=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+const slug=t=>fold(t).replace(/[^a-z0-9\s-]/g,'').trim().replace(/\s+/g,'-')||'section';
+const dirname=p=>{const i=p.lastIndexOf('/');return i<0?'':p.slice(0,i)};
+const decodeSafe=s=>{try{return decodeURIComponent(s)}catch(e){return s}};
+function joinPath(base,rel){
+  const parts=(rel.startsWith('/')?[]:(base?base.split('/'):[])).concat(rel.split('/'));
+  const out=[];
+  for(const s of parts){ if(s===''||s==='.') continue; if(s==='..'){out.pop();continue} out.push(s) }
+  return out.join('/');
+}
+const store={
+  get(k,d){try{const v=localStorage.getItem('liseuse.'+k);return v==null?d:v}catch(e){return d}},
+  set(k,v){try{localStorage.setItem('liseuse.'+k,v)}catch(e){}}
+};
+
+const svg=(d,extra)=>'<svg class="i" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"'+(extra||'')+'>'+d+'</svg>';
+const ICON={
+  folder:svg('<path d="M1.75 4.25a1 1 0 0 1 1-1h3.1l1.5 1.5h5.9a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2.75a1 1 0 0 1-1-1z"/>'),
+  file:svg('<path d="M4 1.75h5l3.25 3.25v8.25a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-10.5a1 1 0 0 1 1-1z"/><path d="M9 1.75V5h3.25"/>'),
+  chev:svg('<path d="M6 4l4 4-4 4"/>',' class="i chev"').replace('class="i" viewBox','viewBox'),
+  menu:svg('<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>'),
+  theme_auto:svg('<circle cx="8" cy="8" r="5.25"/><path d="M8 2.75a5.25 5.25 0 0 1 0 10.5z" fill="currentColor"/>'),
+  theme_light:svg('<circle cx="8" cy="8" r="2.75"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/>'),
+  theme_dark:svg('<path d="M13 9.6A5.5 5.5 0 0 1 6.4 3 5.5 5.5 0 1 0 13 9.6z"/>')
+};
+
+const el={
+  app:$('ls-app'),menu:$('ls-menu'),crumb:$('ls-crumb'),stats:$('ls-stats'),smaller:$('ls-smaller'),bigger:$('ls-bigger'),
+  theme:$('ls-theme'),side:$('ls-side'),openFiles:$('ls-open-files'),openFolder:$('ls-open-folder'),urlForm:$('ls-url-form'),
+  url:$('ls-url'),q:$('ls-q'),src:$('ls-src'),count:$('ls-count'),tree:$('ls-tree'),stage:$('ls-stage'),doc:$('ls-doc'),
+  pager:$('ls-pager'),toc:$('ls-toc'),ring:$('ls-ring'),ringTxt:$('ls-ring-txt'),read:$('ls-read'),toast:$('ls-toast'),drop:$('ls-drop'),scrim:$('ls-scrim'),fileIn:$('ls-file-in'),folderIn:$('ls-folder-in')
+};
+document.documentElement.lang='fr';
+el.menu.innerHTML=ICON.menu;
+el.openFiles.innerHTML=ICON.file+'Fichiers';
+el.openFolder.innerHTML=ICON.folder+'Dossier';
+
+/* ---------- État ---------- */
+let nextId=1;
+const mk=o=>Object.assign({id:nextId++,name:o.path.split('/').pop(),text:null},o);
+const state={
+  label:'',kind:'',files:[],order:[],tree:null,current:null,collapsed:new Set(),
+  byPath:new Map(),byLower:new Map(),byUrl:new Map(),byId:new Map(),
+  assets:new Map(),assetsLower:new Map(),blobUrls:new Map()
+};
+
+/* ---------- Réglages : taille du texte et thème ---------- */
+const SIZES=[15,16,17,18,19,20,22];
+let si=Number(store.get('size',3)); if(!(si>=0&&si<SIZES.length)) si=3;
+function applySize(){
+  document.documentElement.style.setProperty('--fs',SIZES[si]+'px');
+  el.smaller.disabled=si===0; el.bigger.disabled=si===SIZES.length-1;
+  store.set('size',si);
+}
+const THEMES=['auto','light','dark'], THEME_NAME={auto:'automatique',light:'clair',dark:'sombre'};
+let theme=store.get('theme','auto'); if(!THEMES.includes(theme)) theme='auto';
+function applyTheme(initial){
+  const r=document.documentElement;
+  if(theme!=='auto') r.setAttribute('data-theme',theme); else if(!initial) r.removeAttribute('data-theme');
+  el.theme.innerHTML=ICON['theme_'+theme];
+  const l='Thème : '+THEME_NAME[theme]+' (changer)';
+  el.theme.setAttribute('aria-label',l); el.theme.title=l;
+  store.set('theme',theme);
+}
+el.smaller.onclick=()=>{if(si>0){si--;applySize()}};
+el.bigger.onclick=()=>{if(si<SIZES.length-1){si++;applySize()}};
+el.theme.onclick=()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%THEMES.length];applyTheme(false)};
+
+/* ---------- Messages ---------- */
+let toastTimer;
+function toast(msg,kind,ms){
+  clearTimeout(toastTimer);
+  el.toast.textContent=msg; el.toast.className='toast'+(kind==='err'?' err':''); el.toast.hidden=false;
+  if(ms!==0) toastTimer=setTimeout(()=>{el.toast.hidden=true},ms||(kind==='err'?10000:4500));
+}
+const hideToast=()=>{clearTimeout(toastTimer);el.toast.hidden=true};
+const httpErr=r=>Object.assign(new Error('http'),{status:r.status});
+function explain(e,ctx){
+  if(e&&e.status){
+    if(e.status===404) return 'Adresse introuvable (404).';
+    if(e.status===403||e.status===429) return ctx==='gh'?'GitHub refuse la requête (limite de 60 appels par heure sans compte, ou dépôt privé). Réessaie plus tard.':'Accès refusé ('+e.status+').';
+    return 'Le serveur a répondu '+e.status+'.';
+  }
+  if(e&&e.message==='html') return 'Cette adresse renvoie une page web, pas un fichier Markdown. Pour GitHub, utilise l’adresse du dépôt, d’un dossier ou d’un fichier .md.';
+  if(e&&e.message==='empty') return 'Aucun fichier Markdown trouvé à cette adresse.';
+  return 'Impossible de lire cette adresse. Le site doit autoriser les requêtes venant d’une autre origine (CORS), et l’aperçu intégré à Claude bloque le réseau : ouvre la page .html depuis ton ordinateur pour charger des adresses.';
+}
+
+/* ---------- Arborescence ---------- */
+function buildTree(files){
+  const root={name:'',path:'',dirs:new Map(),files:[]};
+  for(const f of files){
+    const segs=f.path.split('/'); let node=root;
+    for(let i=0;i<segs.length-1;i++){
+      let c=node.dirs.get(segs[i]);
+      if(!c){c={name:segs[i],path:(node.path?node.path+'/':'')+segs[i],dirs:new Map(),files:[]};node.dirs.set(segs[i],c)}
+      node=c;
+    }
+    node.files.push(f);
+  }
+  return root;
+}
+const sortedDirs=n=>[...n.dirs.values()].sort((a,b)=>natural.compare(a.name,b.name));
+function flatten(n,out){
+  out=out||[];
+  sortedDirs(n).forEach(d=>flatten(d,out));
+  n.files.sort((a,b)=>natural.compare(a.name,b.name));
+  out.push(...n.files);
+  return out;
+}
+function allDirs(n,out){out=out||[];for(const d of n.dirs.values()){out.push(d.path);allDirs(d,out)}return out}
+function treeHtml(n,depth){
+  let h='';
+  for(const d of sortedDirs(n)){
+    const open=!state.collapsed.has(d.path);
+    h+='<li><button type="button" class="row dir-row" data-dir="'+esc(d.path)+'" aria-expanded="'+open+'" style="--d:'+depth+'">'+ICON.chev+ICON.folder+'<span class="nm">'+esc(d.name)+'</span></button>'+(open?'<ul>'+treeHtml(d,depth+1)+'</ul>':'')+'</li>';
+  }
+  for(const f of n.files){
+    const on=f===state.current;
+    h+='<li><button type="button" class="row file-row'+(on?' on':'')+'" data-id="'+f.id+'" style="--d:'+depth+'"'+(on?' aria-current="true"':'')+'>'+ICON.file+'<span class="nm">'+esc(f.name.replace(MD_RE,''))+'</span></button></li>';
+  }
+  return h;
+}
+function snippet(text,i,len){
+  const s=Math.max(0,i-40), e=Math.min(text.length,i+len+60);
+  const clean=x=>esc(x.replace(/\s+/g,' '));
+  return (s>0?'…':'')+clean(text.slice(s,i))+'<mark>'+clean(text.slice(i,i+len))+'</mark>'+clean(text.slice(i+len,e))+(e<text.length?'…':'');
+}
+function resultsHtml(q){
+  const fq=fold(q), hits=[];
+  for(const f of state.order){
+    const pathHit=fold(f.path).includes(fq); let snip='';
+    if(f.text!=null){const i=fold(f.text).indexOf(fq); if(i>=0) snip=snippet(f.text,i,q.length)}
+    if(pathHit||snip) hits.push({f,snip});
+    if(hits.length>=200) break;
+  }
+  if(!hits.length) return '<p class="empty">Aucun résultat pour « '+esc(q)+' ».</p>';
+  return (state.kind==='github'?'<p class="hint">Les documents pas encore ouverts ne sont cherchés que par leur nom.</p>':'')+
+    '<ul>'+hits.map(({f,snip})=>{
+      const on=f===state.current;
+      return '<li><button type="button" class="hit'+(on?' on':'')+'" data-id="'+f.id+'"'+(on?' aria-current="true"':'')+'><span class="t">'+esc(f.name.replace(MD_RE,''))+'</span><span class="p">'+esc(dirname(f.path)||'/')+'</span>'+(snip?'<span class="s">'+snip+'</span>':'')+'</button></li>';
+    }).join('')+'</ul>';
+}
+function renderSide(){
+  el.src.textContent=state.label;
+  const n=state.files.length; el.count.textContent=n+(n>1?' documents':' document');
+  const q=el.q.value.trim();
+  el.tree.innerHTML=q?resultsHtml(q):'<ul>'+treeHtml(state.tree,0)+'</ul>';
+  const on=el.tree.querySelector('[aria-current="true"]');
+  if(on) on.scrollIntoView({block:'nearest'});
+}
+function expandTo(f){
+  const segs=f.path.split('/'); segs.pop(); let p='';
+  for(const s of segs){p=p?p+'/'+s:s;state.collapsed.delete(p)}
+}
+el.tree.addEventListener('click',e=>{
+  const d=e.target.closest('[data-dir]');
+  if(d){
+    const p=d.dataset.dir;
+    if(state.collapsed.has(p)) state.collapsed.delete(p); else state.collapsed.add(p);
+    renderSide();
+    const again=[...el.tree.querySelectorAll('[data-dir]')].find(x=>x.dataset.dir===p);
+    if(again) again.focus({preventScroll:true});
+    return;
+  }
+  const b=e.target.closest('[data-id]');
+  if(b){
+    const f=state.byId.get(Number(b.dataset.id));
+    if(f){openFile(f,'');const on=el.tree.querySelector('[aria-current="true"]');if(on)on.focus({preventScroll:true})}
+  }
+});
+el.q.addEventListener('input',renderSide);
+
+/* ---------- Source de documents ---------- */
+function setSource(o){
+  for(const u of state.blobUrls.values()) URL.revokeObjectURL(u);
+  state.blobUrls.clear();
+  state.label=o.label; state.kind=o.kind; state.files=o.files; state.assets=o.assets||new Map();
+  state.byPath=new Map(o.files.map(f=>[f.path,f]));
+  state.byLower=new Map(o.files.map(f=>[f.path.toLowerCase(),f]));
+  state.byUrl=new Map(o.files.filter(f=>f.url).map(f=>[f.url,f]));
+  state.byId=new Map(o.files.map(f=>[f.id,f]));
+  state.assetsLower=new Map([...state.assets.keys()].map(k=>[k.toLowerCase(),k]));
+  state.tree=buildTree(o.files); state.order=flatten(state.tree);
+  const dirs=allDirs(state.tree);
+  state.collapsed=new Set(dirs.length>12?dirs:[]);
+  el.q.value='';
+  const start=state.order.find(f=>/^(readme|index|bienvenue)\.(md|markdown)$/i.test(f.name))||state.order[0];
+  openFile(start,'');
+}
+async function loadText(f){
+  if(f.text!=null) return f.text;
+  if(f.file) return f.text=await f.file.text();
+  if(f.url){
+    const r=await fetch(f.url);
+    if(!r.ok) throw httpErr(r);
+    return f.text=await r.text();
+  }
+  return f.text='';
+}
+async function openFile(f,anchor){
+  state.current=f; expandTo(f); renderSide(); updateBar(f); setNav(false);
+  if(f.text==null){
+    el.doc.innerHTML='<p class="muted">Chargement…</p>';
+    try{await loadText(f)}catch(e){
+      if(state.current===f){el.doc.innerHTML='<p class="muted">Ce document n’a pas pu être chargé.</p>';toast(explain(e,state.kind==='github'?'gh':''),'err')}
+      return;
+    }
+  }
+  if(state.current!==f) return;
+  render(f,anchor);
+}
+function updateBar(f){
+  const dirs=f.path.split('/').slice(0,-1);
+  el.crumb.innerHTML='<span>'+esc(state.label)+'</span>'+dirs.map(d=>'<span class="sep">/</span><span>'+esc(d)+'</span>').join('')+'<span class="sep">/</span><strong>'+esc(f.name.replace(MD_RE,''))+'</strong>';
+  el.stats.textContent='';
+}
+
+/* ---------- Rendu d’un document ---------- */
+function blobFor(key){
+  const real=state.assets.has(key)?key:state.assetsLower.get(key.toLowerCase());
+  if(!real) return null;
+  if(!state.blobUrls.has(real)) state.blobUrls.set(real,URL.createObjectURL(state.assets.get(real)));
+  return state.blobUrls.get(real);
+}
+function resolveRef(f,href){
+  const h=href.indexOf('#');
+  const pathPart=(h<0?href:href.slice(0,h)).split('?')[0];
+  const anchor=h<0?'':decodeSafe(href.slice(h+1));
+  if(f.url){
+    let abs; try{abs=new URL(href,f.url).href}catch(e){return {anchor}}
+    const bare=abs.split('#')[0];
+    return {file:state.byUrl.get(bare),abs,anchor};
+  }
+  if(pathPart==='') return {anchor};
+  const p=joinPath(dirname(f.path),decodeSafe(pathPart));
+  return {file:state.byPath.get(p)||state.byLower.get(p.toLowerCase()),path:p,anchor};
+}
+function decorate(root,f){
+  /* titres + plan */
+  const used=new Map(), heads=[];
+  root.querySelectorAll('h1,h2,h3,h4').forEach(h=>{
+    let id=slug(h.textContent); const n=used.get(id)||0; used.set(id,n+1); if(n) id+='-'+n;
+    h.id=id; heads.push({id,level:Number(h.tagName[1]),text:h.textContent,el:h});
+  });
+  /* liens */
+  root.querySelectorAll('a[href]').forEach(a=>{
+    const href=a.getAttribute('href').trim();
+    if(href.startsWith('#')){a.dataset.anchor=decodeSafe(href.slice(1));return}
+    if(/^[a-z][a-z0-9+.-]*:/i.test(href)||href.startsWith('//')){
+      if(/^https?:/i.test(href)){a.target='_blank';a.rel='noopener noreferrer'}
+      return;
+    }
+    const r=resolveRef(f,href);
+    if(r.file){a.dataset.open=r.file.id;a.dataset.anchor=r.anchor||''}
+    else if(r.abs){a.href=r.abs;a.target='_blank';a.rel='noopener noreferrer'}
+    else if(r.anchor!==undefined&&!r.path){a.dataset.anchor=r.anchor}
+    else{a.removeAttribute('href');a.classList.add('dead');a.title='Introuvable dans les documents ouverts'}
+  });
+  /* images */
+  root.querySelectorAll('img[src]').forEach(img=>{
+    const src=img.getAttribute('src').trim();
+    if(/^(data:|blob:|https?:|\/\/)/i.test(src)){img.loading='lazy';return}
+    if(f.url){try{img.src=new URL(src,f.url).href}catch(e){}img.loading='lazy';return}
+    const b=blobFor(joinPath(dirname(f.path),decodeSafe(src.split('?')[0])));
+    if(b){img.src=b;img.loading='lazy'}
+    else{const s=document.createElement('span');s.className='missing-img';s.textContent='Image introuvable : '+(img.alt||src);img.replaceWith(s)}
+  });
+  /* code */
+  root.querySelectorAll('pre > code').forEach(code=>{
+    const pre=code.parentElement, m=/language-([\w+#-]+)/.exec(code.className), lang=m?m[1]:'', src=code.textContent;
+    if(lang&&window.hljs&&hljs.getLanguage(lang)){
+      try{code.innerHTML=hljs.highlight(src,{language:lang,ignoreIllegals:true}).value;code.classList.add('hljs')}catch(e){}
+    }
+    const wrap=document.createElement('div'); wrap.className='codewrap';
+    const bar=document.createElement('div'); bar.className='codebar';
+    bar.innerHTML='<span class="lang">'+esc(lang||'texte')+'</span><button type="button" class="copy">Copier</button>';
+    const btn=bar.querySelector('button');
+    btn.addEventListener('click',async()=>{
+      try{await navigator.clipboard.writeText(src);btn.textContent='Copié'}
+      catch(e){const r=document.createRange();r.selectNodeContents(code);const s=getSelection();s.removeAllRanges();s.addRange(r);btn.textContent='Sélectionné'}
+      setTimeout(()=>{btn.textContent='Copier'},1600);
+    });
+    pre.replaceWith(wrap); wrap.append(bar,pre);
+  });
+  /* tableaux, cases à cocher */
+  root.querySelectorAll('table').forEach(t=>{const w=document.createElement('div');w.className='tablewrap';t.replaceWith(w);w.append(t)});
+  buildTasks(root);
+  return heads;
+}
+
+/* Listes de tâches : état des parents calculé à partir des sous-tâches, comme dans l’outil TODO */
+const tcolor=p=>'hsl('+Math.round(p*1.2)+',72%,52%)';
+let docTasks={done:0,total:0};
+const taskKids=li=>[...li.children].filter(c=>c.tagName==='UL'||c.tagName==='OL').flatMap(l=>[...l.children].filter(x=>x.classList.contains('task')));
+function taskStats(li){
+  const kids=taskKids(li);
+  if(!kids.length) return {done:li.dataset.checked==='1'?1:0,total:1};
+  return kids.reduce((a,k)=>{const s=taskStats(k);return {done:a.done+s.done,total:a.total+s.total}},{done:0,total:0});
+}
+function pill(s){
+  const p=Math.round(s.done/s.total*100);
+  return {p,pill:'<span class="pct" style="--c:'+tcolor(p)+'">'+p+'%<small>'+s.done+'/'+s.total+'</small></span>',bar:'<div class="tbar" style="--c:'+tcolor(p)+'"><i style="width:'+p+'%"></i></div>'};
+}
+function buildTasks(root){
+  docTasks={done:0,total:0};
+  const lis=new Set();
+  root.querySelectorAll('li > input[type="checkbox"], li > p > input[type="checkbox"]').forEach(i=>lis.add(i.closest('li')));
+  lis.forEach(li=>{
+    const input=li.querySelector(':scope > input[type="checkbox"], :scope > p > input[type="checkbox"]');
+    if(!input) return;
+    li.dataset.checked=(input.checked||input.hasAttribute('checked'))?'1':'0';
+    input.remove();
+    li.classList.add('task'); li.parentElement.classList.add('tasks');
+    const row=document.createElement('div'); row.className='trow';
+    const cb=document.createElement('span'); cb.className='cb'; cb.setAttribute('role','img');
+    const body=document.createElement('div'); body.className='tbody';
+    [...li.childNodes].forEach(n=>{ if(!(n.nodeType===1&&(n.tagName==='UL'||n.tagName==='OL'))) body.append(n) });
+    row.append(cb,body); li.prepend(row);
+  });
+  lis.forEach(li=>{
+    const cb=li.querySelector(':scope > .trow > .cb'), body=li.querySelector(':scope > .trow > .tbody');
+    if(!cb||!body) return;
+    const has=taskKids(li).length>0, s=taskStats(li), all=s.done===s.total, part=has&&!all&&s.done>0;
+    if(all) cb.classList.add('on'); else if(part) cb.classList.add('part');
+    cb.setAttribute('aria-label',all?'Fait':part?'En cours':'À faire');
+    body.classList.toggle('done',all);
+    if(has){
+      const pc=pill(s), first=body.firstElementChild, host=(first&&first.tagName==='P')?first:body;
+      host.insertAdjacentHTML('beforeend',pc.pill);
+      body.insertAdjacentHTML('beforeend',pc.bar);
+    }
+  });
+  root.querySelectorAll('ul.tasks, ol.tasks').forEach(list=>{
+    if(list.closest('li.task')) return;
+    const s=[...list.children].filter(x=>x.classList.contains('task')).reduce((a,k)=>{const t=taskStats(k);return {done:a.done+t.done,total:a.total+t.total}},{done:0,total:0});
+    docTasks.done+=s.done; docTasks.total+=s.total;
+    const card=document.createElement('div'); card.className='taskcard';
+    list.replaceWith(card);
+    if(s.total>=2){
+      const pc=pill(s), head=document.createElement('div'); head.className='thead';
+      head.innerHTML=pc.pill+pc.bar; card.append(head);
+    }
+    card.append(list);
+  });
+}
+function updateRing(){
+  const t=docTasks;
+  if(!t.total){el.ring.hidden=true;return}
+  const p=Math.round(t.done/t.total*100);
+  el.ring.hidden=false; el.ring.style.setProperty('--p',p); el.ring.style.setProperty('--c',tcolor(p));
+  el.ringTxt.textContent=p+'%'; el.ring.title='Tâches : '+t.done+' sur '+t.total+' faites';
+}
+function updateProgress(){
+  const s=el.stage, max=s.scrollHeight-s.clientHeight;
+  el.read.firstElementChild.style.width=(max>0?Math.min(100,s.scrollTop/max*100):0)+'%';
+}
+function render(f,anchor){
+  const text=f.text;
+  let body=text, fm='';
+  const m=/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  if(m){fm=m[1];body=text.slice(m[0].length)}
+  let html;
+  if(window.marked&&window.DOMPurify) html=DOMPurify.sanitize(marked.parse(body,{gfm:true}));
+  else html='<p class="notice">Les bibliothèques de rendu n’ont pas pu être chargées (connexion nécessaire). Texte brut :</p><pre>'+esc(body)+'</pre>';
+  const tpl=document.createElement('template'); tpl.innerHTML=html;
+  const root=tpl.content;
+  if(fm){
+    const d=document.createElement('details'); d.className='fm';
+    d.innerHTML='<summary>Métadonnées</summary><pre></pre>'; d.querySelector('pre').textContent=fm;
+    root.prepend(d);
+  }
+  const heads=decorate(root,f);
+  el.doc.replaceChildren(root);
+  renderToc(heads);
+  renderPager(f);
+  updateRing();
+  const words=(body.match(/\S+/g)||[]).length;
+  el.stats.textContent=words.toLocaleString('fr-FR')+' mots · '+Math.max(1,Math.round(words/220))+' min';
+  el.stage.scrollTop=0;
+  if(anchor) scrollToAnchor(anchor);
+  updateProgress();
+}
+function scrollToAnchor(a){
+  if(!a){el.stage.scrollTop=0;return}
+  const all=el.doc.querySelectorAll('[id]');
+  const t=[...all].find(x=>x.id===a)||[...all].find(x=>x.id===slug(a));
+  if(t) t.scrollIntoView({block:'start'});
+}
+el.doc.addEventListener('click',e=>{
+  const a=e.target.closest('a'); if(!a) return;
+  if(a.dataset.open){
+    e.preventDefault();
+    const f=state.byId.get(Number(a.dataset.open)); if(f) openFile(f,a.dataset.anchor||'');
+  }else if(a.dataset.anchor!==undefined){e.preventDefault();scrollToAnchor(a.dataset.anchor)}
+  else if(a.classList.contains('dead')) e.preventDefault();
+});
+
+/* ---------- Plan et navigation entre documents ---------- */
+let tocItems=[];
+function renderToc(heads){
+  const list=heads.filter(h=>h.level<=3);
+  tocItems=[];
+  if(list.length<2){el.toc.hidden=true;el.toc.innerHTML='';return}
+  const min=Math.min(...list.map(h=>h.level));
+  el.toc.hidden=false;
+  el.toc.innerHTML='<h2>Dans ce document</h2>'+list.map((h,i)=>'<a href="#" data-i="'+i+'" style="--l:'+(h.level-min)+'">'+esc(h.text)+'</a>').join('');
+  tocItems=list.map((h,i)=>({el:h.el,a:el.toc.children[i+1]}));
+  updateActive();
+}
+function updateActive(){
+  if(!tocItems.length) return;
+  const top=el.stage.getBoundingClientRect().top+90;
+  let cur=tocItems[0];
+  for(const t of tocItems){ if(t.el.getBoundingClientRect().top<=top) cur=t; else break }
+  tocItems.forEach(t=>t.a.classList.toggle('on',t===cur));
+}
+let ticking=false;
+el.stage.addEventListener('scroll',()=>{ if(ticking) return; ticking=true; requestAnimationFrame(()=>{ticking=false;updateActive();updateProgress()}) });
+el.toc.addEventListener('click',e=>{
+  const a=e.target.closest('a[data-i]'); if(!a) return;
+  e.preventDefault(); tocItems[Number(a.dataset.i)].el.scrollIntoView({block:'start'});
+});
+function renderPager(f){
+  if(state.order.length<2){el.pager.innerHTML='';return}
+  const i=state.order.indexOf(f), prev=state.order[i-1], next=state.order[i+1];
+  const b=(x,dir)=>x?'<button type="button" class="pg '+dir+'" data-id="'+x.id+'"><small>'+(dir==='prev'?'← Précédent':'Suivant →')+'</small><span>'+esc(x.name.replace(MD_RE,''))+'</span></button>':'';
+  el.pager.innerHTML=b(prev,'prev')+b(next,'next');
+}
+el.pager.addEventListener('click',e=>{
+  const b=e.target.closest('[data-id]'); if(!b) return;
+  const f=state.byId.get(Number(b.dataset.id)); if(f) openFile(f,'');
+});
+function step(d){
+  const n=state.order[state.order.indexOf(state.current)+d];
+  if(n) openFile(n,'');
+}
+
+/* ---------- Volet sur mobile ---------- */
+function setNav(open){ el.app.classList.toggle('nav-open',open) }
+el.menu.onclick=()=>setNav(!el.app.classList.contains('nav-open'));
+el.scrim.onclick=()=>setNav(false);
+
+/* ---------- Ouverture : fichiers, dossier, glisser-déposer, collage ---------- */
+async function ingest(list,label,explicit){
+  const md=[], assets=new Map(), seen=new Set();
+  for(const {file,path} of list){
+    if(path.split('/').some(s=>IGNORE.has(s))) continue;
+    if(explicit||MD_RE.test(path)){
+      let p=path,n=1; while(seen.has(p)){p=n+'-'+path;n++} seen.add(p);
+      md.push(mk({path:p,file}));
+    }else if(IMG_RE.test(path)) assets.set(path,file);
+  }
+  if(!md.length){toast('Aucun fichier Markdown trouvé.','err');return}
+  toast('Chargement…','',0);
+  try{
+    await Promise.all(md.map(async f=>{f.text=await f.file.text()}));
+    hideToast();
+    setSource({label,kind:'local',files:md,assets});
+  }catch(e){toast('Lecture impossible : '+(e&&e.message||'erreur inconnue'),'err')}
+}
+function stripRoot(list){
+  if(list.length&&list.every(x=>x.path.includes('/'))){
+    const first=list[0].path.split('/')[0];
+    if(list.every(x=>x.path.split('/')[0]===first)) return {label:first,list:list.map(x=>({file:x.file,path:x.path.slice(first.length+1)}))};
+  }
+  return {label:'Sélection',list};
+}
+el.openFiles.onclick=()=>el.fileIn.click();
+el.openFolder.onclick=()=>el.folderIn.click();
+el.fileIn.addEventListener('change',()=>{
+  const files=[...el.fileIn.files]; el.fileIn.value='';
+  if(files.length) ingest(files.map(f=>({file:f,path:f.name})),'Sélection',true);
+});
+el.folderIn.addEventListener('change',()=>{
+  const files=[...el.folderIn.files]; el.folderIn.value='';
+  if(!files.length) return;
+  const r=stripRoot(files.map(f=>({file:f,path:f.webkitRelativePath||f.name})));
+  ingest(r.list,r.label,false);
+});
+async function walkEntry(entry,prefix,out){
+  if(entry.isFile){
+    const file=await new Promise((res,rej)=>entry.file(res,rej));
+    out.push({file,path:prefix+entry.name});
+  }else if(entry.isDirectory){
+    if(IGNORE.has(entry.name)) return;
+    const reader=entry.createReader(); let batch;
+    do{
+      batch=await new Promise((res,rej)=>reader.readEntries(res,rej));
+      for(const e of batch) await walkEntry(e,prefix+entry.name+'/',out);
+    }while(batch.length);
+  }
+}
+let dragDepth=0;
+const hasFiles=e=>e.dataTransfer&&[...(e.dataTransfer.types||[])].includes('Files');
+document.addEventListener('dragenter',e=>{if(hasFiles(e)){dragDepth++;el.drop.hidden=false}});
+document.addEventListener('dragleave',e=>{if(hasFiles(e)){dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)el.drop.hidden=true}});
+document.addEventListener('dragover',e=>{if(hasFiles(e))e.preventDefault()});
+document.addEventListener('drop',async e=>{
+  if(!hasFiles(e)) return;
+  e.preventDefault(); dragDepth=0; el.drop.hidden=true;
+  const dt=e.dataTransfer;
+  const entries=[...(dt.items||[])].map(i=>i.webkitGetAsEntry?i.webkitGetAsEntry():null).filter(Boolean);
+  const plain=[...(dt.files||[])];
+  try{
+    if(entries.some(en=>en.isDirectory)){
+      toast('Lecture du dossier…','',0);
+      const out=[]; for(const en of entries) await walkEntry(en,'',out);
+      const r=entries.length===1?stripRoot(out):{label:'Sélection',list:out};
+      await ingest(r.list,r.label,false);
+    }else if(plain.length) await ingest(plain.map(f=>({file:f,path:f.name})),'Sélection',true);
+  }catch(err){toast('Lecture impossible : '+(err&&err.message||'erreur inconnue'),'err')}
+});
+document.addEventListener('paste',e=>{
+  if(e.target.closest&&e.target.closest('input,textarea')) return;
+  const t=e.clipboardData&&e.clipboardData.getData('text/plain');
+  if(t&&t.trim()){e.preventDefault();setSource({label:'Presse-papiers',kind:'paste',files:[mk({path:'Texte collé.md',text:t})]})}
+});
+
+/* ---------- Ouverture par adresse (fichier ou dépôt GitHub) ---------- */
+function parseGithub(u){
+  if(u.hostname!=='github.com') return null;
+  const s=u.pathname.split('/').filter(Boolean).map(decodeSafe);
+  if(s.length<2) return null;
+  const owner=s[0], repo=s[1].replace(/\.git$/,'');
+  if(s.length===2) return {kind:'tree',owner,repo,branch:null,sub:''};
+  if(s[2]==='tree'&&s[3]) return {kind:'tree',owner,repo,branch:s[3],sub:s.slice(4).join('/')};
+  if(s[2]==='blob'&&s[3]&&s.length>4){
+    const path=s.slice(4);
+    return {kind:'blob',raw:'https://raw.githubusercontent.com/'+owner+'/'+repo+'/'+s[3].split('/').map(encodeURIComponent).join('/')+'/'+path.map(encodeURIComponent).join('/')};
+  }
+  return null;
+}
+async function loadGithubTree(gh){
+  const base='https://api.github.com/repos/'+gh.owner+'/'+gh.repo;
+  let branch=gh.branch;
+  if(!branch){
+    const r=await fetch(base); if(!r.ok) throw httpErr(r);
+    branch=(await r.json()).default_branch;
+  }
+  const tr=await fetch(base+'/git/trees/'+encodeURIComponent(branch)+'?recursive=1'); if(!tr.ok) throw httpErr(tr);
+  const data=await tr.json();
+  const prefix=gh.sub?gh.sub.replace(/\/$/,'')+'/':'';
+  const rawBase='https://raw.githubusercontent.com/'+gh.owner+'/'+gh.repo+'/'+branch.split('/').map(encodeURIComponent).join('/')+'/';
+  const files=(data.tree||[])
+    .filter(t=>t.type==='blob'&&t.path.startsWith(prefix)&&MD_RE.test(t.path)&&!t.path.split('/').some(s=>IGNORE.has(s)))
+    .map(t=>mk({path:t.path.slice(prefix.length),url:rawBase+t.path.split('/').map(encodeURIComponent).join('/')}));
+  if(!files.length) throw new Error('empty');
+  setSource({label:gh.owner+'/'+gh.repo+(gh.sub?'/'+gh.sub:''),kind:'github',files});
+  if(data.truncated) toast('Dépôt très volumineux : la liste est incomplète.','err');
+}
+async function loadUrl(raw){
+  let u; try{u=new URL(raw.trim())}catch(e){toast('Adresse invalide. Elle doit commencer par https://','err');return}
+  if(!/^https?:$/.test(u.protocol)){toast('Seules les adresses http et https sont lues.','err');return}
+  toast('Chargement…','',0);
+  let ctx='';
+  try{
+    const gh=parseGithub(u);
+    if(gh) ctx='gh';
+    if(gh&&gh.kind==='tree'){ await loadGithubTree(gh); if(!el.toast.classList.contains('err')) hideToast(); }
+    else{
+      const url=gh&&gh.kind==='blob'?gh.raw:u.href;
+      const r=await fetch(url); if(!r.ok) throw httpErr(r);
+      const ct=r.headers.get('content-type')||'', text=await r.text();
+      if(/text\/html/i.test(ct)&&!MD_RE.test(u.pathname)) throw new Error('html');
+      const name=decodeSafe(u.pathname.split('/').filter(Boolean).pop()||u.hostname);
+      hideToast();
+      setSource({label:u.hostname,kind:'url',files:[mk({path:name,url,text})]});
+    }
+    store.set('url',raw.trim());
+  }catch(e){toast(explain(e,ctx),'err')}
+}
+el.urlForm.addEventListener('submit',e=>{e.preventDefault();if(el.url.value.trim()) loadUrl(el.url.value)});
+
+/* ---------- Clavier ---------- */
+document.addEventListener('keydown',e=>{
+  const t=e.target, typing=t.matches&&t.matches('input,textarea,select,[contenteditable]');
+  if(e.key==='Escape'){
+    if(t===el.q&&el.q.value){el.q.value='';renderSide();e.preventDefault();return}
+    if(el.app.classList.contains('nav-open')) setNav(false);
+    return;
+  }
+  if(typing||e.ctrlKey||e.metaKey||e.altKey) return;
+  if(e.key==='/'){e.preventDefault();setNav(true);el.q.focus()}
+  else if(e.key==='['||e.key===']') step(e.key===']'?1:-1);
+});
+
+/* ---------- Démarrage : dossier d’exemple ---------- */
+el.url.value=store.get('url','');
+applySize(); applyTheme(true);
+const sample=[...document.querySelectorAll('script[type="text/markdown"]')].map(s=>mk({path:s.dataset.path,text:s.textContent.trim()+'\n'}));
+setSource({label:'Dossier d’exemple',kind:'sample',files:sample});
+})();
+</script>
+</body>
+</html>
