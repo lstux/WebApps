@@ -7,13 +7,11 @@
 <title>TODO</title>
 <link rel="stylesheet" href="common.css">
 <style>
-/* TODO : styles spécifiques (arbre, barre fixe, formulaires). Composants du système : .btn, .card, .ring, .cb, .progress, .pct, .sheet */
-body { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+/* TODO — styles spécifiques. Composants du système : .btn, .card, .ring, .cb, .progress, .pct, .sheet */
+body { padding-bottom: calc(150px + env(safe-area-inset-bottom,0px)); }
 main { max-width: 720px; margin: 0 auto; padding: 14px 12px; }
-ul { list-style: none; margin: 0; padding: 0; }
 
 /* Arbre de todos */
-li.card { padding: 4px 6px 6px; overflow: hidden; }
 li > ul { margin: 0 0 2px 12px; padding-left: 6px; border-left: 2px solid var(--line); }
 .row { display: flex; align-items: flex-start; padding: 3px 0; }
 .tg { width: 24px; height: 38px; color: var(--mut); font-size: 22px; line-height: 38px; flex: none; text-align: center; transition: transform .15s; }
@@ -32,26 +30,26 @@ li > ul { margin: 0 0 2px 12px; padding-left: 6px; border-left: 2px solid var(--
 .actions button:active { transform: scale(.96); }
 .actions .danger { color: var(--err); }
 
-/* Formulaires d'édition et d'ajout */
+/* Formulaires */
 .edit, .add { display: grid; gap: 8px; margin: 6px 4px 8px; }
 .edit { margin-left: 10px; }
 .edit .btns { display: flex; gap: 8px; }
 .line { display: flex; gap: 8px; align-items: center; }
 .add .icon { width: 44px; height: 44px; border-radius: var(--r-m); background: var(--card2); font-size: 20px; flex: none; color: var(--mut); display: grid; place-items: center; }
-.go { width: 44px; height: 44px; border-radius: 50%; font-size: 24px; line-height: 1; flex: none; color: var(--on-ac); background: linear-gradient(135deg, var(--ac), var(--ac2)); border: 0; box-shadow: 0 4px 12px color-mix(in srgb, var(--ac) 33%, transparent); transition: transform .12s; cursor: pointer; }
+.go { width: 44px; height: 44px; border-radius: 50%; font-size: 24px; line-height: 1; flex: none; background: linear-gradient(135deg,var(--ac),var(--ac2)); color: var(--on-ac); box-shadow: 0 4px 12px color-mix(in srgb,var(--ac) 33%,transparent); transition: transform .12s; }
 .go:active { transform: scale(.92); }
 .add.sub { padding: 4px 0 2px 10px; }
 
-/* Barre de saisie fixe (composer) */
-.composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; padding: 18px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, var(--bg) 62%, transparent); }
+/* Barre fixe du composer */
+.composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; padding: 18px 12px calc(10px + env(safe-area-inset-bottom,0px)); background: linear-gradient(to top,var(--bg) 62%,transparent); }
 .composer .add { max-width: 720px; margin: 0 auto; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 8px; box-shadow: var(--shadow); display: flex; flex-direction: column-reverse; }
 
 /* État vide */
 .empty { text-align: center; color: var(--mut); padding: 56px 20px; }
 .empty b { display: block; font-size: 44px; margin-bottom: 6px; }
 
-/* Import / Export dialog */
-.sheet textarea { height: 34vh; font-family: var(--f-mono); }
+/* Dialogs d'import/export */
+.sheet textarea { height: 34vh; font-family: var(--f-mono); font-size: 14px; }
 .sheet input[type=file] { flex: 1; min-width: 0; }
 </style>
 </head>
