@@ -109,6 +109,18 @@ Précautions : la configuration est vérifiée **avant** le build ; `host`, `use
 - les tuiles de carte, la recherche de lieu et les taux de change demandent une connexion : hors ligne, l'outil s'ouvre et ses données locales restent disponibles ;
 - un nouveau build change l'identifiant du cache (empreinte du contenu) : l'ancien est supprimé à l'activation du nouveau service worker.
 
+### Publication sur GitHub Pages
+
+Le workflow `.github/workflows/ci-pages.yml` construit et publie le site à chaque push sur `main` (et à la demande, depuis l'onglet Actions) :
+
+1. `python3 build.py --pwa` : même build que ci-dessus, en mode non autonome, avec l'application installable ;
+2. vérification que `dist/` contient l'index, le manifest, le service worker, `common.css` et toutes les pages de `code/` ;
+3. publication de `dist/` avec les actions officielles de GitHub Pages.
+
+Sur une pull request, seuls le build et la vérification tournent : rien n'est publié.
+
+À faire une fois dans le dépôt : **Settings → Pages → Source : GitHub Actions**. Le site est ensuite servi sur `https://lstux.github.io/WebApps/`. Tous les chemins étant relatifs, le sous-dossier `/WebApps/` ne pose pas de problème, y compris pour le service worker.
+
 ## Exigences
 
 - Un navigateur moderne (Chrome, Firefox, Safari, Edge)

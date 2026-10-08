@@ -1,0 +1,50 @@
+name: Build et déploiement
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Construire le site (application installable, chemins relatifs)
+        run: python3 build.py --pwa
+      - name: Vérifier le contenu de dist/
+        run: |
+          for f in index.html manifest.webmanifest sw.js common.css; do
+            test -s "dist/$f" || { echo "dist/$f manquant ou vide"; exit 1; }
+          done
+          for f in code/*.html; do
+            test -s "dist/$(basename "$f")" || { echo "$(basename "$f") absent de dist/"; exit 1; }
+          done
+          ls -la dist
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
