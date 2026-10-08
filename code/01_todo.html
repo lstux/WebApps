@@ -7,6 +7,8 @@
 <title>TODO</title>
 <meta name="description" content="Gestionnaire de tâches hiérarchique, avec pourcentage d'achèvement et import/export JSON et texte.">
 <link rel="stylesheet" href="common.css">
+<link rel="icon" type="image/svg+xml" href="icons/todo.svg">
+<script src="common.js"></script>
 <style>
 /* TODO — styles spécifiques. Composants du système : .btn, .card, .ring, .cb, .progress, .pct, .sheet */
 body { padding-bottom: calc(150px + env(safe-area-inset-bottom,0px)); }
@@ -75,11 +77,13 @@ li.drag-src { opacity: .35; }
 <body>
 <header class="topbar">
   <div class="topbar-in">
+    <a class="appicon" href="./" data-home aria-label="Accueil WebApps" title="Accueil WebApps"><img src="icons/todo.svg" alt="" width="36" height="36"></a>
     <div class="grow">
       <h1 class="brand">TODO</h1>
       <div class="subtitle" id="sub"></div>
     </div>
     <div class="ring" id="ring" hidden><span id="ringTxt"></span></div>
+    <button class="iconbtn themebtn" data-theme-toggle></button>
     <button class="iconbtn" id="btnMenu" aria-label="Menu">⋯</button>
   </div>
 </header>
@@ -213,8 +217,8 @@ function render() {
   const tree = $('#tree');
   const visible = nodes.map(n => nodeHTML(n, true)).join('');
   tree.innerHTML = nodes.length
-    ? (visible ? `<ul>${visible}</ul>` : `<div class="empty"><b>✅</b>Tout est fait !</div>`)
-    : `<div class="empty"><b>📝</b>Rien à faire pour l'instant.<br>Ajoute un todo en bas, ou importe une liste.</div>`;
+    ? (visible ? `<ul>${visible}</ul>` : `<div class="empty"><b class="bob">✅</b>Tout est fait !</div>`)
+    : `<div class="empty"><b class="bob">📝</b>Rien à faire pour l'instant.<br>Ajoute un todo en bas, ou importe une liste.</div>`;
 
   const ring = $('#ring');
   if (nodes.length) {

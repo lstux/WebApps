@@ -7,6 +7,8 @@
 <title>Cartes Leaflet</title>
 <meta name="description" content="Compose une carte Leaflet à la souris (points, trajets, main levée) et exporte le code HTML à insérer dans une page.">
 <link rel="stylesheet" href="common.css">
+<link rel="icon" type="image/svg+xml" href="icons/leaflet_manager.svg">
+<script src="common.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 /* Cartes Leaflet — styles spécifiques. Composants du système : .topbar, .btn, .iconbtn, .card, .chips, .sheet, .toast */
@@ -14,6 +16,7 @@ body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; 
 .topbar-in { max-width: none; gap: 8px; }
 .topbar-in .iconbtn { --icon-size: 38px; }
 .topbar-in .btn { padding: 9px 14px; }
+@media (max-width: 480px) { .topbar-in .appicon { display: none; } }   /* barre trop pleine : l'icône cède la place au titre */
 
 /* Mise en page : panneau à gauche, carte à droite ; sur mobile, outils, carte, puis le reste */
 .app { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); }
@@ -115,6 +118,7 @@ input[type=range] { width: 100%; accent-color: var(--ac); }
 <body>
 <header class="topbar">
   <div class="topbar-in">
+    <a class="appicon" href="./" data-home aria-label="Accueil WebApps" title="Accueil WebApps"><img src="icons/leaflet_manager.svg" alt="" width="36" height="36"></a>
     <div class="grow">
       <h1 class="brand">Cartes</h1>
       <div class="subtitle" id="sub">Leaflet</div>
@@ -186,6 +190,7 @@ input[type=range] { width: 100%; accent-color: var(--ac); }
     <button class="item" data-act="import"><span class="ic">⬆</span> Importer…</button>
     <button class="item" data-act="fit"><span class="ic">⤢</span> Cadrer sur les éléments</button>
     <button class="item" data-act="locate"><span class="ic">◎</span> Ma position</button>
+    <button class="item" data-theme-toggle><span class="ic" data-theme-icon></span> Thème<span class="sw" data-theme-name></span></button>
     <button class="item" data-act="clear"><span class="ic">🗑</span> Tout effacer</button>
   </div>
 </dialog>

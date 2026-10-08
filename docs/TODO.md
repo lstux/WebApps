@@ -18,7 +18,7 @@ Une page unique pour gérer une liste de todos hiérarchique et illimitée en pr
 
 ### Démarrer
 
-Ouvrez `code/todo.html` dans un navigateur (la feuille de style `code/common.css` doit rester à côté).
+Ouvrez `code/01_todo.html` dans un navigateur (la feuille de style `code/common.css` doit rester à côté).
 
 ### Ajouter un todo
 

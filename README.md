@@ -11,10 +11,10 @@ Une liseuse pour fichiers Markdown avec:
 - Navigation d'arborescence repliable
 - Recherche dans le contenu
 - Listes de tâches avec progression
-- Taille de texte et thème ajustables
+- Taille de texte et thème (auto, clair, sombre) ajustables
 - Support de liens relatifs et d'images
 
-📄 **[Documentation](docs/LISEUSE.md)** · 📦 **[markdown_reader.html](code/markdown_reader.html)**
+📄 **[Documentation](docs/LISEUSE.md)** · 📦 **[02_markdown_reader.html](code/02_markdown_reader.html)**
 
 ### ✅ TODO
 
@@ -25,7 +25,7 @@ Un gestionnaire de tâches hiérarchique avec:
 - Import/export JSON et texte indenté
 - Sauvegarde locale, interface mobile-first
 
-📄 **[Documentation](docs/TODO.md)** · 📦 **[todo.html](code/todo.html)**
+📄 **[Documentation](docs/TODO.md)** · 📦 **[01_todo.html](code/01_todo.html)**
 
 ### 🔁 Convertisseur
 
@@ -34,7 +34,7 @@ Un convertisseur d'unités et de devises avec:
 - Devises avec taux en ligne, repli sur le dernier taux connu hors ligne
 - Toutes les conversions affichées d'un coup
 
-📄 **[Documentation](docs/CONVERTISSEUR.md)** · 📦 **[units_converter.html](code/units_converter.html)**
+📄 **[Documentation](docs/CONVERTISSEUR.md)** · 📦 **[03_units_converter.html](code/03_units_converter.html)**
 
 ### 🗺️ Cartes Leaflet
 
@@ -44,7 +44,7 @@ Un gestionnaire de cartes Leaflet avec:
 - Export du code HTML à insérer dans une page (fragment ou page complète), du JSON et du GeoJSON
 - Import JSON / GeoJSON, annuler / rétablir, sauvegarde locale
 
-📄 **[Documentation](docs/CARTES.md)** · 📦 **[leaflet_manager.html](code/leaflet_manager.html)**
+📄 **[Documentation](docs/CARTES.md)** · 📦 **[04_leaflet_manager.html](code/04_leaflet_manager.html)**
 
 ## Prochains outils
 
@@ -54,19 +54,32 @@ La liste des outils envisagés est dans [docs/suggested_apps_nextsteps.md](docs/
 
 Chaque outil est une page `.html` unique. Deux façons de l'utiliser :
 
-- **Directement** : télécharge le dossier `code/` en entier (les pages utilisent la feuille de style commune `code/common.css`, qui doit rester à sa place) et ouvre la page voulue dans ton navigateur.
+- **Directement** : télécharge le dossier `code/` en entier (les pages utilisent `code/common.css`, `code/common.js` et le dossier `code/icons/`, qui doivent rester à leur place) et ouvre la page voulue dans ton navigateur.
 - **Après un build** (voir ci-dessous) : `dist/` contient soit l'ensemble des outils avec une page d'accueil, soit des pages autonomes à copier une par une.
 
 ### Build
 
 ```
 python3 build.py                 # dist/ : copie de code/ + index.html qui liste les outils
-python3 build.py --standalone    # dist/ : chaque page avec common.css intégré (un fichier = un outil)
+python3 build.py --standalone    # dist/ : chaque page avec TOUT intégré, bibliothèques et polices des CDN comprises (un fichier = un outil, hors ligne)
+python3 build.py --standalone --refresh   # idem, en retéléchargeant les bibliothèques au lieu d'utiliser le cache
 python3 build.py --pwa           # comme le premier, plus une application installable (voir ci-dessous)
 python3 build.py --pwa --deploy  # construit, puis envoie dist/ sur le serveur (voir « Déploiement »)
 ```
 
-Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent en ligne dans tous les modes. L'index lit le `<title>` et la `<meta name="description">` de chaque page.
+Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Dans les modes normal et `--pwa`, les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent des liens (le service worker les garde en cache) ; `--standalone` les intègre. L'index est une grille de cartes : il lit le `<title>`, la `<meta name="description">` et l'icône (`<link rel="icon">`) de chaque page, et reprend les couleurs du dégradé de l'icône pour sa carte.
+
+### Pages autonomes (`--standalone`)
+
+Chaque outil devient **un seul fichier `.html`**, utilisable hors ligne et copiable n'importe où (clé USB, mail, dossier synchronisé…). Le build y insère :
+
+- `common.css` et `common.js`, les icônes (en `data:`) ;
+- les bibliothèques des CDN : Leaflet (script, feuille de style et ses images), marked, DOMPurify, highlight.js, générateur de QR code ;
+- les polices Google de la Liseuse, **limitées à l'alphabet latin** (le français y est complet ; les autres alphabets retombent sur la police du système).
+
+**Le premier build a besoin d'Internet** : les fichiers sont téléchargés puis gardés dans `.cache/standalone/` (non versionné). Les builds suivants se font sans réseau ; `--refresh` retélécharge tout (par exemple pour passer à une nouvelle version d'une bibliothèque : change l'adresse dans la page, relance). Si un téléchargement échoue, le build s'arrête avec un message clair plutôt que de produire une page à moitié en ligne.
+
+Ce qui reste en ligne, par nature : les taux de change du Convertisseur, les tuiles de carte et la recherche de lieu de Cartes, et le chargement d'une adresse ou d'un dépôt GitHub dans la Liseuse. Il n'y a pas d'index (donc pas de lien d'accueil) dans ce mode. Compte environ 40 Ko pour le TODO et le Convertisseur, et quelques centaines de Ko pour les outils qui embarquent une bibliothèque.
 
 **Ordre des outils** : un préfixe numérique sur le nom d'une page de `code/` (`10_todo.html`, `20_markdown_reader.html`…) fixe sa place dans l'index et dans les raccourcis du manifest ; les pages sans préfixe viennent ensuite, par ordre alphabétique. Le préfixe ne sert qu'à classer : `build.py` le retire de tous les noms publiés (`dist/todo.html`, adresses, index, manifest, cache hors ligne). Deux pages qui donneraient le même nom (`10_todo.html` et `20_todo.html`) font échouer le build.
 
@@ -127,7 +140,7 @@ Sur une pull request, seuls le build et la vérification tournent : rien n'est p
 
 - Un navigateur moderne (Chrome, Firefox, Safari, Edge)
 - Pour charger des adresses : ouvre le fichier localement (pas depuis http://)
-- Connexion Internet pour les CDN des bibliothèques et, dans le Convertisseur, pour actualiser les taux de change
+- Connexion Internet pour les CDN des bibliothèques (sauf dans les pages `--standalone`, qui les embarquent) et, dans le Convertisseur, pour actualiser les taux de change
 
 ## Développement
 
@@ -144,7 +157,9 @@ La structure du repo:
 │   └── suggested_apps_nextsteps.md
 ├── code/                          # Pages HTML
 │   ├── common.css                 # Style partagé par tous les outils
-│   └── …                          # une page par outil, éventuellement préfixée NN_ pour l'ordre
+│   ├── common.js                  # Thème clair / sombre / auto, partagé
+│   ├── icons/                     # Une icône SVG par outil (favicon, en-tête, index) + webapps.svg
+│   └── NN_outil.html              # Une page par outil ; le préfixe NN_ fixe l'ordre (voir « Build »)
 ├── build.py                       # Construit dist/ (voir « Build » et « PWA »)
 ├── dist/                          # Sortie du build (non versionnée)
 ├── LICENSE
