@@ -1,5 +1,7 @@
 # WebApps
 
+🌐 **<https://lstux.github.io/WebApps/>**
+
 Petits outils autonomes : une seule page HTML/CSS/JavaScript, pas de serveur.
 
 ## Outils
