@@ -39,8 +39,23 @@ META_DESC_RE = re.compile(r"""<meta\b[^>]*\bname\s*=\s*["']description["'][^>]*>
 SCRIPT_RE = re.compile(r"<script\b.*?</script\s*>", re.I | re.S)
 HEAD_END_RE = re.compile(r"</head\s*>", re.I)
 
+# Préfixe d'ordre « 10_ » devant le nom d'une page : sert uniquement à classer les outils.
+# Il est retiré de tous les noms publiés (fichiers de dist/, adresses, index, manifest, cache).
+ORDER_RE = re.compile(r"^(\d+)_")
+
 APP_NAME = "WebApps"
 APP_DESC = "Petits outils autonomes : une page HTML, pas de serveur."
+
+
+def public_rel(rel):
+    """Chemin publié d'une page : le préfixe d'ordre du nom de fichier est retiré."""
+    return rel.with_name(ORDER_RE.sub("", rel.name, count=1))
+
+
+def order_key(rel):
+    """Ordre des outils : numéro du préfixe, puis nom. Sans préfixe : après les préfixés, par nom."""
+    m = ORDER_RE.match(rel.name)
+    return (0, int(m.group(1)), rel.as_posix().casefold()) if m else (1, 0, rel.as_posix().casefold())
 
 
 def attrs(tag):
@@ -89,7 +104,7 @@ def page_info(page):
     text = page.read_text(encoding="utf-8")
     text = text.split("</head>", 1)[0]  # titre et description : dans l'en-tête seulement
     t = TITLE_RE.search(text)
-    title = html.unescape(re.sub(r"\s+", " ", t.group(1)).strip()) if t else page.stem
+    title = html.unescape(re.sub(r"\s+", " ", t.group(1)).strip()) if t else ORDER_RE.sub("", page.stem, count=1)
     d = META_DESC_RE.search(text)
     desc = attrs(d.group(0)).get("content", "").strip() if d else ""
     return title, desc
@@ -511,16 +526,26 @@ def main():
     out = (ROOT / args.out).resolve()
     if not source.is_dir():
         sys.exit(f"Dossier introuvable : {source}")
-    pages = sorted(p for p in source.rglob("*.html") if p.is_file())
+    pages = sorted((p for p in source.rglob("*.html") if p.is_file()), key=lambda p: order_key(p.relative_to(source)))
     if not pages:
         sys.exit(f"Aucune page .html dans {source}")
-    if not args.standalone and any(p.relative_to(source).as_posix() == "index.html" for p in pages):
-        sys.exit("code/index.html existe déjà : il serait écrasé par l'index généré.")
+    names = {}
+    for p in pages:   # deux sources ne doivent pas donner le même nom publié
+        pub = public_rel(p.relative_to(source)).as_posix()
+        if pub in names:
+            sys.exit(f"Conflit de noms : {names[pub]} et {p.relative_to(source).as_posix()} donneraient tous deux {pub}.")
+        names[pub] = p.relative_to(source).as_posix()
+    others = {p.relative_to(source).as_posix() for p in source.rglob("*") if p.is_file() and p.suffix.lower() != ".html"}
+    for pub, src in names.items():
+        if pub in others:
+            sys.exit(f"Conflit de noms : {src} donnerait {pub}, qui existe déjà dans {source.name}/.")
+    if not args.standalone and "index.html" in names:
+        sys.exit("code/index.html (ou NN_index.html) existe déjà : il serait écrasé par l'index généré.")
     clean(out, source)
 
     if args.standalone:
         for p in pages:
-            rel = p.relative_to(source)
+            rel = public_rel(p.relative_to(source))
             dest = out / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(inline_css(p, source), encoding="utf-8")
@@ -528,11 +553,13 @@ def main():
         print(f"{len(pages)} page(s) autonome(s) dans {out.relative_to(ROOT)}/")
     else:
         shutil.copytree(source, out, dirs_exist_ok=True)
-        tools = []
+        tools = []   # dans l'ordre des préfixes
         for p in pages:
+            rel = p.relative_to(source)
+            if public_rel(rel) != rel:
+                (out / rel).rename(out / public_rel(rel))
             title, desc = page_info(p)
-            tools.append((p.relative_to(source), title, desc))
-        tools.sort(key=lambda t: t[1].casefold())
+            tools.append((public_rel(rel), title, desc))
         build_index(out, tools)
         print(f"{len(pages)} outil(s) copié(s) dans {out.relative_to(ROOT)}/ + index.html")
         if args.pwa:

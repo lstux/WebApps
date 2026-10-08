@@ -68,6 +68,8 @@ python3 build.py --pwa --deploy  # construit, puis envoie dist/ sur le serveur (
 
 Python 3.8+, sans dépendance. `dist/` est vidé puis recréé à chaque exécution et n'est pas versionné. Les bibliothèques chargées depuis un CDN (Leaflet, marked…) restent en ligne dans tous les modes. L'index lit le `<title>` et la `<meta name="description">` de chaque page.
 
+**Ordre des outils** : un préfixe numérique sur le nom d'une page de `code/` (`10_todo.html`, `20_markdown_reader.html`…) fixe sa place dans l'index et dans les raccourcis du manifest ; les pages sans préfixe viennent ensuite, par ordre alphabétique. Le préfixe ne sert qu'à classer : `build.py` le retire de tous les noms publiés (`dist/todo.html`, adresses, index, manifest, cache hors ligne). Deux pages qui donneraient le même nom (`10_todo.html` et `20_todo.html`) font échouer le build.
+
 ### Application installable (PWA)
 
 `python3 build.py --pwa` ajoute à `dist/` de quoi installer l'ensemble des outils comme une seule application « WebApps » (écran d'accueil du téléphone, fenêtre dédiée sur ordinateur) :
@@ -142,11 +144,7 @@ La structure du repo:
 │   └── suggested_apps_nextsteps.md
 ├── code/                          # Pages HTML
 │   ├── common.css                 # Style partagé par tous les outils
-│   ├── leaflet_manager.html
-│   ├── markdown_reader.html
-│   ├── qrcode_generator.html
-│   ├── todo.html
-│   └── units_converter.html
+│   └── …                          # une page par outil, éventuellement préfixée NN_ pour l'ordre
 ├── build.py                       # Construit dist/ (voir « Build » et « PWA »)
 ├── dist/                          # Sortie du build (non versionnée)
 ├── LICENSE

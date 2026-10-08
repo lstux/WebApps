@@ -25,7 +25,8 @@ jobs:
             test -s "dist/$f" || { echo "dist/$f manquant ou vide"; exit 1; }
           done
           for f in code/*.html; do
-            test -s "dist/$(basename "$f")" || { echo "$(basename "$f") absent de dist/"; exit 1; }
+            n="$(basename "$f" | sed -E 's/^[0-9]+_//')"   # le préfixe d'ordre NN_ n'est pas publié
+            test -s "dist/$n" || { echo "$n absent de dist/"; exit 1; }
           done
           ls -la dist
       - uses: actions/upload-pages-artifact@v3
