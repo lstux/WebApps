@@ -7,6 +7,7 @@ Petits outils autonomes : une seule page HTML/CSS/JavaScript, pas de serveur.
 ### 🔖 Liseuse Markdown
 
 Une liseuse pour fichiers Markdown avec:
+- Favoris (documents, dépôts GitHub, groupes repliables, glisser-déposer)
 - Navigation d'arborescence repliable
 - Recherche dans le contenu
 - Listes de tâches avec progression

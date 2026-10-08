@@ -7,6 +7,7 @@ Une page unique HTML/CSS/JavaScript qui affiche des fichiers Markdown comme on l
 - **Lecture centrée** : colonne étroite de 65 caractères, typographie soignée
 - **Navigation** : arborescence repliable des documents à gauche, plan de la section à droite (sur grand écran)
 - **Recherche** : cherche par nom de fichier et dans le contenu
+- **Favoris** : documents, dépôts GitHub et adresses gardés sous la main, rangeables en groupes repliables
 - **Tâches** : affiche les listes de tâches avec cases rondes, pourcentage de progression, barre colorée (style du TODO)
 - **Adaptif** : fonctionne sur mobile et bureau, volet en tiroir sur petit écran
 - **Thème** : clair, sombre, ou automatique selon le système
@@ -22,6 +23,19 @@ Une page unique HTML/CSS/JavaScript qui affiche des fichiers Markdown comme on l
 - **Coller** : `Ctrl`+`V` pour afficher du Markdown depuis le presse-papiers
 
 Rien n'est envoyé nulle part : tout est lu localement dans le navigateur.
+
+## Favoris
+
+L'onglet **Favoris** du volet de gauche remplace l'ancien dossier d'exemple. L'onglet **Documents** montre l'arborescence de ce qui est ouvert.
+
+- **Liste initiale** : `Bienvenue`, `Syntaxe`, `lstux/WebApps`, un groupe `Slovingo` (huit dépôts) et `lstux/MathPulse`. Tant qu'on ne la modifie pas, elle suit les valeurs par défaut de la page.
+- **Ajouter ou retirer** : l'étoile du bandeau agit sur le document, le dépôt GitHub ou l'adresse ouverts. Une suppression se défait avec **Annuler**.
+- **Réordonner** : on glisse la poignée à gauche d'un favori (souris ou doigt). On peut le déposer avant ou après un autre favori, dans un groupe ou en dehors. Au clavier : flèches haut et bas sur la poignée.
+- **Groupes** : le bouton **Groupe** en crée un, le crayon le renomme, un clic le replie. Un groupe ne contient pas d'autre groupe.
+- **Rétablir** : le lien en bas de l'onglet remet la liste initiale (annulable).
+- **Au lancement** : la liseuse rouvre le dernier document ouvert, ou `Bienvenue` la première fois. Si un dépôt ne peut pas être rechargé (hors connexion, limite GitHub), `Bienvenue` s'affiche à la place.
+- **Stockage** : `localStorage` du navigateur (clés `liseuse.favs` et `liseuse.last`). Les favoris ne passent pas d'un navigateur à l'autre.
+- **Limite** : les fichiers et dossiers de l'ordinateur ne peuvent pas devenir des favoris, car le navigateur ne garde pas l'accès. Ils ne sont pas non plus rouverts au lancement.
 
 ## Raccourcis clavier
 
