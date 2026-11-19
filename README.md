@@ -48,6 +48,16 @@ Un gestionnaire de cartes Leaflet avec:
 
 📄 **[Documentation](docs/CARTES.md)** · 📦 **[04_leaflet_manager.html](code/04_leaflet_manager.html)**
 
+### 🔌 ProtoBoardDesigner
+
+Un plan de câblage sur plaque à pastilles (pas 2,54 mm), façon feuille à petits carreaux, avec:
+- Cartes ESP32 et modules, chacun dans son fichier (`code/protoboard/components/`), barrettes Dupont mâles/femelles, module générique
+- Fils à angles droits qui suivent les pièces déplacées
+- Rôle et réseau de chaque broche, alertes (alimentation sur la masse, 5V/3V3 reliés, broches à éviter)
+- Composants personnels sans toucher au dépôt, export / import JSON, sauvegarde locale
+
+📄 **[Documentation](docs/PROTOBOARD.md)** · 📦 **[06_protoboard_designer.html](code/06_protoboard_designer.html)**
+
 ## Prochains outils
 
 La liste des outils envisagés est dans [docs/suggested_apps_nextsteps.md](docs/suggested_apps_nextsteps.md).
@@ -155,12 +165,14 @@ La structure du repo:
 │   ├── TODO.md
 │   ├── CONVERTISSEUR.md
 │   ├── CARTES.md
+│   ├── PROTOBOARD.md
 │   ├── STYLE.md                   # Style commun : variables et composants
 │   └── suggested_apps_nextsteps.md
 ├── code/                          # Pages HTML
 │   ├── common.css                 # Style partagé par tous les outils
 │   ├── common.js                  # Thème clair / sombre / auto, partagé
 │   ├── icons/                     # Une icône SVG par outil (favicon, en-tête, index) + webapps.svg
+│   ├── protoboard/components/     # Composants de ProtoBoardDesigner, un fichier .js par composant
 │   └── NN_outil.html              # Une page par outil ; le préfixe NN_ fixe l'ordre (voir « Build »)
 ├── build.py                       # Construit dist/ (voir « Build » et « PWA »)
 ├── dist/                          # Sortie du build (non versionnée)
