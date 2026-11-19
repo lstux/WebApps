@@ -22,7 +22,12 @@ window.ProtoBoard = { list: [], component(def) { this.list.push(def); } };
 @media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --pb-board:#b9a47a; --pb-board-edge:#8a7448; --pb-pad:#c08a45; --pb-pad-edge:#8a5a22; --pb-hole:#2b2016; } }
 :root[data-theme="dark"] { --pb-board:#b9a47a; --pb-board-edge:#8a7448; --pb-pad:#c08a45; --pb-pad-edge:#8a5a22; --pb-hole:#2b2016; }
 
-body { display:flex; flex-direction:column; height:100dvh; overflow:hidden; }
+/* La page occupe exactement la zone visible : position fixe plutôt que 100dvh, qui sur certains
+   navigateurs mobiles (Android en plein écran, barre d'adresse dynamique) déborde sous le bas de l'écran
+   et cachait la barre des modes. */
+html, body { height:100%; }
+body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hidden; overscroll-behavior:none; }
+.topbar, .dock { flex:none; }
 .topbar-in { max-width:none; gap:8px; }
 .topbar-in .iconbtn { --icon-size:38px; }
 @media (max-width:480px) { .topbar-in .appicon, .topbar .subtitle { display:none; } .brand { font-size:17px; } .topbar-in .iconbtn { --icon-size:34px; font-size:18px; } }
