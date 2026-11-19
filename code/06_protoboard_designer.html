@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>ProtoBoardDesigner</title>
+<meta name="description" content="Plan de câblage sur plaque à pastilles au pas de 2,54 mm : cartes ESP32, modules, barrettes Dupont et fils.">
+<link rel="stylesheet" href="common.css">
+<link rel="icon" type="image/svg+xml" href="icons/protoboard_designer.svg">
+<script src="common.js"></script>
+<script>
+/* Registre des composants : chaque fichier de protoboard/components/ appelle ProtoBoard.component({…}).
+   Défini avant les fichiers de composants, qui sont chargés en fin de page. */
+window.ProtoBoard = { list: [], component(def) { this.list.push(def); } };
+</script>
+<style>
+/* ProtoBoardDesigner — styles propres à l'outil.
+   Composants du système : .topbar, .appicon, .brand, .iconbtn, .btn, .chips, .chip, dialog.sheet, .item, .toast.
+   Les couleurs de la plaque, des broches et des fils représentent des objets réels : elles sont fixes,
+   sauf la plaque (assombrie en thème sombre) et les repères de sélection (accent du thème). */
+:root { --pb-board:#f3e3bd; --pb-board-edge:#c9a96a; --pb-pad:#dca866; --pb-pad-edge:#b07a35; --pb-hole:#5a4630; }
+@media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --pb-board:#b9a47a; --pb-board-edge:#8a7448; --pb-pad:#c08a45; --pb-pad-edge:#8a5a22; --pb-hole:#2b2016; } }
+:root[data-theme="dark"] { --pb-board:#b9a47a; --pb-board-edge:#8a7448; --pb-pad:#c08a45; --pb-pad-edge:#8a5a22; --pb-hole:#2b2016; }
+
+body { display:flex; flex-direction:column; height:100dvh; overflow:hidden; }
+.topbar-in { max-width:none; gap:8px; }
+.topbar-in .iconbtn { --icon-size:38px; }
+@media (max-width:480px) { .topbar-in .appicon, .topbar .subtitle { display:none; } .brand { font-size:17px; } .topbar-in .iconbtn { --icon-size:34px; font-size:18px; } }
+
+.stage { position:relative; flex:1; min-height:0; }
+#svg { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+.pb-line { stroke:var(--line); }
+.pb-dot { fill:var(--mut2); }
+.pb-board { fill:var(--pb-board); stroke:var(--pb-board-edge); }
+.pb-pad { fill:var(--pb-pad); stroke:var(--pb-pad-edge); }
+.pb-hole { fill:var(--pb-hole); }
+.pb-sel { stroke:var(--ac); }
+.pb-glow { stroke:var(--ac); stroke-opacity:.35; }
+.pb-ring { fill:none; stroke:var(--ac); }
+.pb-ring.here { fill:color-mix(in srgb,var(--ac) 22%,transparent); }
+.pb-out { fill:var(--fg); stroke:var(--bg); stroke-width:2.5px; paint-order:stroke; }
+.pb-in { fill:#fff; fill-opacity:.92; }
+.pb-title { fill:#fff; fill-opacity:.55; }
+
+.dock { position:relative; z-index:5; background:var(--glass); backdrop-filter:blur(14px) saturate(1.4); -webkit-backdrop-filter:blur(14px) saturate(1.4);
+  border-top:1px solid var(--line); padding:8px 12px calc(10px + env(safe-area-inset-bottom,0px)); }
+.dock-in { max-width:900px; margin:0 auto; display:flex; flex-direction:column; gap:8px; }
+.ctx { display:flex; flex-direction:column; gap:8px; }
+.ctx:empty { display:none; }
+.ctx .info { font-size:13.5px; color:var(--mut); }
+.ctx .info b { color:var(--fg); }
+.ctx .warn { font-size:13.5px; font-weight:700; color:var(--err); }
+.rowb { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.rowb .btn { padding:8px 13px; }
+.mainrow { display:flex; align-items:center; gap:8px; }
+.mainrow .chips { flex:1; }
+.mainrow .chip { flex:1; text-align:center; padding:9px 12px; }
+.swatch { width:32px; height:32px; border-radius:50%; border:2px solid var(--card); box-shadow:0 0 0 1px var(--mut2); flex:none; transition:transform .2s var(--spring); }
+.swatch.on { box-shadow:0 0 0 3px var(--ac); }
+.swatch:active { transform:scale(.9); }
+
+/* Feuilles */
+.sheet .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; margin:0 4px; }
+.sheet .grid .btn { justify-content:flex-start; flex-direction:column; align-items:flex-start; gap:1px; white-space:normal; text-align:left; min-height:58px; }
+.sheet .grid small { font-weight:500; color:var(--mut); font-size:12px; }
+.sheet h3 { margin:16px 8px 6px; font-size:14px; font-weight:750; }
+.sheet .form { margin:0 4px; }
+.sheet label.lbl { display:block; font-size:13px; font-weight:600; color:var(--mut); margin:8px 0 4px; }
+.sheet .three { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.sheet textarea { font:12.5px/1.45 var(--f-mono); min-height:120px; }
+.sheet .net { padding:8px; border-bottom:1px solid var(--line); font-size:14px; }
+.sheet .net b { font-weight:700; }
+.sheet .warn { color:var(--err); font-weight:700; font-size:13px; }
+.sheet .help p { color:var(--fg); font-size:14px; }
+.sheet .lib { display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid var(--line); }
+.sheet .lib .grow { flex:1; min-width:0; }
+.sheet .lib small { display:block; color:var(--mut); }
+.inner { max-height:84dvh; overflow-y:auto; }
+.legend { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:12px; color:var(--mut); margin:14px 8px 0; }
+.legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; vertical-align:-1px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="appicon" href="./" data-home aria-label="Accueil WebApps" title="Accueil WebApps"><img src="icons/protoboard_designer.svg" alt="" width="36" height="36"></a>
+    <div class="grow">
+      <h1 class="brand">ProtoBoardDesigner</h1>
+      <div class="subtitle">Plaque à pastilles · pas 2,54 mm</div>
+    </div>
+    <button class="iconbtn" id="bUndo" title="Annuler (Ctrl+Z)" aria-label="Annuler">↶</button>
+    <button class="iconbtn" id="bRedo" title="Rétablir (Ctrl+Maj+Z)" aria-label="Rétablir">↷</button>
+    <button class="iconbtn" id="bFit" title="Recentrer" aria-label="Recentrer">⤢</button>
+    <button class="iconbtn" id="bMenu" title="Menu" aria-label="Menu">☰</button>
+  </div>
+</header>
+
+<main class="stage">
+  <svg id="svg" xmlns="http://www.w3.org/2000/svg" aria-label="Plaque">
+    <defs>
+      <pattern id="paperPat" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path class="pb-line" d="M0 0H20M0 0V20" stroke-width="1" fill="none"/>
+        <circle class="pb-dot" cx="0" cy="0" r="1.3"/>
+      </pattern>
+      <pattern id="holes" x="-10" y="-10" width="20" height="20" patternUnits="userSpaceOnUse">
+        <circle class="pb-pad" cx="10" cy="10" r="6.2" stroke-width="1"/>
+        <circle class="pb-hole" cx="10" cy="10" r="2.4"/>
+      </pattern>
+    </defs>
+    <g id="vp">
+      <rect id="paper" fill="url(#paperPat)"/>
+      <g id="world"></g>
+    </g>
+  </svg>
+</main>
+
+<footer class="dock">
+  <div class="dock-in">
+    <div class="ctx" id="ctx"></div>
+    <div class="mainrow">
+      <div class="chips">
+        <button class="chip" id="mSel">☝ Sélection</button>
+        <button class="chip" id="mWire">〰 Fil</button>
+      </div>
+      <button class="btn primary" id="bAdd">＋ Ajouter</button>
+    </div>
+  </div>
+</footer>
+
+<dialog class="sheet" id="dlg"><div class="inner" id="dlgIn"></div></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- Composants : un fichier par composant. Pour en ajouter un, crée le fichier et ajoute sa ligne ici. -->
+<script src="protoboard/components/esp32_c3_super_mini.js"></script>
+<script src="protoboard/components/esp32_s3_super_mini.js"></script>
+<script src="protoboard/components/esp32_s3_devkit_n16r8.js"></script>
+<script src="protoboard/components/bme280.js"></script>
+<script src="protoboard/components/ads1115.js"></script>
+<script src="protoboard/components/ds3231.js"></script>
+<script src="protoboard/components/oled_ssd1306_i2c.js"></script>
+
+<script>
+'use strict';
+/* ==========================================================================
+   ProtoBoardDesigner
+   Coordonnées : unités de grille (1 = 2,54 mm), dessinées à U pixels par pas.
+   Plan (doc) : { board:{w,h,show}, parts:[…], wires:[{id,c,pts:[[x,y]…]}] }
+   Pièce : { id, type, x, y, r (quarts de tour), f (retournée), label, names[], n, rows, gap }
+   ========================================================================== */
+const U = 20;
+const KEY_DOC = 'protoboard.doc.v1', KEY_VIEW = 'protoboard.view.v1', KEY_LIB = 'protoboard.components.v1';
+const $ = s => document.querySelector(s);
+const svg = $('#svg'), vp = $('#vp'), world = $('#world'), paper = $('#paper');
+const COLORS = ['#e53935','#212121','#1e88e5','#43a047','#fdd835','#fb8c00','#8e24aa','#f5f5f5'];
+const TYPES = {
+  power:{f:'#e53935',t:'Alimentation'}, gnd:{f:'#1a1a1a',t:'Masse'}, gpio:{f:'#d4a72c',t:'Signal / GPIO'},
+  strap:{f:'#fb8c00',t:'Strapping (démarrage)'}, uart:{f:'#1e88e5',t:'UART'}, avoid:{f:'#8e24aa',t:'À éviter'},
+  ctrl:{f:'#9e9e9e',t:'Contrôle'}
+};
+const POWER_NOTE = {'5V':'Alim 5 V (USB) — entrée ou sortie', '3V3':'Sortie 3,3 V du régulateur', 'GND':'Masse'};
+const BUILTIN = {
+  hdrM:{name:'Barrette mâle', label:'Mâle'},
+  hdrF:{name:'Barrette femelle', label:'Femelle'},
+  mod:{name:'Module générique', label:'Module'}
+};
+
+/* ---------- utilitaires ---------- */
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clampInt = (v,a,b) => { v = parseInt(v, 10); if (isNaN(v)) v = a; return Math.max(a, Math.min(b, v)); };
+const K = (x,y) => x + ',' + y;
+const slug = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'composant';
+let toastTimer;
+function toast(msg, err){
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, err ? 6000 : 3000);
+}
+function download(name, txt, type){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt], {type})); a.download = name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+async function copyText(txt){
+  try { await navigator.clipboard.writeText(txt); toast('Copié dans le presse-papiers.'); }
+  catch(e){ toast('Copie impossible : sélectionne le texte à la main.', true); }
+}
+
+/* ---------- bibliothèque de composants ---------- */
+const LIB = new Map();   // id → { def, src:'file'|'local', geo }
+function pinType(name, t){
+  if (t && TYPES[t]) return t;
+  const n = String(name).trim().toUpperCase();
+  if (/^(GND|VSS|0V|G|MASSE)$/.test(n)) return 'gnd';
+  if (/^(VCC|VIN|VDD|5V|3V3|3\.3V|3V|V\+|\+5V|\+3V3)$/.test(n)) return 'power';
+  return 'gpio';
+}
+function parsePin(s){ const i = String(s).lastIndexOf(':'); return i > 0 ? {name:s.slice(0,i), type:s.slice(i+1)} : {name:String(s)}; }
+/* Compile la définition d'un fichier de composant en géométrie (broches, corps, décor). */
+function compile(def){
+  const pins = [];
+  (def.columns || []).forEach(c => (c.pins || []).forEach((s,i) => pins.push({...parsePin(s), x:c.x, y:(c.y || 0) + i, dir:c.labels})));
+  (def.rows || []).forEach(r => (r.pins || []).forEach((s,i) => pins.push({...parsePin(s), x:(r.x || 0) + i, y:r.y, dir:r.labels})));
+  (def.pins || []).forEach(p => pins.push({name:p.name, type:p.type, x:p.x, y:p.y, dir:p.label}));
+  if (!pins.length) throw new Error('aucune broche');
+  let body = def.body;
+  if (!body){
+    const xs = pins.map(p => p.x), ys = pins.map(p => p.y);
+    body = {x0:Math.min(...xs) - .8, y0:Math.min(...ys) - .8, x1:Math.max(...xs) + .8, y1:Math.max(...ys) + .8};
+  }
+  const cx = (body.x0 + body.x1) / 2, cy = (body.y0 + body.y1) / 2;
+  const DIRS = {left:[-1,0], right:[1,0], up:[0,-1], down:[0,1]};
+  const out = pins.map(p => {
+    let d = DIRS[p.dir];
+    if (!d){
+      const col = (def.columns || []).length && (def.columns || []).some(c => c.x === p.x);
+      d = col ? [p.x <= cx ? 1 : -1, 0] : [0, p.y <= cy ? 1 : -1];
+    }
+    return {name:p.name, type:pinType(p.name, p.type), x:p.x, y:p.y, d};
+  });
+  return {pins:out, body, deco:def.deco || [], style:def.pinStyle || 'round', color:def.color || '#1b2a3a'};
+}
+function register(def, src){
+  if (!def || typeof def !== 'object' || !def.id || !def.name) throw new Error('il faut au moins id et name');
+  const id = slug(def.id); def = Object.assign({}, def, {id});
+  const geo = compile(def);
+  if (src === 'file' && LIB.has(id)) console.warn('ProtoBoard : composant en double', id);
+  LIB.set(id, {def, src, geo});
+  return id;
+}
+function loadLocalLib(){ try { (JSON.parse(localStorage.getItem(KEY_LIB)) || []).forEach(d => { try { register(d, 'local'); } catch(e){} }); } catch(e){} }
+function saveLocalLib(){ try { localStorage.setItem(KEY_LIB, JSON.stringify([...LIB.values()].filter(e => e.src === 'local').map(e => e.def))); } catch(e){} }
+ProtoBoard.list.forEach(d => { try { register(d, 'file'); } catch(e){ console.warn('ProtoBoard : composant ignoré', d && d.id, e.message); } });
+ProtoBoard.component = d => { try { register(d, 'file'); } catch(e){} };   // fichiers chargés plus tard
+/* Fichier de composant (.js) à partir d'une définition. */
+function componentFile(def){
+  const q = v => JSON.stringify(v).replace(/"([A-Za-z_]\w*)":/g, '$1: ').replace(/,"/g, ', "').replace(/,\{/g, ', {').replace(/,([A-Za-z_]\w*): /g, ', $1: ');
+  const parts = [];
+  ['id','name','label','category','description','color','pinStyle','body','deco','columns','rows','pins','notes'].forEach(k => {
+    const v = def[k]; if (v === undefined) return;
+    if (Array.isArray(v) && (k === 'columns' || k === 'rows' || k === 'pins' || k === 'deco'))
+      parts.push(`  ${k}: [\n${v.map(x => '    ' + q(x)).join(',\n')}\n  ]`);
+    else if (k === 'notes' && v && typeof v === 'object')
+      parts.push(`  notes: {\n${Object.entries(v).map(([a,b]) => `    ${JSON.stringify(a)}: ${JSON.stringify(b)}`).join(',\n')}\n  }`);
+    else parts.push(`  ${k}: ${q(v)}`);
+  });
+  return `/* ${def.name} — composant ProtoBoardDesigner. */\nProtoBoard.component({\n${parts.join(',\n')}\n});\n`;
+}
+function parseComponentText(txt){
+  txt = txt.trim(); const found = [];
+  try { const d = JSON.parse(txt); (Array.isArray(d) ? d : [d]).forEach(x => found.push(x)); return found; } catch(e){}
+  // Texte d'un fichier .js : exécuté avec un ProtoBoard qui ne fait que recueillir les définitions.
+  new Function('ProtoBoard', txt)({component:d => found.push(d)});
+  return found;
+}
+
+/* ---------- état ---------- */
+let doc, undoStack = [], redoStack = [], lastJSON = '';
+let view = {s:1.5, tx:20, ty:20};
+let mode = 'sel', sel = null, cur = null, hover = null;
+let wireColor = COLORS[0], ortho = true, showLabels = true;
+let pinMap = new Map(), vtxKeys = new Set(), parent = new Map();
+const getPart = id => doc.parts.find(p => p.id === id);
+const getWire = id => doc.wires.find(w => w.id === id);
+const partName = p => BUILTIN[p.type] ? BUILTIN[p.type].name : (LIB.get(p.type) ? LIB.get(p.type).def.name : p.type + ' (introuvable)');
+
+function defaultDoc(){
+  const d = {board:{w:24,h:30,show:true}, parts:[], wires:[]};
+  if (LIB.has('esp32-c3-super-mini')){
+    d.parts.push({id:uid(), type:'esp32-c3-super-mini', x:3, y:3, r:0, f:false, label:'C3 Super Mini', names:[]});
+    d.parts.push({id:uid(), type:'hdrF', x:13, y:4, r:1, f:false, label:'I2C', n:4, rows:1, names:['VIN','GND','SCL','SDA']});
+    d.wires.push({id:uid(), c:'#fdd835', pts:[[9,5],[12,5],[12,6],[13,6]]});
+    d.wires.push({id:uid(), c:'#1e88e5', pts:[[9,8],[12,8],[12,7],[13,7]]});
+  }
+  return d;
+}
+
+/* ---------- géométrie des pièces ---------- */
+function geo(p){
+  let g;
+  if (p.type === 'hdrM' || p.type === 'hdrF'){
+    const n = p.n || 4, rows = p.rows || 1, pins = [];
+    for (let i = 0; i < n; i++) for (let r = 0; r < rows; r++)
+      pins.push({name:String(rows === 1 ? i+1 : i*2+r+1), type:'gpio', x:i, y:r, d:[0, r ? 1 : -1]});
+    g = {pins, body:{x0:-.5, x1:n-.5, y0:-.5, y1:rows-.5}, deco:[], style:p.type === 'hdrM' ? 'male' : 'female', color:'#262626', out:true};
+  } else if (p.type === 'mod'){
+    const n = p.n || 4, rows = p.rows || 1, gap = p.gap || 5, pins = [];
+    if (rows === 1){
+      for (let i = 0; i < n; i++) pins.push({name:String(i+1), type:'gpio', x:i, y:0, d:[0,1]});
+      g = {pins, body:{x0:-.7, x1:n-.3, y0:-.7, y1:2.8}};
+    } else {
+      for (let i = 0; i < n; i++) pins.push({name:String(i+1), type:'gpio', x:0, y:i, d:[1,0]});
+      for (let i = 0; i < n; i++) pins.push({name:String(n+i+1), type:'gpio', x:gap, y:i, d:[-1,0]});
+      g = {pins, body:{x0:-.8, x1:gap+.8, y0:-.8, y1:n-.2}};
+    }
+    Object.assign(g, {deco:[], style:'round', color:'#2e6b34'});
+  } else if (LIB.has(p.type)){
+    const c = LIB.get(p.type).geo;
+    g = {pins:c.pins.map(q => ({...q})), body:c.body, deco:c.deco, style:c.style, color:c.color};
+  } else {
+    return {pins:[], body:{x0:-.5, y0:-.5, x1:5.5, y1:2.5}, deco:[], style:'round', color:'#000', missing:true};
+  }
+  if (p.names && p.names.length) g.pins.forEach((q,i) => { if (p.names[i]) { q.name = p.names[i]; q.type = pinType(q.name, q.type === 'gpio' ? null : q.type); } });
+  return g;
+}
+function tf(p, lx, ly){ let x = p.f ? -lx : lx, y = ly; for (let i = 0; i < p.r; i++) [x,y] = [-y,x]; return [p.x + x, p.y + y]; }
+function tv(p, dx, dy){ let x = p.f ? -dx : dx, y = dy; for (let i = 0; i < p.r; i++) [x,y] = [-y,x]; return [x, y]; }
+function bboxW(p, g){
+  const b = g.body, c = [[b.x0,b.y0],[b.x1,b.y0],[b.x0,b.y1],[b.x1,b.y1]].map(([x,y]) => tf(p,x,y));
+  const xs = c.map(v => v[0]), ys = c.map(v => v[1]);
+  return {x0:Math.min(...xs), x1:Math.max(...xs), y0:Math.min(...ys), y1:Math.max(...ys)};
+}
+const pinKeys = p => geo(p).pins.map(q => tf(p, q.x, q.y));
+/* Fils accrochés aux broches d'une pièce : ils la suivent quand elle bouge ou pivote. */
+function attached(p){
+  const ks = pinKeys(p), refs = [];
+  doc.wires.forEach(w => w.pts.forEach((pt,j) => { const i = ks.findIndex(k => k[0] === pt[0] && k[1] === pt[1]); if (i >= 0) refs.push([w,j,i]); }));
+  return refs;
+}
+function reattach(p, refs){
+  const ks = pinKeys(p);
+  refs.forEach(([w,j,i]) => {
+    if (!ks[i]) return;
+    const o = w.pts[j], n = [ks[i][0], ks[i][1]];
+    [j-1, j+1].forEach(m => {   // le coude voisin suit, pour garder les angles droits
+      if (m <= 0 || m >= w.pts.length - 1) return;
+      const q = w.pts[m];
+      if (q[1] === o[1] && q[0] !== o[0]) w.pts[m] = [q[0], n[1]];
+      else if (q[0] === o[0] && q[1] !== o[1]) w.pts[m] = [n[0], q[1]];
+    });
+    w.pts[j] = n;
+  });
+}
+
+/* ---------- réseaux (union-find sur les points de soudure) ---------- */
+function find(k){ let r = k; while (parent.has(r) && parent.get(r) !== r) r = parent.get(r); return r; }
+function union(a, b){ if (!parent.has(a)) parent.set(a,a); if (!parent.has(b)) parent.set(b,b); const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); }
+function buildIndex(){
+  pinMap = new Map(); vtxKeys = new Set(); parent = new Map();
+  doc.parts.forEach(p => geo(p).pins.forEach((q,i) => {
+    const [x,y] = tf(p,q.x,q.y), k = K(x,y);
+    if (!pinMap.has(k)) pinMap.set(k, []); pinMap.get(k).push({p, i, q, x, y});
+  }));
+  doc.wires.forEach(w => { w.pts.forEach(pt => vtxKeys.add(K(...pt))); for (let i = 1; i < w.pts.length; i++) union(K(...w.pts[0]), K(...w.pts[i])); });
+}
+function netKeys(k){ const r = find(k), s = new Set([k]); parent.forEach((_, key) => { if (find(key) === r) s.add(key); }); return s; }
+function netPins(keys){ const out = []; keys.forEach(k => (pinMap.get(k) || []).forEach(e => out.push(e))); return out; }
+function netWarnings(pins){
+  const w = [], pw = new Set(); let g = false, x = false;
+  pins.forEach(e => {
+    if (e.q.type === 'gnd') g = true;
+    if (e.q.type === 'avoid') x = true;
+    if (e.q.type === 'power'){ const n = e.q.name.toUpperCase().replace('3.3V','3V3'); pw.add(n === '5V' || n === '3V3' ? n : 'alim'); }
+  });
+  if (g && pw.size) w.push('⚠ Alimentation reliée à la masse !');
+  if (pw.has('5V') && pw.has('3V3')) w.push('⚠ 5V et 3V3 reliés !');
+  if (x) w.push('⚠ Broche à éviter dans ce réseau');
+  return w;
+}
+function currentNet(){
+  if (!sel) return null;
+  if (sel.t === 'pin') return netKeys(sel.key);
+  if (sel.t === 'wire'){ const w = getWire(sel.id); return w ? netKeys(K(...w.pts[0])) : null; }
+  return null;
+}
+const pinTitle = e => `${esc(e.p.label)} · ${esc(e.q.name)}`;
+
+/* ---------- rendu ---------- */
+function decoSVG(d){
+  const x = d.x*U, y = d.y*U, w = d.w*U, h = d.h*U;
+  switch (d.shape){
+    case 'usb': return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="#c3c8cf" stroke="#7a7f87"/>`;
+    case 'can': return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="#cfd4da" stroke="#8a9099"/>`;
+    case 'antenna': {
+      let p = `M${x + U*.4} ${y + h*.75}`; const step = U*.5;
+      for (let i = 0, up = true; x + U*.4 + (i+1)*step <= x + w - U*.3; i++, up = !up) p += ` h${step} v${up ? -h*.45 : h*.45}`;
+      return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#22324d"/><path d="${p}" stroke="#d4a72c" stroke-width="1.5" fill="none"/>`;
+    }
+    case 'chip': return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="#1c1c1c" stroke="#555"/>`;
+    case 'screen': return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="#0a0f1c" stroke="#3a4a6a"/>`;
+    case 'coin': return `<circle cx="${x + w/2}" cy="${y + h/2}" r="${Math.min(w,h)/2}" fill="#c3c8cf" stroke="#7a7f87"/><circle cx="${x + w/2}" cy="${y + h/2}" r="${Math.min(w,h)/2.6}" fill="none" stroke="#9aa0a8"/>`;
+    case 'rect': return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${esc(d.fill || '#888')}"/>`;
+  }
+  return '';
+}
+function partSVG(p, g, isSel){
+  const b = g.body;
+  let s = `<g data-part="${p.id}" transform="translate(${p.x*U},${p.y*U}) rotate(${p.r*90}) scale(${p.f?-1:1},1)">`;
+  if (g.missing)
+    return s + `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" fill="#e5484d22" stroke="#e5484d" stroke-dasharray="5 4" stroke-width="2"/></g>`;
+  s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.out?2:5}" fill="${esc(g.color)}" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0007" stroke-width="1"'}/>`;
+  g.deco.forEach(d => s += decoSVG(d));
+  g.pins.forEach(q => {
+    const cx = q.x*U, cy = q.y*U;
+    if (g.style === 'male') s += `<rect x="${cx-U*.28}" y="${cy-U*.28}" width="${U*.56}" height="${U*.56}" fill="#d4a72c" stroke="#8a6a12"/><rect x="${cx-U*.1}" y="${cy-U*.1}" width="${U*.2}" height="${U*.2}" fill="#f1d27a"/>`;
+    else if (g.style === 'female') s += `<rect x="${cx-U*.3}" y="${cy-U*.3}" width="${U*.6}" height="${U*.6}" fill="#0b0b0b" stroke="#666"/>`;
+    else s += `<circle cx="${cx}" cy="${cy}" r="${U*.34}" fill="${(TYPES[q.type] || TYPES.gpio).f}" stroke="#000a" stroke-width=".8"/><circle cx="${cx}" cy="${cy}" r="${U*.11}" fill="#ffffffaa"/>`;
+  });
+  return s + '</g>';
+}
+function labelsSVG(p, g){
+  let s = '';
+  const cls = g.out ? 'pb-out' : 'pb-in';
+  if (showLabels) g.pins.forEach(q => {
+    const [wx, wy] = tf(p, q.x, q.y), [dx, dy] = tv(p, q.d[0], q.d[1]);
+    const X = wx*U + dx*U*.48, Y = wy*U + dy*U*.48;
+    if (Math.abs(dx) > Math.abs(dy)) s += `<text class="${cls}" x="${X}" y="${Y}" font-size="6.5" text-anchor="${dx>0?'start':'end'}" dominant-baseline="central">${esc(q.name)}</text>`;
+    else s += `<text class="${cls}" x="${X}" y="${Y}" font-size="6.5" text-anchor="${dy<0?'start':'end'}" dominant-baseline="central" transform="rotate(-90 ${X} ${Y})">${esc(q.name)}</text>`;
+  });
+  const bb = bboxW(p, g), cx = (bb.x0 + bb.x1)/2*U;
+  if (g.out || g.missing) s += `<text class="pb-out" x="${cx}" y="${(bb.y1+.95)*U}" font-size="8" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(g.missing ? p.label + ' — composant introuvable' : p.label)}</text>`;
+  else s += `<text class="pb-title" x="${cx}" y="${(bb.y0+bb.y1)/2*U}" font-size="8" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(p.label)}</text>`;
+  return s;
+}
+function wireSVG(w, dim, isSel){
+  const pts = w.pts.map(([x,y]) => `${x*U},${y*U}`).join(' ');
+  const light = w.c === '#f5f5f5' || w.c === '#fdd835';
+  const pl = (extra) => `<polyline points="${pts}" fill="none" stroke-linecap="round" stroke-linejoin="round" ${extra}/>`;
+  let s = `<g data-wire="${w.id}" opacity="${dim ? .3 : 1}">`;
+  if (isSel) s += pl(`class="pb-glow" stroke-width="${U*.8}"`);
+  s += pl(`stroke="${light ? '#0009' : '#0005'}" stroke-width="${U*.3+2}"`) + pl(`stroke="${esc(w.c)}" stroke-width="${U*.3}"`);
+  w.pts.forEach((pt,i) => { const end = i === 0 || i === w.pts.length - 1;
+    s += `<circle cx="${pt[0]*U}" cy="${pt[1]*U}" r="${end?U*.22:U*.12}" fill="${esc(w.c)}" stroke="#0008" stroke-width="${end?1:.6}"/>`; });
+  return s + pl(`stroke="#0000" stroke-width="${U*.9}"`) + '</g>';
+}
+function render(){
+  buildIndex();
+  const net = currentNet(), B = doc.board;
+  let h = '';
+  if (B.show){
+    h += `<rect class="pb-board" x="${-U/2}" y="${-U/2}" width="${B.w*U}" height="${B.h*U}" rx="5" stroke-width="1.5"/>`;
+    h += `<rect x="${-U/2}" y="${-U/2}" width="${B.w*U}" height="${B.h*U}" fill="url(#holes)" pointer-events="none"/>`;
+  }
+  doc.parts.forEach(p => { const g = geo(p);
+    h += partSVG(p, g, sel && sel.t === 'part' && sel.id === p.id) + '<g pointer-events="none">' + labelsSVG(p, g) + '</g>'; });
+  doc.wires.forEach(w => h += wireSVG(w, net && !net.has(K(...w.pts[0])), sel && sel.t === 'wire' && sel.id === w.id));
+  if (cur){
+    const pts = cur.pts.slice();
+    if (hover){ const l = pts[pts.length-1]; if (ortho && l[0] !== hover[0] && l[1] !== hover[1]) pts.push([hover[0], l[1]]); pts.push(hover); }
+    h += `<g pointer-events="none"><polyline points="${pts.map(([x,y]) => `${x*U},${y*U}`).join(' ')}" fill="none" stroke="${wireColor}" stroke-width="${U*.3}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 5" opacity=".85"/>`;
+    cur.pts.forEach(pt => h += `<circle class="pb-sel" cx="${pt[0]*U}" cy="${pt[1]*U}" r="${U*.2}" fill="${wireColor}" stroke-width="2"/>`);
+    h += '</g>';
+  }
+  h += '<g pointer-events="none">';
+  if (net) netPins(net).forEach(e => h += `<circle class="pb-ring" cx="${e.x*U}" cy="${e.y*U}" r="${U*.52}" stroke-width="2.5"/>`);
+  if (sel && sel.t === 'pin'){ const [x,y] = sel.key.split(',').map(Number); h += `<circle class="pb-ring here" cx="${x*U}" cy="${y*U}" r="${U*.62}" stroke-width="3"/>`; }
+  h += '</g>';
+  world.innerHTML = h;
+  $('#bUndo').disabled = !undoStack.length; $('#bRedo').disabled = !redoStack.length;
+}
+function applyView(){
+  vp.setAttribute('transform', `translate(${view.tx},${view.ty}) scale(${view.s})`);
+  const r = svg.getBoundingClientRect();
+  paper.setAttribute('x', Math.floor(-view.tx/view.s/U - 1)*U); paper.setAttribute('y', Math.floor(-view.ty/view.s/U - 1)*U);
+  paper.setAttribute('width', r.width/view.s + 3*U); paper.setAttribute('height', r.height/view.s + 3*U);
+  try { localStorage.setItem(KEY_VIEW, JSON.stringify(view)); } catch(e){}
+}
+
+/* ---------- historique et sauvegarde ---------- */
+function save(){ try { localStorage.setItem(KEY_DOC, lastJSON); } catch(e){} }
+function commit(){
+  const j = JSON.stringify(doc);
+  if (j !== lastJSON){ undoStack.push(lastJSON); if (undoStack.length > 100) undoStack.shift(); redoStack = []; lastJSON = j; save(); }
+  render(); updateCtx();
+}
+function restore(j){ lastJSON = j; doc = JSON.parse(j); sel = null; cur = null; save(); render(); updateCtx(); }
+function undo(){ if (undoStack.length){ redoStack.push(lastJSON); restore(undoStack.pop()); } }
+function redo(){ if (redoStack.length){ undoStack.push(lastJSON); restore(redoStack.pop()); } }
+function validDoc(d){ return d && typeof d === 'object' && Array.isArray(d.parts) && Array.isArray(d.wires); }
+function load(){
+  let d = null, v = null;
+  try { d = JSON.parse(localStorage.getItem(KEY_DOC)); v = JSON.parse(localStorage.getItem(KEY_VIEW)); } catch(e){}
+  doc = validDoc(d) ? d : defaultDoc();
+  if (!doc.board) doc.board = {w:24, h:30, show:true};
+  lastJSON = JSON.stringify(doc);
+  return v;
+}
+
+/* ---------- vue ---------- */
+function toWorld(cx, cy){ const r = svg.getBoundingClientRect(); return {x:(cx - r.left - view.tx)/view.s, y:(cy - r.top - view.ty)/view.s}; }
+function zoomAt(cx, cy, f){
+  const r = svg.getBoundingClientRect(), px = cx - r.left, py = cy - r.top, wx = (px - view.tx)/view.s, wy = (py - view.ty)/view.s;
+  view.s = Math.max(.3, Math.min(8, view.s*f)); view.tx = px - wx*view.s; view.ty = py - wy*view.s; applyView();
+}
+function fit(){
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const add = (a,b,c,d) => { x0 = Math.min(x0,a); y0 = Math.min(y0,b); x1 = Math.max(x1,c); y1 = Math.max(y1,d); };
+  if (doc.board.show) add(-.5, -.5, doc.board.w - .5, doc.board.h - .5);
+  doc.parts.forEach(p => { const b = bboxW(p, geo(p)); add(b.x0, b.y0, b.x1, b.y1 + 1.5); });
+  doc.wires.forEach(w => w.pts.forEach(([x,y]) => add(x,y,x,y)));
+  if (!isFinite(x0)){ x0 = 0; y0 = 0; x1 = 20; y1 = 20; }
+  const r = svg.getBoundingClientRect(), aw = r.width - 24, ah = r.height - 24;
+  const bw = (x1 - x0 + 1)*U, bh = (y1 - y0 + 1)*U;
+  view.s = Math.max(.3, Math.min(4, Math.min(aw/bw, ah/bh)));
+  view.tx = 12 + (aw - bw*view.s)/2 - (x0 - .5)*U*view.s;
+  view.ty = 12 + (ah - bh*view.s)/2 - (y0 - .5)*U*view.s;
+  applyView();
+}
+
+/* ---------- pointeurs : toucher, souris, pincement ---------- */
+const ptrs = new Map(); let gest = null;
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+const mid = (a,b) => ({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
+svg.addEventListener('contextmenu', e => e.preventDefault());
+svg.addEventListener('pointerdown', e => {
+  try { svg.setPointerCapture(e.pointerId); } catch(_){}
+  ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if (ptrs.size === 2){
+    if (gest && gest.moved && (gest.part || gest.vertex)) commit();
+    const [a,b] = [...ptrs.values()], m = mid(a,b), r = svg.getBoundingClientRect();
+    gest = {type:'pinch', d0:dist(a,b) || 1, s0:view.s, wm:{x:(m.x - r.left - view.tx)/view.s, y:(m.y - r.top - view.ty)/view.s}};
+    return;
+  }
+  if (ptrs.size > 2) return;
+  const w = toWorld(e.clientX, e.clientY);
+  gest = {type:'tap', sx:e.clientX, sy:e.clientY, w, target:e.target, moved:false, tx0:view.tx, ty0:view.ty};
+  if (mode !== 'sel') return;
+  if (sel && sel.t === 'wire'){
+    const wr = getWire(sel.id), idx = wr ? wr.pts.findIndex(pt => Math.hypot(pt[0]*U - w.x, pt[1]*U - w.y) < .5*U) : -1;
+    if (idx >= 0) gest.vertex = {wr, idx};
+  }
+  if (!gest.vertex && e.target.closest){
+    const pg = e.target.closest('[data-part]');
+    if (pg && !e.target.closest('[data-wire]')){ const p = getPart(pg.dataset.part); if (p){ gest.part = p; gest.p0 = {x:p.x, y:p.y}; gest.att = attached(p); } }
+  }
+});
+svg.addEventListener('pointermove', e => {
+  if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if (!gest){
+    if (mode === 'wire' && cur && e.pointerType === 'mouse'){
+      const w = toWorld(e.clientX, e.clientY), k = [Math.round(w.x/U), Math.round(w.y/U)];
+      if (!hover || hover[0] !== k[0] || hover[1] !== k[1]){ hover = k; render(); }
+    }
+    return;
+  }
+  if (gest.type === 'pinch'){
+    if (ptrs.size < 2) return;
+    const [a,b] = [...ptrs.values()], m = mid(a,b), r = svg.getBoundingClientRect();
+    view.s = Math.max(.3, Math.min(8, gest.s0*dist(a,b)/gest.d0));
+    view.tx = m.x - r.left - gest.wm.x*view.s; view.ty = m.y - r.top - gest.wm.y*view.s; applyView(); return;
+  }
+  const dx = e.clientX - gest.sx, dy = e.clientY - gest.sy;
+  if (!gest.moved && Math.hypot(dx,dy) > 7) gest.moved = true;
+  if (!gest.moved) return;
+  if (gest.vertex){
+    const w = toWorld(e.clientX, e.clientY), k = [Math.round(w.x/U), Math.round(w.y/U)], pt = gest.vertex.wr.pts[gest.vertex.idx];
+    if (pt[0] !== k[0] || pt[1] !== k[1]){ gest.vertex.wr.pts[gest.vertex.idx] = k; render(); }
+  } else if (gest.part){
+    const nx = gest.p0.x + Math.round(dx/view.s/U), ny = gest.p0.y + Math.round(dy/view.s/U);
+    if (nx !== gest.part.x || ny !== gest.part.y){ gest.part.x = nx; gest.part.y = ny; reattach(gest.part, gest.att); sel = {t:'part', id:gest.part.id}; render(); }
+  } else { view.tx = gest.tx0 + dx; view.ty = gest.ty0 + dy; applyView(); }
+});
+function endPtr(e, cancel){
+  ptrs.delete(e.pointerId);
+  if (!gest) return;
+  if (gest.type === 'pinch'){ if (!ptrs.size) gest = null; return; }
+  const g = gest; gest = null;
+  if (g.moved && (g.part || g.vertex)){ if (g.vertex) cleanWire(g.vertex.wr); commit(); return; }
+  if (!cancel && !g.moved) handleTap(g);
+}
+svg.addEventListener('pointerup', e => endPtr(e, false));
+svg.addEventListener('pointercancel', e => endPtr(e, true));
+svg.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY*.0015)); }, {passive:false});
+
+function handleTap(g){
+  const k = [Math.round(g.w.x/U), Math.round(g.w.y/U)], key = K(...k);
+  if (mode === 'wire'){ wireTap(k); return; }
+  const near = Math.hypot(k[0]*U - g.w.x, k[1]*U - g.w.y) < .46*U;
+  const t = g.target && g.target.closest ? g.target : null;
+  if (near && pinMap.has(key)) sel = {t:'pin', key};
+  else if (t && t.closest('[data-wire]')) sel = {t:'wire', id:t.closest('[data-wire]').dataset.wire};
+  else if (t && t.closest('[data-part]')) sel = {t:'part', id:t.closest('[data-part]').dataset.part};
+  else sel = null;
+  render(); updateCtx();
+}
+
+/* ---------- fils ---------- */
+function cleanWire(w){ w.pts = w.pts.filter((p,i,a) => i === 0 || p[0] !== a[i-1][0] || p[1] !== a[i-1][1]); if (w.pts.length < 2) doc.wires = doc.wires.filter(x => x !== w); }
+function wireTap(k){
+  const key = K(...k);
+  if (!cur) cur = {pts:[k]};
+  else {
+    const l = cur.pts[cur.pts.length-1];
+    if (l[0] === k[0] && l[1] === k[1]){ finishWire(); return; }
+    if (ortho && l[0] !== k[0] && l[1] !== k[1]) cur.pts.push([k[0], l[1]]);
+    cur.pts.push(k);
+    if (pinMap.has(key) || vtxKeys.has(key)){ finishWire(); return; }
+  }
+  render(); updateCtx();
+}
+function finishWire(){
+  if (cur && cur.pts.length >= 2){
+    const w = {id:uid(), c:wireColor, pts:cur.pts};
+    cur = null; hover = null; doc.wires.push(w); cleanWire(w); commit();
+  } else { cur = null; hover = null; render(); updateCtx(); }
+}
+
+/* ---------- modes et pièces ---------- */
+function setMode(m){
+  if (mode === 'wire' && m !== 'wire' && cur) finishWire();
+  mode = m; if (m === 'wire') sel = null;
+  $('#mSel').classList.toggle('on', m === 'sel'); $('#mWire').classList.toggle('on', m === 'wire');
+  render(); updateCtx();
+}
+function centerW(p){ const b = geo(p).body; return tf(p, (b.x0+b.x1)/2, (b.y0+b.y1)/2); }
+function transformPart(id, fn){
+  const p = getPart(id); if (!p) return;
+  const refs = attached(p), c0 = centerW(p);
+  fn(p);
+  const c1 = centerW(p); p.x += Math.round(c0[0]-c1[0]); p.y += Math.round(c0[1]-c1[1]);
+  reattach(p, refs); commit();
+}
+function addPart(type, extra){
+  const r = svg.getBoundingClientRect(), c = toWorld(r.left + r.width/2, r.top + r.height/2);
+  const label = BUILTIN[type] ? BUILTIN[type].label : (LIB.get(type).def.label || LIB.get(type).def.name);
+  const p = Object.assign({id:uid(), type, x:0, y:0, r:0, f:false, label, names:[]}, extra || {});
+  const b = geo(p).body;
+  p.x = Math.round(c.x/U - (b.x0+b.x1)/2); p.y = Math.round(c.y/U - (b.y0+b.y1)/2);
+  doc.parts.push(p); closeDlg(); setMode('sel'); sel = {t:'part', id:p.id}; commit();
+}
+
+/* ---------- panneau contextuel (au-dessus des modes) ---------- */
+const swatches = active => '<div class="rowb">' + COLORS.map(c => `<button class="swatch ${c === active ? 'on' : ''}" style="background:${c}" data-a="color" data-v="${c}" aria-label="Couleur ${c}"></button>`).join('') + '</div>';
+function updateCtx(){
+  let h = '';
+  if (mode === 'wire'){
+    h += swatches(wireColor) + `<div class="rowb"><button class="chip ${ortho ? 'on' : ''}" data-a="ortho">⌐ Angles droits</button>`;
+    if (cur) h += `<button class="btn" data-a="pop" title="Retirer le dernier point">⌫</button><button class="btn primary" data-a="finish">✓ Terminer</button><button class="btn" data-a="cancel">✕</button>`;
+    h += `</div><div class="info">${cur ? `${cur.pts.length} point(s) — touche les coudes, puis une broche ou un fil pour terminer (ou retouche le dernier point).` : 'Touche un point de départ : une broche ou un trou.'}</div>`;
+  } else if (sel && sel.t === 'part'){
+    const p = getPart(sel.id);
+    if (p) h += `<div class="info"><b>${esc(p.label)}</b> — ${esc(partName(p))}</div>
+      <div class="rowb"><button class="btn" data-a="rot" title="Pivoter (R)">⟳</button><button class="btn" data-a="flip" title="Retourner (F)">⇋</button><button class="btn" data-a="edit">✎ Modifier</button><button class="btn" data-a="dup" title="Dupliquer">⧉</button><button class="btn" data-a="delpart" title="Supprimer">🗑</button></div>`;
+  } else if (sel && sel.t === 'wire'){
+    const w = getWire(sel.id);
+    if (w){
+      const pins = netPins(netKeys(K(...w.pts[0])));
+      h += swatches(w.c) + `<div class="rowb"><button class="btn" data-a="delwire">🗑 Supprimer le fil</button></div>`;
+      h += `<div class="info">Réseau : ${pins.length ? pins.map(e => `<b>${pinTitle(e)}</b>`).join(' ↔ ') : 'aucune broche'} · glisse un point du fil pour le déplacer</div>`;
+      netWarnings(pins).forEach(t => h += `<div class="warn">${t}</div>`);
+    }
+  } else if (sel && sel.t === 'pin'){
+    const here = pinMap.get(sel.key) || [], pins = netPins(netKeys(sel.key));
+    here.forEach(e => {
+      const def = LIB.get(e.p.type), note = (def && def.def.notes && def.def.notes[e.q.name]) || POWER_NOTE[e.q.name] || '';
+      h += `<div class="info"><b>${pinTitle(e)}</b> — ${(TYPES[e.q.type] || TYPES.gpio).t}${note ? ' — ' + esc(note) : ''}</div>`;
+    });
+    const others = pins.filter(e => K(e.x,e.y) !== sel.key);
+    h += `<div class="info">${others.length ? 'Relié à : ' + others.map(e => `<b>${pinTitle(e)}</b>`).join(', ') : 'Aucune connexion'}</div>`;
+    netWarnings(pins).forEach(t => h += `<div class="warn">${t}</div>`);
+  } else h += `<div class="info">Touche une pièce, une broche ou un fil · glisse pour déplacer · pince pour zoomer</div>`;
+  $('#ctx').innerHTML = h;
+}
+$('#ctx').addEventListener('click', e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const id = sel && sel.id;
+  switch (b.dataset.a){
+    case 'color':
+      wireColor = b.dataset.v;
+      if (sel && sel.t === 'wire' && getWire(id)){ getWire(id).c = wireColor; commit(); } else { render(); updateCtx(); }
+      break;
+    case 'ortho': ortho = !ortho; updateCtx(); break;
+    case 'pop': if (cur){ cur.pts.pop(); if (!cur.pts.length) cur = null; render(); updateCtx(); } break;
+    case 'finish': finishWire(); break;
+    case 'cancel': cur = null; hover = null; render(); updateCtx(); break;
+    case 'rot': transformPart(id, p => p.r = (p.r + 1) % 4); break;
+    case 'flip': transformPart(id, p => p.f = !p.f); break;
+    case 'edit': sheetEdit(id); break;
+    case 'dup': { const p = getPart(id), bb = bboxW(p, geo(p)), q = JSON.parse(JSON.stringify(p));
+      q.id = uid(); q.x += Math.ceil(bb.x1 - bb.x0) + 1; doc.parts.push(q); sel = {t:'part', id:q.id}; commit(); break; }
+    case 'delpart': doc.parts = doc.parts.filter(p => p.id !== id); sel = null; commit(); break;
+    case 'delwire': doc.wires = doc.wires.filter(w => w.id !== id); sel = null; commit(); break;
+  }
+});
+
+/* ---------- feuilles ---------- */
+const dlg = $('#dlg');
+let dlgHandler = null;
+function openDlg(html, handler){
+  $('#dlgIn').innerHTML = '<div class="grab"></div>' + html; dlgHandler = handler || null;
+  if (!dlg.open) dlg.showModal();
+}
+function closeDlg(){ if (dlg.open) dlg.close(); }
+dlg.addEventListener('click', e => {
+  if (e.target === dlg){ closeDlg(); return; }
+  const b = e.target.closest('[data-a]'); if (b && dlgHandler) dlgHandler(b.dataset.a, b);
+});
+const typeLegend = () => '<div class="legend">' + Object.values(TYPES).map(t => `<span><i style="background:${t.f}"></i>${t.t}</span>`).join('') + '</div>';
+
+function sheetAdd(){
+  const cats = new Map();
+  [...LIB.entries()].sort((a,b) => (a[1].src === b[1].src ? 0 : a[1].src === 'file' ? -1 : 1)).forEach(([id, e]) => {
+    const c = e.src === 'local' ? 'Mes composants' : (e.def.category || 'Divers');
+    if (!cats.has(c)) cats.set(c, []); cats.get(c).push([id, e.def]);
+  });
+  let h = '<h2>Ajouter</h2>';
+  cats.forEach((list, c) => {
+    h += `<h3>${esc(c)}</h3><div class="grid">` + list.map(([id, d]) => `<button class="btn" data-a="add" data-id="${esc(id)}"><b>${esc(d.name)}</b><small>${esc(d.description || '')}</small></button>`).join('') + '</div>';
+  });
+  h += `<h3>Connecteurs Dupont</h3><div class="form"><div class="three">
+      <div><label class="lbl" for="hn">Broches</label><input type="number" id="hn" min="1" max="40" value="4" inputmode="numeric"></div>
+      <div><label class="lbl" for="hr">Rangées</label><select id="hr"><option value="1">1</option><option value="2">2</option></select></div><div></div></div></div>
+    <div class="grid" style="margin-top:8px"><button class="btn" data-a="hdrM"><b>Barrette mâle</b><small>picots</small></button><button class="btn" data-a="hdrF"><b>Barrette femelle</b><small>douilles</small></button></div>
+    <h3>Module générique</h3><div class="form">
+      <label class="lbl" for="glabel">Nom</label><input type="text" id="glabel" value="Module">
+      <div class="three"><div><label class="lbl" for="gn">Broches/rangée</label><input type="number" id="gn" min="1" max="40" value="4" inputmode="numeric"></div>
+      <div><label class="lbl" for="gr">Rangées</label><select id="gr"><option value="1">1</option><option value="2">2</option></select></div>
+      <div><label class="lbl" for="gg">Écart (2 rangées)</label><input type="number" id="gg" min="1" max="30" value="5" inputmode="numeric"></div></div>
+      <label class="lbl" for="gnames">Noms des broches (séparés par des virgules)</label><input type="text" id="gnames" placeholder="VCC, GND, SCL, SDA"></div>
+    <div class="btns"><button class="btn primary" data-a="mod">Ajouter le module</button></div>` + typeLegend();
+  openDlg(h, (a, b) => {
+    if (a === 'add') addPart(b.dataset.id);
+    if (a === 'hdrM' || a === 'hdrF'){
+      const n = clampInt($('#hn').value, 1, 40), rows = clampInt($('#hr').value, 1, 2);
+      addPart(a, {n, rows, label:(a === 'hdrM' ? 'Mâle ' : 'Femelle ') + (rows === 2 ? '2×' : '1×') + n});
+    }
+    if (a === 'mod'){
+      const names = $('#gnames').value.split(/[,\n]/).map(s => s.trim());
+      addPart('mod', {n:clampInt($('#gn').value,1,40), rows:clampInt($('#gr').value,1,2), gap:clampInt($('#gg').value,1,30),
+        label:$('#glabel').value.trim() || 'Module', names:names.some(Boolean) ? names : []});
+    }
+  });
+}
+function sheetEdit(id){
+  const p = getPart(id); if (!p) return;
+  const g = geo(p), param = p.type === 'hdrM' || p.type === 'hdrF' || p.type === 'mod';
+  let h = `<h2>Modifier</h2><div class="form"><label class="lbl" for="eLabel">Nom</label><input type="text" id="eLabel" value="${esc(p.label)}">`;
+  if (param) h += `<div class="three"><div><label class="lbl" for="eN">Broches${p.type === 'mod' ? '/rangée' : ''}</label><input type="number" id="eN" min="1" max="40" value="${p.n || 4}" inputmode="numeric"></div>
+      <div><label class="lbl" for="eRows">Rangées</label><select id="eRows"><option value="1" ${(p.rows || 1) === 1 ? 'selected' : ''}>1</option><option value="2" ${p.rows === 2 ? 'selected' : ''}>2</option></select></div>
+      <div>${p.type === 'mod' ? `<label class="lbl" for="eGap">Écart</label><input type="number" id="eGap" min="1" max="30" value="${p.gap || 5}" inputmode="numeric">` : ''}</div></div>`;
+  h += `<label class="lbl" for="eNames">Noms des broches (virgules, dans l'ordre)</label><textarea id="eNames" spellcheck="false">${esc(g.pins.map(q => q.name).join(', '))}</textarea></div>`;
+  if (!param) h += `<p>Ordre : celui du fichier du composant. Si la carte est montée à l'envers, utilise plutôt ⇋.</p>`;
+  h += `<div class="btns">${p.type === 'mod' ? '<button class="btn" data-a="tocomp">Enregistrer comme composant</button>' : ''}<button class="btn" data-a="reset">Noms par défaut</button><button class="btn primary" data-a="apply">Appliquer</button></div>`;
+  openDlg(h, a => {
+    if (a === 'reset'){ p.names = []; closeDlg(); commit(); }
+    if (a === 'apply' || a === 'tocomp'){
+      const refs = attached(p);
+      p.label = $('#eLabel').value.trim() || p.label;
+      if (param){ p.n = clampInt($('#eN').value,1,40); p.rows = clampInt($('#eRows').value,1,2); if (p.type === 'mod') p.gap = clampInt($('#eGap').value,1,30); }
+      const def = geo(Object.assign({}, p, {names:[]})).pins.map(q => q.name);
+      const arr = $('#eNames').value.split(/[,\n]/).map(s => s.trim());
+      p.names = arr.some((v,i) => v && v !== def[i]) ? arr.slice(0, def.length) : [];
+      reattach(p, refs.filter(r => r[2] < def.length));
+      if (a === 'tocomp') moduleToComponent(p); else { closeDlg(); commit(); }
+    }
+  });
+}
+/* Module générique → composant enregistré dans le navigateur, et fichier .js à placer dans le dépôt. */
+function moduleToComponent(p){
+  const g = geo(p), names = g.pins.map(q => q.name + (q.type === 'power' || q.type === 'gnd' ? ':' + q.type : ''));
+  const n = p.n || 4;
+  let id = slug(p.label); while (LIB.has(id) && LIB.get(id).src === 'file') id += '-perso';
+  const def = {id, name:p.label, label:p.label, category:'Mes composants', description:(p.rows === 2 ? '2×' : '1×') + n + ' broches', color:'#2e6b34', body:g.body};
+  if ((p.rows || 1) === 1) def.rows = [{y:0, pins:names}];
+  else def.columns = [{x:0, pins:names.slice(0, n)}, {x:p.gap || 5, pins:names.slice(n)}];
+  register(def, 'local'); saveLocalLib();
+  p.type = id; p.names = []; delete p.n; delete p.rows; delete p.gap;
+  commit(); sheetComponentFile(id);
+}
+function sheetComponentFile(id){
+  const e = LIB.get(id), file = id.replace(/-/g, '_') + '.js', txt = componentFile(e.def);
+  openDlg(`<h2>${esc(e.def.name)}</h2><p>Enregistré dans ce navigateur. Pour l'ajouter au dépôt, place ce fichier dans <code>code/protoboard/components/${esc(file)}</code> et ajoute sa ligne <code>&lt;script src&gt;</code> dans la page.</p>
+    <textarea id="cfTxt" readonly spellcheck="false" style="min-height:220px">${esc(txt)}</textarea>
+    <div class="btns"><button class="btn" data-a="copy">Copier</button><button class="btn primary" data-a="dl">Télécharger ${esc(file)}</button></div>`,
+    a => { if (a === 'copy') copyText(txt); if (a === 'dl') download(file, txt, 'text/javascript'); });
+}
+function sheetLib(){
+  const local = [...LIB.entries()].filter(([,e]) => e.src === 'local'), files = [...LIB.entries()].filter(([,e]) => e.src === 'file');
+  let h = '<h2>Composants</h2><p>Les fichiers de <code>protoboard/components/</code> sont chargés avec la page. Ceux que tu importes ici restent dans ce navigateur.</p><h3>Mes composants</h3>';
+  h += local.length ? local.map(([id, e]) => `<div class="lib"><div class="grow"><b>${esc(e.def.name)}</b><small>${esc(id)}</small></div><button class="btn" data-a="file" data-id="${esc(id)}">.js</button><button class="btn" data-a="del" data-id="${esc(id)}">🗑</button></div>`).join('')
+    : '<p>Aucun pour l\'instant. Crée un module générique puis « Enregistrer comme composant », ou importe un fichier.</p>';
+  h += `<h3>Importer un composant</h3><div class="form"><textarea id="ciTxt" spellcheck="false" placeholder="Colle le contenu d'un fichier .js de composant (ou son JSON)…"></textarea>
+    <input type="file" id="ciFile" accept=".js,.json,text/javascript,application/json,text/plain" style="margin-top:8px"></div>
+    <div class="btns"><button class="btn primary" data-a="import">Importer</button></div>
+    <h3>Fichiers chargés (${files.length})</h3>` + files.map(([id, e]) => `<div class="lib"><div class="grow"><b>${esc(e.def.name)}</b><small>${esc(e.def.category || '')} · ${esc(id)}</small></div><button class="btn" data-a="file" data-id="${esc(id)}">.js</button></div>`).join('');
+  openDlg(h, (a, b) => {
+    if (a === 'file') sheetComponentFile(b.dataset.id);
+    if (a === 'del'){ const used = doc.parts.some(p => p.type === b.dataset.id);
+      if (used && !b.dataset.armed){ b.dataset.armed = 1; b.textContent = 'Utilisé : supprimer ?'; return; }
+      LIB.delete(b.dataset.id); saveLocalLib(); render(); sheetLib(); }
+    if (a === 'import'){
+      try {
+        const defs = parseComponentText($('#ciTxt').value); if (!defs.length) throw new Error('aucun composant trouvé');
+        const ids = defs.map(d => register(d, 'local')); saveLocalLib(); render();
+        toast(`Importé : ${ids.join(', ')}`); sheetLib();
+      } catch(err){ toast('Composant non reconnu : ' + err.message, true); }
+    }
+  });
+  $('#ciFile').addEventListener('change', ev => { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { $('#ciTxt').value = r.result; }; r.readAsText(f); });
+}
+function nets(){
+  buildIndex();
+  const groups = new Map();
+  pinMap.forEach((list, k) => { const r = find(k); if (!groups.has(r)) groups.set(r, []); list.forEach(e => groups.get(r).push(e)); });
+  return [...groups.values()].filter(g => g.length >= 2);
+}
+function sheetNets(){
+  const N = nets();
+  const txt = N.map((g,i) => `${i+1}. ` + g.map(e => `${e.p.label} ${e.q.name}`).join(' <-> ')).join('\n');
+  let h = '<h2>Connexions</h2>';
+  h += N.length ? N.map((g,i) => `<div class="net"><b>${i+1}.</b> ${g.map(pinTitle).join(' ↔ ')}${netWarnings(g).map(t => `<div class="warn">${t}</div>`).join('')}</div>`).join('') : '<p>Aucune connexion pour l\'instant.</p>';
+  h += `<div class="btns"><button class="btn" data-a="copy">Copier la liste</button></div>`;
+  openDlg(h, a => { if (a === 'copy') copyText(txt); });
+}
+/* Export : le plan, plus les définitions des composants qu'il utilise (pour l'ouvrir ailleurs). */
+function exportText(){
+  const used = {};
+  doc.parts.forEach(p => { const e = LIB.get(p.type); if (e) used[p.type] = e.def; });
+  return JSON.stringify({app:'ProtoBoardDesigner', version:1, board:doc.board, parts:doc.parts, wires:doc.wires, components:used}, null, 1);
+}
+function sheetExport(){
+  const txt = exportText();
+  openDlg(`<h2>Exporter</h2><p>Le plan et les définitions des composants utilisés.</p><textarea readonly spellcheck="false" style="min-height:200px">${esc(txt)}</textarea>
+    <div class="btns"><button class="btn" data-a="copy">Copier</button><button class="btn primary" data-a="dl">Télécharger</button></div>`,
+    a => { if (a === 'copy') copyText(txt); if (a === 'dl') download('protoboard-plan.json', txt, 'application/json'); });
+}
+function sheetImport(){
+  openDlg(`<h2>Importer un plan</h2><p>Colle un export JSON ou choisis un fichier. Le plan actuel est remplacé (↶ pour revenir).</p>
+    <textarea id="imTxt" spellcheck="false" placeholder='{"app":"ProtoBoardDesigner",…}'></textarea>
+    <div class="btns"><input type="file" id="imFile" accept=".json,application/json,text/plain"><button class="btn primary" data-a="go">Charger</button></div>`, a => {
+    if (a !== 'go') return;
+    try {
+      const d = JSON.parse($('#imTxt').value); if (!validDoc(d)) throw 0;
+      let added = 0;
+      Object.values(d.components || {}).forEach(c => { if (c && c.id && !LIB.has(slug(c.id))){ try { register(c, 'local'); added++; } catch(e){} } });
+      if (added) saveLocalLib();
+      doc = {board:d.board || {w:24,h:30,show:true}, parts:d.parts, wires:d.wires};
+      sel = null; cur = null; closeDlg(); commit(); fit();
+      toast(added ? `Plan chargé (${added} composant(s) ajouté(s) à « Mes composants »).` : 'Plan chargé.');
+    } catch(e){ toast('Texte non reconnu.', true); }
+  });
+  $('#imFile').addEventListener('change', ev => { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { $('#imTxt').value = r.result; }; r.readAsText(f); });
+}
+function sheetBoard(){
+  const B = doc.board;
+  openDlg(`<h2>Plaque</h2><div class="form"><div class="three">
+    <div><label class="lbl" for="bw">Trous en largeur</label><input type="number" id="bw" min="2" max="200" value="${B.w}" inputmode="numeric"></div>
+    <div><label class="lbl" for="bh">Trous en hauteur</label><input type="number" id="bh" min="2" max="200" value="${B.h}" inputmode="numeric"></div>
+    <div><label class="lbl" for="bs">Afficher</label><select id="bs"><option value="1" ${B.show ? 'selected' : ''}>Oui</option><option value="0" ${B.show ? '' : 'selected'}>Non</option></select></div></div></div>
+    <p style="margin-top:10px">Repères : 5 × 7 cm ≈ 18 × 24 trous · 7 × 9 cm ≈ 24 × 30 trous.</p>
+    <div class="btns"><button class="btn primary" data-a="ok">Appliquer</button></div>`, a => {
+    if (a === 'ok'){ doc.board = {w:clampInt($('#bw').value,2,200), h:clampInt($('#bh').value,2,200), show:$('#bs').value === '1'}; closeDlg(); commit(); }
+  });
+}
+function sheetHelp(){
+  openDlg(`<h2>Aide</h2><div class="help">
+    <p><b>Sélection</b> : touche une pièce puis glisse-la, elle s'aligne sur les trous. Les fils accrochés à ses broches suivent. ⟳ pivote, ⇋ retourne (module monté à l'envers).</p>
+    <p><b>Fil</b> : touche un départ, puis chaque coude ; le fil se termine sur une broche ou sur un point d'un autre fil. « Angles droits » ajoute le coude tout seul.</p>
+    <p><b>Broche</b> : touche-la pour voir son rôle, ses mises en garde et tout ce qui y est relié. Deux fils ne sont reliés que s'ils partagent un point (une soudure) : se croiser ne suffit pas. Une barrette posée sur les broches d'un module est connectée.</p>
+    <p><b>Composants</b> : un fichier par composant dans <code>code/protoboard/components/</code>. Pour les tiens sans toucher au dépôt : module générique → ✎ → « Enregistrer comme composant », ou menu → Composants → Importer.</p>
+    <p><b>Clavier</b> : W fil, R pivoter, F retourner, Suppr effacer, Échap annuler, Ctrl+Z / Ctrl+Maj+Z.</p>
+    <p>Le plan est gardé dans ce navigateur ; Exporter / Importer pour le sauvegarder ou le passer sur un autre appareil.</p></div>` + typeLegend());
+}
+function sheetMenu(){
+  openDlg(`<button class="item" data-a="board"><span class="ic">▦</span> Plaque<span class="sw">${doc.board.w} × ${doc.board.h}</span></button>
+    <button class="item" data-a="labels"><span class="ic">🏷</span> Noms des broches<span class="sw">${showLabels ? 'affichés' : 'masqués'}</span></button>
+    <button class="item" data-a="nets"><span class="ic">🔗</span> Liste des connexions</button>
+    <button class="item" data-a="lib"><span class="ic">🧩</span> Composants</button>
+    <button class="item" data-a="export"><span class="ic">⬇</span> Exporter</button>
+    <button class="item" data-a="import"><span class="ic">⬆</span> Importer</button>
+    <button class="item" data-theme-toggle><span class="ic" data-theme-icon></span> Thème<span class="sw" data-theme-name></span></button>
+    <button class="item" data-a="help"><span class="ic">?</span> Aide</button>
+    <button class="item" data-a="new"><span class="ic">🗑</span> Nouveau plan</button>`, (a, b) => {
+    if (a === 'board') sheetBoard();
+    if (a === 'labels'){ showLabels = !showLabels; closeDlg(); render(); }
+    if (a === 'nets') sheetNets();
+    if (a === 'lib') sheetLib();
+    if (a === 'export') sheetExport();
+    if (a === 'import') sheetImport();
+    if (a === 'help') sheetHelp();
+    if (a === 'new'){
+      if (!b.dataset.armed){ b.dataset.armed = 1; b.lastChild.textContent = ' Confirmer : tout effacer ?'; return; }
+      doc = {board:Object.assign({}, doc.board), parts:[], wires:[]}; sel = null; cur = null; closeDlg(); commit(); fit();
+    }
+  });
+  if (window.WebAppsTheme) WebAppsTheme.set(WebAppsTheme.get());   // dessine l'icône du thème dans la feuille
+}
+
+/* ---------- barres et clavier ---------- */
+$('#bUndo').onclick = undo; $('#bRedo').onclick = redo; $('#bFit').onclick = fit; $('#bMenu').onclick = sheetMenu;
+$('#bAdd').onclick = sheetAdd; $('#mSel').onclick = () => setMode('sel'); $('#mWire').onclick = () => setMode('wire');
+document.addEventListener('keydown', e => {
+  if (dlg.open || (e.target.matches && e.target.matches('input,textarea,select'))) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Escape'){ if (cur){ cur = null; hover = null; } else sel = null; render(); updateCtx(); }
+  else if (e.key === 'Enter' && cur) finishWire();
+  else if (e.key === 'w') setMode(mode === 'wire' ? 'sel' : 'wire');
+  else if (sel && sel.t === 'part' && e.key === 'r') transformPart(sel.id, p => p.r = (p.r + 1) % 4);
+  else if (sel && sel.t === 'part' && e.key === 'f') transformPart(sel.id, p => p.f = !p.f);
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && sel){
+    if (sel.t === 'part') doc.parts = doc.parts.filter(p => p.id !== sel.id);
+    else if (sel.t === 'wire') doc.wires = doc.wires.filter(w => w.id !== sel.id);
+    else return;
+    sel = null; commit();
+  }
+});
+window.addEventListener('resize', applyView);
+
+/* ---------- démarrage ---------- */
+loadLocalLib();
+const savedView = load();
+setMode('sel');
+if (savedView && savedView.s){ view = savedView; applyView(); } else fit();
+const missing = [...new Set(doc.parts.filter(p => !BUILTIN[p.type] && !LIB.has(p.type)).map(p => p.type))];
+if (missing.length) toast('Composant(s) introuvable(s) : ' + missing.join(', '), true);
+</script>
+</body>
+</html>

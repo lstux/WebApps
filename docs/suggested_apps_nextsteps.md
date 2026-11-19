@@ -10,6 +10,7 @@ Liste des outils envisagés pour le repo. Chaque outil reste une page HTML auton
 | TODO (arbre de tâches) | `code/01_todo.html` | [TODO.md](TODO.md) |
 | Convertisseur unités et devises | `code/03_units_converter.html` | [CONVERTISSEUR.md](CONVERTISSEUR.md) |
 | Cartes Leaflet (gestionnaire de cartes) | `code/04_leaflet_manager.html` | [CARTES.md](CARTES.md) |
+| ProtoBoardDesigner (plan de câblage sur plaque à pastilles) | `code/06_protoboard_designer.html` | [PROTOBOARD.md](PROTOBOARD.md) |
 | Style commun | `code/common.css` | [STYLE.md](STYLE.md) |
 
 ## En cours
