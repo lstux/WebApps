@@ -33,7 +33,8 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 .topbar-in { max-width:none; gap:8px; }
 .topbar-in .iconbtn { --icon-size:38px; }
 #subtitle { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-@media (max-width:480px) { .topbar-in .appicon { display:none; } .topbar .subtitle { font-size:12px; } .brand { font-size:17px; } .topbar-in .iconbtn { --icon-size:34px; font-size:18px; } }
+@media (max-width:480px) { .topbar-in { gap:5px; } .topbar-in .appicon { width:30px; height:30px; border-radius:9px; } .topbar-in .grow { min-width:0; } .brand { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .topbar .subtitle { font-size:12px; } .brand { font-size:16px; } .topbar-in .iconbtn { --icon-size:32px; font-size:18px; } }
+@media (max-width:380px) { .brand { font-size:14px; } .topbar-in .iconbtn { --icon-size:30px; } }
 
 .stage { position:relative; flex:1; min-height:0; }
 #svg { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
