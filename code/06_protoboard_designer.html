@@ -157,6 +157,19 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 <script src="protoboard/components/ads1115.js"></script>
 <script src="protoboard/components/ds3231.js"></script>
 <script src="protoboard/components/oled_ssd1306_i2c.js"></script>
+<script src="protoboard/components/bouton_poussoir_6mm.js"></script>
+<script src="protoboard/components/buzzer.js"></script>
+<script src="protoboard/components/encodeur_ky040.js"></script>
+<script src="protoboard/components/interrupteur_3_pattes.js"></script>
+<script src="protoboard/components/joystick_analogique.js"></script>
+<script src="protoboard/components/led_rgb_5mm.js"></script>
+<script src="protoboard/components/mosfet_n_to220.js"></script>
+<script src="protoboard/components/optocoupleur_pc817.js"></script>
+<script src="protoboard/components/potentiometre.js"></script>
+<script src="protoboard/components/regulateur_ams1117.js"></script>
+<script src="protoboard/components/regulateur_lm7805.js"></script>
+<script src="protoboard/components/transistor_npn_to92.js"></script>
+<script src="protoboard/components/transistor_pnp_to92.js"></script>
 
 <script>
 'use strict';
@@ -182,7 +195,16 @@ const POWER_NOTE = {'5V':'Alim 5 V (USB) — entrée ou sortie', '3V3':'Sortie 3
 const BUILTIN = {
   hdrM:{name:'Barrette mâle', label:'Mâle'},
   hdrF:{name:'Barrette femelle', label:'Femelle'},
-  mod:{name:'Module générique', label:'Module'}
+  mod:{name:'Module générique', label:'Module'},
+  axial:{name:'Pièce à 2 pattes', label:'R'}
+};
+/* Pièces à deux pattes, écart réglable : kind -> nom, étiquette, broches, couleur du corps. */
+const AXIAL = {
+  res:{name:'Résistance', label:'R', pins:['1','2'], fill:'#d9b98a', band:'#8a4b1c', sp:4},
+  diode:{name:'Diode', label:'D', pins:['A','K'], fill:'#1c1c1c', band:'#d8d8d8', sp:4},
+  cap:{name:'Condensateur céramique', label:'C', pins:['1','2'], fill:'#e0a030', sp:2},
+  elec:{name:'Condensateur chimique', label:'C', pins:['+','-'], fill:'#1d3557', band:'#c9d1db', sp:2},
+  led:{name:'LED', label:'LED', pins:['A','K'], fill:'#e5484d', sp:2}
 };
 
 /* ---------- utilitaires ---------- */
@@ -305,6 +327,12 @@ function geo(p){
     for (let i = 0; i < n; i++) for (let r = 0; r < rows; r++)
       pins.push({name:String(rows === 1 ? i+1 : i*2+r+1), type:'gpio', x:i, y:r, d:[0, r ? 1 : -1]});
     g = {pins, body:{x0:-.5, x1:n-.5, y0:-.5, y1:rows-.5}, deco:[], style:p.type === 'hdrM' ? 'male' : 'female', color:'#262626', out:true};
+  } else if (p.type === 'axial'){
+    const a = AXIAL[p.kind] || AXIAL.res, sp = Math.max(1, p.n || a.sp), bw = Math.max(.6, sp - 1.6), x0 = (sp - bw)/2, deco = [];
+    deco.push({shape:'rect', x:x0, y:-.45, w:bw, h:.9, fill:a.fill});
+    if (a.band) deco.push({shape:'rect', x:p.kind === 'res' ? x0 + bw*.2 : x0 + bw - Math.min(.3, bw*.25), y:-.45, w:Math.min(.3, bw*.25), h:.9, fill:a.band});
+    g = {pins:a.pins.map((nm, i) => ({name:nm, type:nm === 'K' || nm === '-' ? 'gnd' : 'gpio', x:i ? sp : 0, y:0, d:[0,1]})),
+      body:{x0:-.5, x1:sp + .5, y0:-.6, y1:.6}, deco, style:'round', color:'#0000', out:true};
   } else if (p.type === 'mod'){
     const n = p.n || 4, rows = p.rows || 1, gap = p.gap || 5, pins = [];
     if (rows === 1){
@@ -794,6 +822,10 @@ function sheetAdd(){
       <div><label class="lbl" for="hn">Broches</label><input type="number" id="hn" min="1" max="40" value="4" inputmode="numeric"></div>
       <div><label class="lbl" for="hr">Rangées</label><select id="hr"><option value="1">1</option><option value="2">2</option></select></div><div></div></div></div>
     <div class="grid" style="margin-top:8px"><button class="btn" data-a="hdrM"><b>Barrette mâle</b><small>picots</small></button><button class="btn" data-a="hdrF"><b>Barrette femelle</b><small>douilles</small></button></div>
+    <h3>Pièces à 2 pattes</h3><div class="form"><div class="three">
+      <div><label class="lbl" for="ak">Type</label><select id="ak">${Object.entries(AXIAL).map(([k,a]) => `<option value="${k}">${a.name}</option>`).join('')}</select></div>
+      <div><label class="lbl" for="asp">Écart (pas)</label><input type="number" id="asp" min="1" max="30" value="4" inputmode="numeric"></div><div></div></div></div>
+    <div class="btns"><button class="btn primary" data-a="axial">Ajouter la pièce</button></div>
     <h3>Module générique</h3><div class="form">
       <label class="lbl" for="glabel">Nom</label><input type="text" id="glabel" value="Module">
       <div class="three"><div><label class="lbl" for="gn">Broches/rangée</label><input type="number" id="gn" min="1" max="40" value="4" inputmode="numeric"></div>
@@ -806,6 +838,10 @@ function sheetAdd(){
     if (a === 'hdrM' || a === 'hdrF'){
       const n = clampInt($('#hn').value, 1, 40), rows = clampInt($('#hr').value, 1, 2);
       addPart(a, {n, rows, label:(a === 'hdrM' ? 'Mâle ' : 'Femelle ') + (rows === 2 ? '2×' : '1×') + n});
+    }
+    if (a === 'axial'){
+      const kind = $('#ak').value, ax = AXIAL[kind];
+      addPart('axial', {kind, n:clampInt($('#asp').value, 1, 30), label:ax.label});
     }
     if (a === 'mod'){
       const names = $('#gnames').value.split(/[,\n]/).map(s => s.trim());
@@ -822,7 +858,8 @@ function sheetEdit(id){
       <div><label class="lbl" for="eRows">Rangées</label><select id="eRows"><option value="1" ${(p.rows || 1) === 1 ? 'selected' : ''}>1</option><option value="2" ${p.rows === 2 ? 'selected' : ''}>2</option></select></div>
       <div>${p.type === 'mod' ? `<label class="lbl" for="eGap">Écart</label><input type="number" id="eGap" min="1" max="30" value="${p.gap || 5}" inputmode="numeric">` : ''}</div></div>`;
   h += `<label class="lbl" for="eNames">Noms des broches (virgules, dans l'ordre)</label><textarea id="eNames" spellcheck="false">${esc(g.pins.map(q => q.name).join(', '))}</textarea></div>`;
-  if (!param) h += `<p>Ordre : celui du fichier du composant. Si la carte est montée à l'envers, utilise plutôt ⇋.</p>`;
+  if (p.type === 'axial') h = h.replace('<label class="lbl" for="eNames"', `<div class="three"><div><label class="lbl" for="eSp">Écart (pas)</label><input type="number" id="eSp" min="1" max="30" value="${p.n || (AXIAL[p.kind] || AXIAL.res).sp}" inputmode="numeric"></div><div></div><div></div></div><label class="lbl" for="eNames"`);
+  if (!param && p.type !== 'axial') h += `<p>Ordre : celui du fichier du composant. Si la carte est montée à l'envers, utilise plutôt ⇋.</p>`;
   h += `<div class="btns">${p.type === 'mod' ? '<button class="btn" data-a="tocomp">Enregistrer comme composant</button>' : ''}<button class="btn" data-a="reset">Noms par défaut</button><button class="btn primary" data-a="apply">Appliquer</button></div>`;
   openDlg(h, a => {
     if (a === 'reset'){ p.names = []; closeDlg(); commit(); }
@@ -830,6 +867,7 @@ function sheetEdit(id){
       const refs = attached(p);
       p.label = $('#eLabel').value.trim() || p.label;
       if (param){ p.n = clampInt($('#eN').value,1,40); p.rows = clampInt($('#eRows').value,1,2); if (p.type === 'mod') p.gap = clampInt($('#eGap').value,1,30); }
+      if (p.type === 'axial') p.n = clampInt($('#eSp').value, 1, 30);
       const def = geo(Object.assign({}, p, {names:[]})).pins.map(q => q.name);
       const arr = $('#eNames').value.split(/[,\n]/).map(s => s.trim());
       p.names = arr.some((v,i) => v && v !== def[i]) ? arr.slice(0, def.length) : [];
