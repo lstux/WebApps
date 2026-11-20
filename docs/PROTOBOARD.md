@@ -80,7 +80,7 @@ Les brochages fournis sont vus de dessus, USB en haut : vérifie-les sur ta cart
 
 ## Synchronisation (facultative)
 
-Menu ☰ → **Synchronisation** : serveur (`https://store.lslinux.org` par défaut), email et mot de passe d'un compte PocketBase créé par l'administrateur. Une fois connecté, le plan en cours, chaque circuit enregistré et « Mes composants » sont copiés sur le serveur et retrouvés sur tes autres appareils. La synchro tourne à l'ouverture, au retour en ligne, quand l'onglet redevient visible et à la demande (« Synchroniser maintenant »). La dernière modification gagne, clé par clé ; si le plan en cours change à distance, l'app le remplace et propose ↶ pour revenir. Le mot de passe n'est pas gardé, seulement un jeton. Sans connexion, rien ne change. Détails : [SYNCHRO.md](SYNCHRO.md) ; le module est [code/pbstore.js](../code/pbstore.js).
+Menu ☰ → **Synchronisation** : serveur (`https://store.lslinux.org` par défaut), email et mot de passe d'un compte PocketBase créé par l'administrateur. Une fois connecté, le plan en cours, chaque circuit enregistré et « Mes composants » sont copiés sur le serveur et retrouvés sur tes autres appareils. La synchro tourne à l'ouverture, au retour en ligne, quand l'onglet redevient visible et à la demande (« Synchroniser maintenant »). La dernière modification gagne, clé par clé ; si le plan en cours change à distance, l'app le remplace et propose ↶ pour revenir. Le mot de passe n'est pas gardé, seulement un jeton, partagé avec TODO et la Liseuse (une seule connexion pour les trois). Sans connexion, rien ne change. Détails : [SYNCHRO.md](SYNCHRO.md) ; le module est [code/pbstore.js](../code/pbstore.js).
 
 ## Données
 

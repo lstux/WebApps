@@ -3,9 +3,10 @@
    À placer dans le <head> après common.js et pbstore.js :
      <script src="common.js"></script> <script src="pbstore.js"></script> <script src="pbsync.js"></script>
 
-   const pb = new PBStore({ app: "todo", prefix: "" });
+   const pb = new PBStore({ app: "todo", sharedAuth: true });   // sharedAuth : une seule connexion pour toutes les apps de l'origine
    const sync = PBSync.init(pb, {
      adopt: ["todo-tree-v1"],            // clés déjà présentes en local avant la synchro (la version du serveur gagne)
+     summary: "…",                       // phrase de l'écran connecté : ce qui est synchronisé, sans chiffrement
      note: "…",                          // phrase propre à l'app, ajoutée à l'écran de connexion
      onChange(key, value){ … return "message" },   // valeur remplacée par le serveur : relire, redessiner ; le texte renvoyé s'affiche
      onStatus(texte){ … }                // « non connecté » ou l'email : pour l'entrée de menu
@@ -56,14 +57,14 @@
       if (pb.connected) {
         h += '<p>Connecté : <b>' + esc(pb.email) + '</b> · ' + esc(pb.url) + '</p><p id="pbsMsg">' + esc(msg || "Pas encore synchronisé sur cette page.") + '</p>' +
           '<div class="btns"><button class="btn" data-pbs="logout">Se déconnecter</button><button class="btn primary" data-pbs="now">Synchroniser maintenant</button></div>' +
-          "<p>Les données de cette page sont copiées sur le serveur et retrouvées sur tes autres appareils. La dernière modification gagne, clé par clé : les horloges des appareils doivent être à peu près justes. Les valeurs sont lisibles par l'administrateur du serveur.</p>";
+          "<p>" + esc(opts.summary || "Les données de cette page sont synchronisées sur le serveur, les données sont stockées sans chiffrement.") + "</p>";
       } else {
-        h += "<p>Facultatif : retrouve les données de cette page sur tes autres appareils. Sans connexion, tout reste dans ce navigateur.</p>" +
+        h += "<p>Facultatif : retrouve les données de cette page sur tes autres appareils.</p>" +
           '<div style="margin:0 8px"><label class="lbl" for="pbsUrl">Serveur</label><input class="field" type="text" id="pbsUrl" value="' + esc(pb.url) + '" autocomplete="off" autocapitalize="off" spellcheck="false">' +
           '<label class="lbl" for="pbsMail" style="margin-top:8px;display:block">Email</label><input class="field" type="email" id="pbsMail" autocomplete="username" autocapitalize="off" spellcheck="false">' +
           '<label class="lbl" for="pbsPw" style="margin-top:8px;display:block">Mot de passe</label><input class="field" type="password" id="pbsPw" autocomplete="current-password"></div>' +
           '<div class="btns"><button class="btn primary" data-pbs="login">Se connecter</button></div>' +
-          "<p>Les comptes sont créés par l'administrateur. Le mot de passe n'est pas gardé, seulement un jeton. " + esc(opts.note || "") + "</p>";
+          "<p>Compte créé par l'administrateur. " + esc(opts.note || "") + "</p>";
       }
       dlg.firstChild.innerHTML = h;
     }
