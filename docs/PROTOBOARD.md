@@ -37,6 +37,17 @@ Le format `.js` (plutôt que JSON) permet d'ouvrir la page directement depuis le
 1. Créer `code/protoboard/components/mon_module.js` (partir d'un fichier existant).
 2. Ajouter sa ligne `<script src="protoboard/components/mon_module.js"></script>` dans `code/06_protoboard_designer.html`, avec les autres.
 
+### Composants fournis
+
+Ajouter → par catégorie. Les brochages viennent de la documentation courante des modules et **sont à vérifier sur ta pièce** (ordre des broches, tensions, écart entre rangées) : les clones diffèrent, ⇋ retourne une pièce.
+
+- **Pièces à 2 pattes** (Ajouter → « Pièces à 2 pattes ») : résistance, diode, condensateur céramique ou chimique, LED. L'écart entre les pattes est réglable (✎ Modifier → Écart), les broches se renomment comme les autres (diode : `A`/`K`, chimique : `+`/`-`).
+- **Discrets** : LED RGB, potentiomètre, transistors NPN/PNP, MOSFET, PC817, buzzer, bouton, interrupteur, KY-040, joystick. **Alimentation** : LM7805, AMS1117, TP4056, MT3608, LM2596.
+- **Capteurs** : BMP180/280, BME280, AHT20, SHT31, DHT, DS18B20, MPU6050, HC-SR04, PIR, ADS1115, DS3231, INA219.
+- **Écrans** : OLED SSD1306 (I2C, SPI), SH1106 1,3" (I2C, SPI), TFT ST7735 et ILI9341.
+- **Modules** : microSD, LoRa SX127x, NRF24L01, GPS NEO-6M, PCF8574, MCP23017, adaptateur de niveau, relais, ponts en H (L298N, TB6612, DRV8833).
+- **Cartes** : ESP32 (C3/S3 Super Mini, S3 DevKit, DevKit 30 et 38 broches), Wemos D1 mini, Arduino Nano, Pro Micro, Pico, Blue Pill, Black Pill.
+
 ### Ajouter un composant sans toucher au dépôt
 
 - **Depuis un module générique** : ✎ Modifier → « Enregistrer comme composant ». Il rejoint « Mes composants » (gardé dans le navigateur) et l'app affiche le fichier `.js` correspondant, à télécharger ou copier pour l'ajouter au dépôt plus tard.
