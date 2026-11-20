@@ -124,7 +124,7 @@ li.drag-src { opacity: .35; }
 
 <script>
 const KEY = 'todo-tree-v1', UIKEY = 'todo-tree-ui';
-const pb = new PBStore({ app: 'todo' });   // synchronisation facultative (menu → Synchronisation) ; clés localStorage inchangées
+const pb = new PBStore({ app: 'todo', sharedAuth: true });   // synchronisation facultative (menu → Synchronisation) ; clés localStorage inchangées
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -299,7 +299,8 @@ document.addEventListener('dblclick', e => {
 $('#btnMenu').onclick = () => { syncMenu(); $('#menuDlg').showModal(); };
 const sync = PBSync.init(pb, {
   adopt: [KEY],
-  note: 'Au premier envoi, si le serveur a déjà une liste, c\'est sa version qui remplace celle de cet appareil : exporte-la en JSON avant si tu veux la garder.',
+  summary: 'La liste est synchronisée sur le serveur, les données sont stockées sans chiffrement.',
+  note: 'Au premier envoi, si le serveur a déjà une liste, c\'est la sienne qui est reprise (exporte la tienne avant si besoin).',
   onChange(key, value) {
     if (key !== KEY || !value) return null;
     nodes = normalize(value.nodes); ui.adding = ui.editing = ui.menu = null; render();
