@@ -10,10 +10,14 @@ L'équivalent de la feuille à petits carreaux : une plaque au pas de 2,54 mm su
 - **Pièces** : cartes et modules (un fichier par composant), barrettes Dupont mâles ou femelles (1 ou 2 rangées, nombre de broches au choix), module générique (nom, broches, rangées, écart, noms des broches).
 - **Placement** : glisser-déposer aligné sur les trous ; ⟳ pivoter, ⇋ retourner (module monté à l'envers), ⧉ dupliquer. Les fils accrochés aux broches suivent la pièce.
 - **Fils** : un point par coude, angles droits automatiques (désactivables), huit couleurs. Le fil se termine sur une broche ou sur un point d'un autre fil. Un point du fil sélectionné se déplace au doigt.
+- **Entre les pastilles** : le bouton « ½ Entre pastilles » accroche aussi les points au demi-pas (repères bleus), pour faire passer un fil entre deux pastilles ou le longer sans qu'il en cache un autre. Une broche proche attire toujours le point.
+- **Fil nu / fil isolé** : un fil est fin par défaut (fil nu soudé de pastille en pastille) ; « Fil isolé » le dessine plus épais avec une gaine, pour un fil qui passe par-dessus des soudures (fil de wrapping, fil gainé).
+- **Vue de dessous** (⇄) : la plaque est retournée comme une feuille, miroir gauche-droite. Les modules deviennent des empreintes pâles, il ne reste que les pastilles à souder et les fils. Le plan n'est pas modifié et reste éditable dans les deux vues.
+- **Image PNG** : menu → Image PNG exporte la vue affichée (dessus ou dessous) sur fond blanc, avec repères de colonnes (A, B…) et de lignes (1, 2…) pour souder.
 - **Broches** : couleur selon le rôle (alimentation, masse, GPIO, strapping, UART, à éviter, contrôle), note propre au composant (LED intégrée, PSRAM, adresse I2C…), réseau relié surligné.
 - **Contrôles** : alerte si l'alimentation touche la masse, si 5V et 3V3 sont reliés, ou si une broche « à éviter » est utilisée. Liste complète des connexions, copiable.
 - **Annuler / rétablir**, sauvegarde automatique dans le navigateur, export / import JSON, thème clair / sombre / auto.
-- **Clavier** (ordinateur) : W fil, R pivoter, F retourner, Suppr effacer, Échap annuler, Entrée terminer un fil, Ctrl+Z / Ctrl+Maj+Z.
+- **Clavier** (ordinateur) : W fil, H demi-pas, D dessous / dessus, R pivoter, F retourner, Suppr effacer, Échap annuler, Entrée terminer un fil, Ctrl+Z / Ctrl+Maj+Z.
 
 Deux fils ne sont reliés que s'ils partagent un **point** (une soudure) : se croiser ne suffit pas. Deux broches au même trou (une barrette posée sur un module, par exemple) sont reliées.
 
@@ -86,5 +90,7 @@ Export (`protoboard-plan.json`) :
   "wires": [ { "id": "…", "c": "#fdd835", "pts": [[9,5],[12,5],[12,6],[13,6]] } ],
   "components": { "esp32-c3-super-mini": { … } } }
 ```
+
+Les points d'un fil sont en pas de grille, entiers ou en demi-pas (`12.5`) ; `"iso": true` marque un fil isolé (absent pour un fil nu). Les anciens exports restent valides.
 
 `r` : quarts de tour ; `f` : pièce retournée ; `names` : noms de broches remplacés (vide = noms du composant) ; barrettes et module générique ont en plus `n`, `rows` et `gap`.

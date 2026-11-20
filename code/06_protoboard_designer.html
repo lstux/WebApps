@@ -18,9 +18,9 @@ window.ProtoBoard = { list: [], component(def) { this.list.push(def); } };
    Composants du système : .topbar, .appicon, .brand, .iconbtn, .btn, .chips, .chip, dialog.sheet, .item, .toast.
    Les couleurs de la plaque, des broches et des fils représentent des objets réels : elles sont fixes,
    sauf la plaque (assombrie en thème sombre) et les repères de sélection (accent du thème). */
-:root { --pb-board:#f3e3bd; --pb-board-edge:#c9a96a; --pb-pad:#dca866; --pb-pad-edge:#b07a35; --pb-hole:#5a4630; }
-@media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --pb-board:#b9a47a; --pb-board-edge:#8a7448; --pb-pad:#c08a45; --pb-pad-edge:#8a5a22; --pb-hole:#2b2016; } }
-:root[data-theme="dark"] { --pb-board:#b9a47a; --pb-board-edge:#8a7448; --pb-pad:#c08a45; --pb-pad-edge:#8a5a22; --pb-hole:#2b2016; }
+:root { --pb-under:#e2c486; --pb-board:#f3e3bd; --pb-board-edge:#c9a96a; --pb-pad:#dca866; --pb-pad-edge:#b07a35; --pb-hole:#5a4630; }
+@media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --pb-under:#9a8458; --pb-board:#b9a47a; --pb-board-edge:#8a7448; --pb-pad:#c08a45; --pb-pad-edge:#8a5a22; --pb-hole:#2b2016; } }
+:root[data-theme="dark"] { --pb-under:#9a8458; --pb-board:#b9a47a; --pb-board-edge:#8a7448; --pb-pad:#c08a45; --pb-pad-edge:#8a5a22; --pb-hole:#2b2016; }
 
 /* La page occupe exactement la zone visible : position fixe plutôt que 100dvh, qui sur certains
    navigateurs mobiles (Android en plein écran, barre d'adresse dynamique) déborde sous le bas de l'écran
@@ -37,6 +37,12 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 .pb-line { stroke:var(--line); }
 .pb-dot { fill:var(--mut2); }
 .pb-board { fill:var(--pb-board); stroke:var(--pb-board-edge); }
+#svg.under .pb-board { fill:var(--pb-under); }
+.pb-half { fill:var(--ac); opacity:.55; }
+.pb-copper { fill:var(--pb-pad); stroke:var(--pb-pad-edge); }
+.sidepill { white-space:nowrap; position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:3; padding:5px 14px; border-radius:99px; font-size:12.5px; font-weight:750;
+  background:var(--ac); color:#fff; box-shadow:0 2px 10px #0004; border:0; cursor:pointer; }
+.sidepill[hidden] { display:none; }
 .pb-pad { fill:var(--pb-pad); stroke:var(--pb-pad-edge); }
 .pb-hole { fill:var(--pb-hole); }
 .pb-sel { stroke:var(--ac); }
@@ -107,16 +113,21 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
         <path class="pb-line" d="M0 0H20M0 0V20" stroke-width="1" fill="none"/>
         <circle class="pb-dot" cx="0" cy="0" r="1.3"/>
       </pattern>
+      <pattern id="halfPat" x="-5" y="-5" width="20" height="20" patternUnits="userSpaceOnUse">
+        <circle class="pb-half" cx="15" cy="5" r="1.5"/><circle class="pb-half" cx="5" cy="15" r="1.5"/><circle class="pb-half" cx="15" cy="15" r="1.5"/>
+      </pattern>
       <pattern id="holes" x="-10" y="-10" width="20" height="20" patternUnits="userSpaceOnUse">
         <circle class="pb-pad" cx="10" cy="10" r="6.2" stroke-width="1"/>
         <circle class="pb-hole" cx="10" cy="10" r="2.4"/>
       </pattern>
     </defs>
-    <g id="vp">
+    <g id="vp"><g id="mir">
       <rect id="paper" fill="url(#paperPat)"/>
       <g id="world"></g>
-    </g>
+      <rect id="paperHalf" fill="url(#halfPat)" pointer-events="none" visibility="hidden"/>
+    </g></g>
   </svg>
+  <button class="sidepill" id="pillSide" hidden>Vue de dessous ✕</button>
 </main>
 
 <footer class="dock">
@@ -127,6 +138,7 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
         <button class="chip" id="mSel">☝ Sélection</button>
         <button class="chip" id="mWire">〰 Fil</button>
       </div>
+      <button class="btn" id="bSide" title="Vue de dessous / de dessus (D)" aria-label="Vue de dessous ou de dessus">⇄</button>
       <button class="btn primary" id="bAdd">＋ Ajouter</button>
     </div>
   </div>
@@ -149,13 +161,15 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 /* ==========================================================================
    ProtoBoardDesigner
    Coordonnées : unités de grille (1 = 2,54 mm), dessinées à U pixels par pas.
-   Plan (doc) : { board:{w,h,show}, parts:[…], wires:[{id,c,pts:[[x,y]…]}] }
+   Plan (doc) : { board:{w,h,show}, parts:[…], wires:[{id,c,pts:[[x,y]…], iso?:true}] }
+   Les points de fil peuvent être au demi-pas (x.5) pour passer entre deux pastilles ; iso = fil isolé (gaine).
+   Vue de dessous : miroir horizontal autour de l'axe de la plaque ; les coordonnées du plan ne changent pas.
    Pièce : { id, type, x, y, r (quarts de tour), f (retournée), label, names[], n, rows, gap }
    ========================================================================== */
 const U = 20;
 const KEY_DOC = 'protoboard.doc.v1', KEY_VIEW = 'protoboard.view.v1', KEY_LIB = 'protoboard.components.v1';
 const $ = s => document.querySelector(s);
-const svg = $('#svg'), vp = $('#vp'), world = $('#world'), paper = $('#paper');
+const svg = $('#svg'), vp = $('#vp'), mir = $('#mir'), world = $('#world'), paper = $('#paper'), paperHalf = $('#paperHalf');
 const COLORS = ['#e53935','#212121','#1e88e5','#43a047','#fdd835','#fb8c00','#8e24aa','#f5f5f5'];
 const TYPES = {
   power:{f:'#e53935',t:'Alimentation'}, gnd:{f:'#1a1a1a',t:'Masse'}, gpio:{f:'#d4a72c',t:'Signal / GPIO'},
@@ -262,7 +276,8 @@ function parseComponentText(txt){
 let doc, undoStack = [], redoStack = [], lastJSON = '';
 let view = {s:1.5, tx:20, ty:20};
 let mode = 'sel', sel = null, cur = null, hover = null;
-let wireColor = COLORS[0], ortho = true, showLabels = true;
+let wireColor = COLORS[0], ortho = true, showLabels = true, half = false, wireIso = false, bottom = false;
+const mirX = () => (doc.board.w - 1) * U;   // axe du miroir (dessous) : x → mirX − x
 let pinMap = new Map(), vtxKeys = new Set(), parent = new Map();
 const getPart = id => doc.parts.find(p => p.id === id);
 const getWire = id => doc.wires.find(w => w.id === id);
@@ -392,6 +407,14 @@ function partSVG(p, g, isSel){
   let s = `<g data-part="${p.id}" transform="translate(${p.x*U},${p.y*U}) rotate(${p.r*90}) scale(${p.f?-1:1},1)">`;
   if (g.missing)
     return s + `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" fill="#e5484d22" stroke="#e5484d" stroke-dasharray="5 4" stroke-width="2"/></g>`;
+  if (bottom){   // dessous : empreinte pâle du module, seules les pastilles de soudure comptent
+    s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.out?2:5}" fill="${esc(g.color)}" fill-opacity=".14" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0006" stroke-width="1" stroke-dasharray="5 4"'}/>`;
+    g.pins.forEach(q => {
+      const cx = q.x*U, cy = q.y*U;
+      s += `<circle class="pb-copper" cx="${cx}" cy="${cy}" r="${U*.4}" stroke-width="1"/><circle cx="${cx}" cy="${cy}" r="${U*.4}" fill="none" stroke="${(TYPES[q.type] || TYPES.gpio).f}" stroke-width="2.4"/><circle class="pb-hole" cx="${cx}" cy="${cy}" r="${U*.12}"/>`;
+    });
+    return s + '</g>';
+  }
   s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.out?2:5}" fill="${esc(g.color)}" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0007" stroke-width="1"'}/>`;
   g.deco.forEach(d => s += decoSVG(d));
   g.pins.forEach(q => {
@@ -402,62 +425,103 @@ function partSVG(p, g, isSel){
   });
   return s + '</g>';
 }
+/* Texte du plan. En vue de dessous le calque est en miroir : on re-retourne chaque texte autour de son point
+   d'ancrage pour qu'il reste lisible, et on échange début/fin pour qu'il reste du côté extérieur de la broche. */
+function txt(cls, X, Y, size, anchor, str, o){
+  o = o || {};
+  const wt = o.weight ? ` font-weight="${o.weight}"` : '';
+  let tr = '';
+  if (o.vert) tr = `rotate(-90 ${X} ${Y})`;
+  if (bottom){
+    if (!o.vert) anchor = anchor === 'start' ? 'end' : anchor === 'end' ? 'start' : anchor;
+    tr = `translate(${X} ${Y}) scale(-1 1) translate(${-X} ${-Y}) ` + tr;
+  }
+  return `<text class="${cls}" x="${X}" y="${Y}" font-size="${size}"${wt} text-anchor="${anchor}" dominant-baseline="central"${tr ? ` transform="${tr.trim()}"` : ''}>${esc(str)}</text>`;
+}
 function labelsSVG(p, g){
   let s = '';
-  const cls = g.out ? 'pb-out' : 'pb-in';
+  const cls = g.out || bottom ? 'pb-out' : 'pb-in';
   if (showLabels) g.pins.forEach(q => {
     const [wx, wy] = tf(p, q.x, q.y), [dx, dy] = tv(p, q.d[0], q.d[1]);
     const X = wx*U + dx*U*.48, Y = wy*U + dy*U*.48;
-    if (Math.abs(dx) > Math.abs(dy)) s += `<text class="${cls}" x="${X}" y="${Y}" font-size="6.5" text-anchor="${dx>0?'start':'end'}" dominant-baseline="central">${esc(q.name)}</text>`;
-    else s += `<text class="${cls}" x="${X}" y="${Y}" font-size="6.5" text-anchor="${dy<0?'start':'end'}" dominant-baseline="central" transform="rotate(-90 ${X} ${Y})">${esc(q.name)}</text>`;
+    if (Math.abs(dx) > Math.abs(dy)) s += txt(cls, X, Y, 6.5, dx>0?'start':'end', q.name);
+    else s += txt(cls, X, Y, 6.5, dy<0?'start':'end', q.name, {vert:true});
   });
   const bb = bboxW(p, g), cx = (bb.x0 + bb.x1)/2*U;
-  if (g.out || g.missing) s += `<text class="pb-out" x="${cx}" y="${(bb.y1+.95)*U}" font-size="8" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(g.missing ? p.label + ' — composant introuvable' : p.label)}</text>`;
-  else s += `<text class="pb-title" x="${cx}" y="${(bb.y0+bb.y1)/2*U}" font-size="8" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(p.label)}</text>`;
+  if (g.out || g.missing) s += txt('pb-out', cx, (bb.y1+.95)*U, 8, 'middle', g.missing ? p.label + ' — composant introuvable' : p.label, {weight:700});
+  else s += txt(bottom ? 'pb-out' : 'pb-title', cx, (bb.y0+bb.y1)/2*U, 8, 'middle', p.label, {weight:700});
   return s;
 }
+/* Fils fins : on voit mieux ceux qui se croisent ou se longent. Nu = trait fin ; isolé = trait plus épais
+   avec une gaine sombre (fil de wrapping ou fil gainé qui passe par-dessus les soudures). */
+const wireW = w => w.iso ? U*.2 : U*.11;
 function wireSVG(w, dim, isSel){
   const pts = w.pts.map(([x,y]) => `${x*U},${y*U}`).join(' ');
   const light = w.c === '#f5f5f5' || w.c === '#fdd835';
-  const pl = (extra) => `<polyline points="${pts}" fill="none" stroke-linecap="round" stroke-linejoin="round" ${extra}/>`;
+  const lw = wireW(w), pl = (extra) => `<polyline points="${pts}" fill="none" stroke-linecap="round" stroke-linejoin="round" ${extra}/>`;
   let s = `<g data-wire="${w.id}" opacity="${dim ? .3 : 1}">`;
-  if (isSel) s += pl(`class="pb-glow" stroke-width="${U*.8}"`);
-  s += pl(`stroke="${light ? '#0009' : '#0005'}" stroke-width="${U*.3+2}"`) + pl(`stroke="${esc(w.c)}" stroke-width="${U*.3}"`);
+  if (isSel) s += pl(`class="pb-glow" stroke-width="${U*.7}"`);
+  s += pl(`stroke="${light ? '#000a' : '#0006'}" stroke-width="${lw+1.6}"`) + pl(`stroke="${esc(w.c)}" stroke-width="${lw}"`);
   w.pts.forEach((pt,i) => { const end = i === 0 || i === w.pts.length - 1;
-    s += `<circle cx="${pt[0]*U}" cy="${pt[1]*U}" r="${end?U*.22:U*.12}" fill="${esc(w.c)}" stroke="#0008" stroke-width="${end?1:.6}"/>`; });
-  return s + pl(`stroke="#0000" stroke-width="${U*.9}"`) + '</g>';
+    s += `<circle cx="${pt[0]*U}" cy="${pt[1]*U}" r="${end ? lw*.95 : lw*.6}" fill="${esc(w.c)}" stroke="#0008" stroke-width="${end?1:.6}"/>`; });
+  return s + pl(`stroke="#0000" stroke-width="${U*.8}"`) + '</g>';
 }
-function render(){
-  buildIndex();
-  const net = currentNet(), B = doc.board;
+/* Le dessin du plan. forExport : sans sélection, sans surbrillance, sans fil en cours (image PNG). */
+function sceneHTML(forExport){
+  const net = forExport ? null : currentNet(), B = doc.board, sel_ = forExport ? null : sel, cur_ = forExport ? null : cur;
   let h = '';
   if (B.show){
     h += `<rect class="pb-board" x="${-U/2}" y="${-U/2}" width="${B.w*U}" height="${B.h*U}" rx="5" stroke-width="1.5"/>`;
     h += `<rect x="${-U/2}" y="${-U/2}" width="${B.w*U}" height="${B.h*U}" fill="url(#holes)" pointer-events="none"/>`;
   }
   doc.parts.forEach(p => { const g = geo(p);
-    h += partSVG(p, g, sel && sel.t === 'part' && sel.id === p.id) + '<g pointer-events="none">' + labelsSVG(p, g) + '</g>'; });
-  doc.wires.forEach(w => h += wireSVG(w, net && !net.has(K(...w.pts[0])), sel && sel.t === 'wire' && sel.id === w.id));
-  if (cur){
-    const pts = cur.pts.slice();
+    h += partSVG(p, g, sel_ && sel_.t === 'part' && sel_.id === p.id) + '<g pointer-events="none">' + labelsSVG(p, g) + '</g>'; });
+  doc.wires.forEach(w => h += wireSVG(w, net && !net.has(K(...w.pts[0])), sel_ && sel_.t === 'wire' && sel_.id === w.id));
+  if (cur_){
+    const pts = cur_.pts.slice();
     if (hover){ const l = pts[pts.length-1]; if (ortho && l[0] !== hover[0] && l[1] !== hover[1]) pts.push([hover[0], l[1]]); pts.push(hover); }
-    h += `<g pointer-events="none"><polyline points="${pts.map(([x,y]) => `${x*U},${y*U}`).join(' ')}" fill="none" stroke="${wireColor}" stroke-width="${U*.3}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 5" opacity=".85"/>`;
-    cur.pts.forEach(pt => h += `<circle class="pb-sel" cx="${pt[0]*U}" cy="${pt[1]*U}" r="${U*.2}" fill="${wireColor}" stroke-width="2"/>`);
+    h += `<g pointer-events="none"><polyline points="${pts.map(([x,y]) => `${x*U},${y*U}`).join(' ')}" fill="none" stroke="${wireColor}" stroke-width="${wireIso ? U*.2 : U*.11}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 5" opacity=".9"/>`;
+    cur_.pts.forEach(pt => h += `<circle class="pb-sel" cx="${pt[0]*U}" cy="${pt[1]*U}" r="${U*.16}" fill="${wireColor}" stroke-width="2"/>`);
     h += '</g>';
   }
   h += '<g pointer-events="none">';
   if (net) netPins(net).forEach(e => h += `<circle class="pb-ring" cx="${e.x*U}" cy="${e.y*U}" r="${U*.52}" stroke-width="2.5"/>`);
-  if (sel && sel.t === 'pin'){ const [x,y] = sel.key.split(',').map(Number); h += `<circle class="pb-ring here" cx="${x*U}" cy="${y*U}" r="${U*.62}" stroke-width="3"/>`; }
+  if (sel_ && sel_.t === 'pin'){ const [x,y] = sel_.key.split(',').map(Number); h += `<circle class="pb-ring here" cx="${x*U}" cy="${y*U}" r="${U*.62}" stroke-width="3"/>`; }
   h += '</g>';
-  world.innerHTML = h;
+  return h;
+}
+function render(){
+  buildIndex();
+  applyMirror();
+  world.innerHTML = sceneHTML(false);
   $('#bUndo').disabled = !undoStack.length; $('#bRedo').disabled = !redoStack.length;
+}
+/* Vue de dessous : le calque du plan est retourné autour de l'axe vertical de la plaque. */
+function applyMirror(){
+  mir.setAttribute('transform', bottom ? `translate(${mirX()},0) scale(-1,1)` : '');
+  svg.classList.toggle('under', bottom);
+  $('#pillSide').hidden = !bottom;
+  $('#bSide').classList.toggle('primary', bottom);
+  paperHalf.setAttribute('visibility', half ? 'visible' : 'hidden');
 }
 function applyView(){
   vp.setAttribute('transform', `translate(${view.tx},${view.ty}) scale(${view.s})`);
+  applyMirror();
   const r = svg.getBoundingClientRect();
-  paper.setAttribute('x', Math.floor(-view.tx/view.s/U - 1)*U); paper.setAttribute('y', Math.floor(-view.ty/view.s/U - 1)*U);
-  paper.setAttribute('width', r.width/view.s + 3*U); paper.setAttribute('height', r.height/view.s + 3*U);
+  const ox0 = -view.tx/view.s, ox1 = ox0 + r.width/view.s, wx0 = bottom ? mirX() - ox1 : ox0;   // zone visible, en coordonnées du plan
+  const px = Math.floor(wx0/U - 1)*U, py = Math.floor(-view.ty/view.s/U - 1)*U, pw = r.width/view.s + 3*U, ph = r.height/view.s + 3*U;
+  [paper, paperHalf].forEach(el => { el.setAttribute('x', px); el.setAttribute('y', py); el.setAttribute('width', pw); el.setAttribute('height', ph); });
+  view.b = bottom;
   try { localStorage.setItem(KEY_VIEW, JSON.stringify(view)); } catch(e){}
+}
+function setSide(b){
+  if (b === bottom) return;
+  // garde le même point de la plaque au centre de l'écran
+  const r = svg.getBoundingClientRect(), cx = r.width/2, ox = (cx - view.tx)/view.s, wx = bottom ? mirX() - ox : ox;
+  bottom = b;
+  const nx = bottom ? mirX() - wx : wx;
+  view.tx = cx - nx*view.s;
+  render(); applyView(); updateCtx();
 }
 
 /* ---------- historique et sauvegarde ---------- */
@@ -481,7 +545,17 @@ function load(){
 }
 
 /* ---------- vue ---------- */
-function toWorld(cx, cy){ const r = svg.getBoundingClientRect(); return {x:(cx - r.left - view.tx)/view.s, y:(cy - r.top - view.ty)/view.s}; }
+function toWorld(cx, cy){
+  const r = svg.getBoundingClientRect(), x = (cx - r.left - view.tx)/view.s;
+  return {x:bottom ? mirX() - x : x, y:(cy - r.top - view.ty)/view.s};
+}
+/* Point de grille le plus proche : au pas, ou au demi-pas (entre les pastilles) ; une broche proche attire. */
+function snapPt(w){
+  const ix = Math.round(w.x/U), iy = Math.round(w.y/U);
+  if (half && pinMap.has(K(ix,iy)) && Math.hypot(ix*U - w.x, iy*U - w.y) < .4*U) return [ix, iy];
+  const f = half ? 2 : 1;
+  return [Math.round(w.x/U*f)/f, Math.round(w.y/U*f)/f];
+}
 function zoomAt(cx, cy, f){
   const r = svg.getBoundingClientRect(), px = cx - r.left, py = cy - r.top, wx = (px - view.tx)/view.s, wy = (py - view.ty)/view.s;
   view.s = Math.max(.3, Math.min(8, view.s*f)); view.tx = px - wx*view.s; view.ty = py - wy*view.s; applyView();
@@ -493,6 +567,7 @@ function fit(){
   doc.parts.forEach(p => { const b = bboxW(p, geo(p)); add(b.x0, b.y0, b.x1, b.y1 + 1.5); });
   doc.wires.forEach(w => w.pts.forEach(([x,y]) => add(x,y,x,y)));
   if (!isFinite(x0)){ x0 = 0; y0 = 0; x1 = 20; y1 = 20; }
+  if (bottom){ const a = doc.board.w - 1 - x1, b = doc.board.w - 1 - x0; x0 = a; x1 = b; }
   const r = svg.getBoundingClientRect(), aw = r.width - 24, ah = r.height - 24;
   const bw = (x1 - x0 + 1)*U, bh = (y1 - y0 + 1)*U;
   view.s = Math.max(.3, Math.min(4, Math.min(aw/bw, ah/bh)));
@@ -520,7 +595,8 @@ svg.addEventListener('pointerdown', e => {
   gest = {type:'tap', sx:e.clientX, sy:e.clientY, w, target:e.target, moved:false, tx0:view.tx, ty0:view.ty};
   if (mode !== 'sel') return;
   if (sel && sel.t === 'wire'){
-    const wr = getWire(sel.id), idx = wr ? wr.pts.findIndex(pt => Math.hypot(pt[0]*U - w.x, pt[1]*U - w.y) < .5*U) : -1;
+    const wr = getWire(sel.id); let idx = -1, best = .45*U;
+    if (wr) wr.pts.forEach((pt,i) => { const d = Math.hypot(pt[0]*U - w.x, pt[1]*U - w.y); if (d < best){ best = d; idx = i; } });
     if (idx >= 0) gest.vertex = {wr, idx};
   }
   if (!gest.vertex && e.target.closest){
@@ -532,7 +608,7 @@ svg.addEventListener('pointermove', e => {
   if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if (!gest){
     if (mode === 'wire' && cur && e.pointerType === 'mouse'){
-      const w = toWorld(e.clientX, e.clientY), k = [Math.round(w.x/U), Math.round(w.y/U)];
+      const k = snapPt(toWorld(e.clientX, e.clientY));
       if (!hover || hover[0] !== k[0] || hover[1] !== k[1]){ hover = k; render(); }
     }
     return;
@@ -547,10 +623,10 @@ svg.addEventListener('pointermove', e => {
   if (!gest.moved && Math.hypot(dx,dy) > 7) gest.moved = true;
   if (!gest.moved) return;
   if (gest.vertex){
-    const w = toWorld(e.clientX, e.clientY), k = [Math.round(w.x/U), Math.round(w.y/U)], pt = gest.vertex.wr.pts[gest.vertex.idx];
+    const k = snapPt(toWorld(e.clientX, e.clientY)), pt = gest.vertex.wr.pts[gest.vertex.idx];
     if (pt[0] !== k[0] || pt[1] !== k[1]){ gest.vertex.wr.pts[gest.vertex.idx] = k; render(); }
   } else if (gest.part){
-    const nx = gest.p0.x + Math.round(dx/view.s/U), ny = gest.p0.y + Math.round(dy/view.s/U);
+    const nx = gest.p0.x + Math.round((bottom ? -dx : dx)/view.s/U), ny = gest.p0.y + Math.round(dy/view.s/U);
     if (nx !== gest.part.x || ny !== gest.part.y){ gest.part.x = nx; gest.part.y = ny; reattach(gest.part, gest.att); sel = {t:'part', id:gest.part.id}; render(); }
   } else { view.tx = gest.tx0 + dx; view.ty = gest.ty0 + dy; applyView(); }
 });
@@ -568,7 +644,7 @@ svg.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.clientX, e.cli
 
 function handleTap(g){
   const k = [Math.round(g.w.x/U), Math.round(g.w.y/U)], key = K(...k);
-  if (mode === 'wire'){ wireTap(k); return; }
+  if (mode === 'wire'){ wireTap(snapPt(g.w)); return; }
   const near = Math.hypot(k[0]*U - g.w.x, k[1]*U - g.w.y) < .46*U;
   const t = g.target && g.target.closest ? g.target : null;
   if (near && pinMap.has(key)) sel = {t:'pin', key};
@@ -595,6 +671,7 @@ function wireTap(k){
 function finishWire(){
   if (cur && cur.pts.length >= 2){
     const w = {id:uid(), c:wireColor, pts:cur.pts};
+    if (wireIso) w.iso = true;
     cur = null; hover = null; doc.wires.push(w); cleanWire(w); commit();
   } else { cur = null; hover = null; render(); updateCtx(); }
 }
@@ -628,9 +705,9 @@ const swatches = active => '<div class="rowb">' + COLORS.map(c => `<button class
 function updateCtx(){
   let h = '';
   if (mode === 'wire'){
-    h += swatches(wireColor) + `<div class="rowb"><button class="chip ${ortho ? 'on' : ''}" data-a="ortho">⌐ Angles droits</button>`;
-    if (cur) h += `<button class="btn" data-a="pop" title="Retirer le dernier point">⌫</button><button class="btn primary" data-a="finish">✓ Terminer</button><button class="btn" data-a="cancel">✕</button>`;
-    h += `</div><div class="info">${cur ? `${cur.pts.length} point(s) — touche les coudes, puis une broche ou un fil pour terminer (ou retouche le dernier point).` : 'Touche un point de départ : une broche ou un trou.'}</div>`;
+    h += swatches(wireColor) + `<div class="rowb"><button class="chip ${ortho ? 'on' : ''}" data-a="ortho">⌐ Angles droits</button><button class="chip ${half ? 'on' : ''}" data-a="half" title="Accrocher entre les pastilles">½ Entre pastilles</button><button class="chip ${wireIso ? 'on' : ''}" data-a="iso" title="Fil gainé, par-dessus les soudures">Fil isolé</button></div>`;
+    if (cur) h += `<div class="rowb"><button class="btn" data-a="pop" title="Retirer le dernier point">⌫</button><button class="btn primary" data-a="finish">✓ Terminer</button><button class="btn" data-a="cancel">✕</button></div>`;
+    h += `<div class="info">${cur ? `${cur.pts.length} point(s) — touche les coudes, puis une broche ou un fil pour terminer (ou retouche le dernier point).` : 'Touche un point de départ : une broche ou un trou.'}</div>`;
   } else if (sel && sel.t === 'part'){
     const p = getPart(sel.id);
     if (p) h += `<div class="info"><b>${esc(p.label)}</b> — ${esc(partName(p))}</div>
@@ -639,7 +716,7 @@ function updateCtx(){
     const w = getWire(sel.id);
     if (w){
       const pins = netPins(netKeys(K(...w.pts[0])));
-      h += swatches(w.c) + `<div class="rowb"><button class="btn" data-a="delwire">🗑 Supprimer le fil</button></div>`;
+      h += swatches(w.c) + `<div class="rowb"><button class="chip ${w.iso ? 'on' : ''}" data-a="iso" title="Fil gainé, par-dessus les soudures">Fil isolé</button><button class="chip ${half ? 'on' : ''}" data-a="half" title="Déplacer les points entre les pastilles">½ Entre pastilles</button><button class="btn" data-a="delwire">🗑 Supprimer</button></div>`;
       h += `<div class="info">Réseau : ${pins.length ? pins.map(e => `<b>${pinTitle(e)}</b>`).join(' ↔ ') : 'aucune broche'} · glisse un point du fil pour le déplacer</div>`;
       netWarnings(pins).forEach(t => h += `<div class="warn">${t}</div>`);
     }
@@ -664,6 +741,11 @@ $('#ctx').addEventListener('click', e => {
       if (sel && sel.t === 'wire' && getWire(id)){ getWire(id).c = wireColor; commit(); } else { render(); updateCtx(); }
       break;
     case 'ortho': ortho = !ortho; updateCtx(); break;
+    case 'half': half = !half; applyMirror(); updateCtx(); break;
+    case 'iso':
+      if (sel && sel.t === 'wire' && getWire(id)){ const w = getWire(id); if (w.iso) delete w.iso; else w.iso = true; commit(); }
+      else { wireIso = !wireIso; render(); updateCtx(); }
+      break;
     case 'pop': if (cur){ cur.pts.pop(); if (!cur.pts.length) cur = null; render(); updateCtx(); } break;
     case 'finish': finishWire(); break;
     case 'cancel': cur = null; hover = null; render(); updateCtx(); break;
@@ -812,11 +894,49 @@ function exportText(){
   doc.parts.forEach(p => { const e = LIB.get(p.type); if (e) used[p.type] = e.def; });
   return JSON.stringify({app:'ProtoBoardDesigner', version:1, board:doc.board, parts:doc.parts, wires:doc.wires, components:used}, null, 1);
 }
+/* Image PNG de la vue actuelle (dessus ou dessous), sur fond blanc, avec repères de colonnes (A, B…) et de
+   lignes (1, 2…) : un guide pour souder. Fabriquée à partir du même dessin que l'écran, sans sélection. */
+const colLetter = i => { let r = ''; for (i++; i > 0; i = Math.floor((i - 1)/26)) r = String.fromCharCode(65 + (i - 1) % 26) + r; return r; };
+function exportPNG(){
+  const B = doc.board, W = B.w;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const add = (a,b,c,d) => { x0 = Math.min(x0,a); y0 = Math.min(y0,b); x1 = Math.max(x1,c); y1 = Math.max(y1,d); };
+  if (B.show) add(-.5, -.5, W - .5, B.h - .5);
+  doc.parts.forEach(p => { const b = bboxW(p, geo(p)); add(b.x0, b.y0, b.x1, b.y1 + 1.5); });
+  doc.wires.forEach(w => w.pts.forEach(([x,y]) => add(x,y,x,y)));
+  if (!isFinite(x0)){ toast('Rien à exporter.', true); return; }
+  if (bottom){ const a = W - 1 - x1, b = W - 1 - x0; x0 = a; x1 = b; }
+  const L = 2.2, T = 3, R = 1.2, Bm = 2.2;
+  const vx = (x0 - L)*U, vy = (y0 - T)*U, vw = (x1 - x0 + L + R)*U, vh = (y1 - y0 + T + Bm)*U;
+  const sc = Math.min(2, 4000/Math.max(vw, vh));
+  const gx = i => (bottom ? W - 1 - i : i)*U;
+  let ov = `<text x="${vx + U*.6}" y="${vy + U*1.1}" font-size="11" font-weight="700" fill="#111">ProtoBoardDesigner — vue de ${bottom ? 'dessous (miroir)' : 'dessus'}</text>`;
+  if (B.show){
+    for (let i = 0; i < W; i++) ov += `<text x="${gx(i)}" y="${-1.15*U}" font-size="7" fill="#555" text-anchor="middle" dominant-baseline="central">${colLetter(i)}</text>`;
+    for (let j = 0; j < B.h; j++) ov += `<text x="${-1.25*U}" y="${j*U}" font-size="7" fill="#555" text-anchor="middle" dominant-baseline="central">${j + 1}</text>`;
+  }
+  ov += `<text x="${vx + U*.6}" y="${vy + vh - U*.7}" font-size="7.5" fill="#555">Trait fin : fil nu soudé de pastille en pastille · trait épais : fil isolé · pastille cerclée : couleur = type de broche</text>`;
+  const css = `text{font-family:system-ui,Arial,sans-serif}.pb-board{fill:${bottom ? '#e2c486' : '#f3e3bd'};stroke:#c9a96a}.pb-pad,.pb-copper{fill:#dca866;stroke:#b07a35}.pb-hole{fill:#5a4630}`
+    + `.pb-line{stroke:#ddd}.pb-dot{fill:#bbb}.pb-half{fill:none}.pb-sel{stroke:none}.pb-glow{stroke:none}.pb-in{fill:#fff;fill-opacity:.92}.pb-title{fill:#fff;fill-opacity:.55}`
+    + `.pb-out{fill:#111;stroke:#fff;stroke-width:2.5px;paint-order:stroke}`;
+  const mirror = bottom ? `translate(${mirX()},0) scale(-1,1)` : '';
+  const out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vx} ${vy} ${vw} ${vh}" width="${Math.round(vw*sc)}" height="${Math.round(vh*sc)}">`
+    + `<style>${css}</style><defs>${svg.querySelector('defs').innerHTML}</defs><rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" fill="#fff"/>`
+    + `<g ${mirror ? `transform="${mirror}"` : ''}>${sceneHTML(true)}</g>${ov}</svg>`;
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = Math.round(vw*sc); c.height = Math.round(vh*sc);
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob(b => { if (!b){ toast('Export de l\'image impossible.', true); return; } download(`protoboard-${bottom ? 'dessous' : 'dessus'}.png`, b, 'image/png'); toast('Image enregistrée.'); }, 'image/png');
+  };
+  img.onerror = () => toast('Export de l\'image impossible.', true);
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(out);
+}
 function sheetExport(){
   const txt = exportText();
-  openDlg(`<h2>Exporter</h2><p>Le plan et les définitions des composants utilisés.</p><textarea readonly spellcheck="false" style="min-height:200px">${esc(txt)}</textarea>
-    <div class="btns"><button class="btn" data-a="copy">Copier</button><button class="btn primary" data-a="dl">Télécharger</button></div>`,
-    a => { if (a === 'copy') copyText(txt); if (a === 'dl') download('protoboard-plan.json', txt, 'application/json'); });
+  openDlg(`<h2>Exporter</h2><p>Le plan et les définitions des composants utilisés. L'image PNG montre la vue actuelle (${bottom ? 'dessous' : 'dessus'}), avec repères A, B… et 1, 2… pour souder.</p><textarea readonly spellcheck="false" style="min-height:200px">${esc(txt)}</textarea>
+    <div class="btns"><button class="btn" data-a="png">🖼 Image PNG</button><button class="btn" data-a="copy">Copier</button><button class="btn primary" data-a="dl">Télécharger</button></div>`,
+    a => { if (a === 'copy') copyText(txt); if (a === 'dl') download('protoboard-plan.json', txt, 'application/json'); if (a === 'png'){ closeDlg(); exportPNG(); } });
 }
 function sheetImport(){
   openDlg(`<h2>Importer un plan</h2><p>Colle un export JSON ou choisis un fichier. Le plan actuel est remplacé (↶ pour revenir).</p>
@@ -850,9 +970,11 @@ function sheetHelp(){
   openDlg(`<h2>Aide</h2><div class="help">
     <p><b>Sélection</b> : touche une pièce puis glisse-la, elle s'aligne sur les trous. Les fils accrochés à ses broches suivent. ⟳ pivote, ⇋ retourne (module monté à l'envers).</p>
     <p><b>Fil</b> : touche un départ, puis chaque coude ; le fil se termine sur une broche ou sur un point d'un autre fil. « Angles droits » ajoute le coude tout seul.</p>
+    <p><b>½ Entre pastilles</b> : les points s'accrochent aussi entre les trous (demi-pas, repères bleus) pour faire passer un fil entre deux pastilles ou en parallèle d'un autre. <b>Fil isolé</b> : trait plus épais avec gaine, pour un fil qui passe par-dessus des soudures ; les autres sont des fils nus, plus fins.</p>
+    <p><b>⇄ Dessous</b> : vue de la plaque retournée comme une feuille (miroir gauche-droite) : les modules deviennent des empreintes pâles, il ne reste que les pastilles à souder. Le plan ne change pas, on peut y éditer aussi. L'export PNG suit la vue affichée.</p>
     <p><b>Broche</b> : touche-la pour voir son rôle, ses mises en garde et tout ce qui y est relié. Deux fils ne sont reliés que s'ils partagent un point (une soudure) : se croiser ne suffit pas. Une barrette posée sur les broches d'un module est connectée.</p>
     <p><b>Composants</b> : un fichier par composant dans <code>code/protoboard/components/</code>. Pour les tiens sans toucher au dépôt : module générique → ✎ → « Enregistrer comme composant », ou menu → Composants → Importer.</p>
-    <p><b>Clavier</b> : W fil, R pivoter, F retourner, Suppr effacer, Échap annuler, Ctrl+Z / Ctrl+Maj+Z.</p>
+    <p><b>Clavier</b> : W fil, H demi-pas, D dessous/dessus, R pivoter, F retourner, Suppr effacer, Échap annuler, Ctrl+Z / Ctrl+Maj+Z.</p>
     <p>Le plan est gardé dans ce navigateur ; Exporter / Importer pour le sauvegarder ou le passer sur un autre appareil.</p></div>` + typeLegend());
 }
 function sheetMenu(){
@@ -860,6 +982,7 @@ function sheetMenu(){
     <button class="item" data-a="labels"><span class="ic">🏷</span> Noms des broches<span class="sw">${showLabels ? 'affichés' : 'masqués'}</span></button>
     <button class="item" data-a="nets"><span class="ic">🔗</span> Liste des connexions</button>
     <button class="item" data-a="lib"><span class="ic">🧩</span> Composants</button>
+    <button class="item" data-a="png"><span class="ic">🖼</span> Image PNG<span class="sw">${bottom ? 'dessous' : 'dessus'}</span></button>
     <button class="item" data-a="export"><span class="ic">⬇</span> Exporter</button>
     <button class="item" data-a="import"><span class="ic">⬆</span> Importer</button>
     <button class="item" data-theme-toggle><span class="ic" data-theme-icon></span> Thème<span class="sw" data-theme-name></span></button>
@@ -869,6 +992,7 @@ function sheetMenu(){
     if (a === 'labels'){ showLabels = !showLabels; closeDlg(); render(); }
     if (a === 'nets') sheetNets();
     if (a === 'lib') sheetLib();
+    if (a === 'png'){ closeDlg(); exportPNG(); }
     if (a === 'export') sheetExport();
     if (a === 'import') sheetImport();
     if (a === 'help') sheetHelp();
@@ -882,6 +1006,7 @@ function sheetMenu(){
 
 /* ---------- barres et clavier ---------- */
 $('#bUndo').onclick = undo; $('#bRedo').onclick = redo; $('#bFit').onclick = fit; $('#bMenu').onclick = sheetMenu;
+$('#bSide').onclick = () => setSide(!bottom); $('#pillSide').onclick = () => setSide(false);
 $('#bAdd').onclick = sheetAdd; $('#mSel').onclick = () => setMode('sel'); $('#mWire').onclick = () => setMode('wire');
 document.addEventListener('keydown', e => {
   if (dlg.open || (e.target.matches && e.target.matches('input,textarea,select'))) return;
@@ -890,6 +1015,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape'){ if (cur){ cur = null; hover = null; } else sel = null; render(); updateCtx(); }
   else if (e.key === 'Enter' && cur) finishWire();
   else if (e.key === 'w') setMode(mode === 'wire' ? 'sel' : 'wire');
+  else if (e.key === 'd') setSide(!bottom);
+  else if (e.key === 'h'){ half = !half; applyMirror(); updateCtx(); }
   else if (sel && sel.t === 'part' && e.key === 'r') transformPart(sel.id, p => p.r = (p.r + 1) % 4);
   else if (sel && sel.t === 'part' && e.key === 'f') transformPart(sel.id, p => p.f = !p.f);
   else if ((e.key === 'Delete' || e.key === 'Backspace') && sel){
@@ -905,7 +1032,7 @@ window.addEventListener('resize', applyView);
 loadLocalLib();
 const savedView = load();
 setMode('sel');
-if (savedView && savedView.s){ view = savedView; applyView(); } else fit();
+if (savedView && savedView.s){ view = savedView; bottom = !!view.b; applyView(); render(); } else fit();
 const missing = [...new Set(doc.parts.filter(p => !BUILTIN[p.type] && !LIB.has(p.type)).map(p => p.type))];
 if (missing.length) toast('Composant(s) introuvable(s) : ' + missing.join(', '), true);
 </script>
