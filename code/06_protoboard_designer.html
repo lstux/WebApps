@@ -9,6 +9,7 @@
 <link rel="icon" type="image/svg+xml" href="icons/protoboard_designer.svg">
 <script src="common.js"></script>
 <script src="pbstore.js"></script>
+<script src="pbsync.js"></script>
 <script>
 /* Registre des composants : chaque fichier de protoboard/components/ appelle ProtoBoard.component({…}).
    Défini avant les fichiers de composants, qui sont chargés en fin de page. */
@@ -1216,7 +1217,7 @@ function sheetMenu(){
     if (a === 'nets') sheetNets();
     if (a === 'lib') sheetLib();
     if (a === 'png'){ closeDlg(); exportPNG(); }
-    if (a === 'sync') sheetSync();
+    if (a === 'sync'){ closeDlg(); sync.open(); }
     if (a === 'export') sheetExport();
     if (a === 'import') sheetImport();
     if (a === 'help') sheetHelp();
@@ -1229,68 +1230,21 @@ function sheetMenu(){
 }
 
 
-/* ---------- synchronisation (PocketBase, facultative) ---------- */
-let syncing = false, lastSync = 0, syncMsg = '';
+/* ---------- synchronisation (PocketBase, facultative) : écran et boucle dans pbsync.js ---------- */
 function reloadLocalLib(){ [...LIB.entries()].forEach(([id, e]) => { if (e.src === 'local') LIB.delete(id); }); loadLocalLib(); }
-/* Une valeur vient d'être remplacée par la version du serveur. */
-store.onChange = (key, value) => {
+/* Une valeur vient d'être remplacée par la version du serveur (le texte renvoyé s'affiche en message). */
+function syncChanged(key, value){
   if (key === 'doc.v1'){
-    if (!validDoc(value)) return;
+    if (!validDoc(value)) return null;
     undoStack.push(lastJSON); if (undoStack.length > 100) undoStack.shift(); redoStack = [];
     doc = value; if (!doc.board) doc.board = {w:24, h:30, show:true};
     lastJSON = JSON.stringify(doc); sel = null; cur = null; render(); updateCtx();
-    toast('Plan mis à jour depuis un autre appareil — ↶ pour revenir.');
-  } else if (key === 'components.v1'){ reloadLocalLib(); render(); }
-  else if (key.startsWith('circuit.')){ const h = $('#dlgIn h2'); if (dlg.open && h && h.textContent === 'Charger un circuit') sheetLoad(); }
-};
-store.onError = e => {
-  syncMsg = 'Erreur : ' + (e && e.message || e);
-  if (e && (e.status === 401 || e.status === 403)) toast('Synchronisation : reconnecte-toi (menu ☰ → Synchronisation).', true);
-  console.warn('pbstore :', e);
-};
-async function doSync(manual){
-  if (!store.connected || syncing) return null;
-  if (!manual && Date.now() - lastSync < 20000) return null;   // l'authentification du serveur est limitée en débit
-  syncing = true; lastSync = Date.now();
-  try {
-    const r = await store.sync();
-    syncMsg = `Synchronisé à ${new Date().toLocaleTimeString('fr-FR', {timeStyle:'short'})} · ${r.pushed} envoyé(s), ${r.pulled} reçu(s)`;
-    return r;
-  } catch(e){ store.onError(e); return null; }
-  finally { syncing = false; }
-}
-function sheetSync(){
-  let h = '<h2>Synchronisation</h2>';
-  if (store.connected){
-    h += `<p>Connecté : <b>${esc(store.email)}</b> · ${esc(store.url)}</p><p id="syMsg">${esc(syncMsg || 'Pas encore synchronisé sur cette page.')}</p>
-      <div class="btns"><button class="btn" data-a="logout">Se déconnecter</button><button class="btn primary" data-a="now">Synchroniser maintenant</button></div>
-      <p>Le plan en cours, les circuits enregistrés et « Mes composants » sont synchronisés sur le serveur, les données sont stockées sans chiffrement.</p>`;
-  } else {
-    h += `<p>Facultatif : retrouve ton plan et tes circuits sur tes autres appareils.</p>
-      <div class="form"><label class="lbl" for="syUrl">Serveur</label><input type="text" id="syUrl" value="${esc(store.url)}" autocomplete="off" autocapitalize="off" spellcheck="false">
-      <label class="lbl" for="syMail">Email</label><input class="field" type="email" id="syMail" autocomplete="username" autocapitalize="off" spellcheck="false">
-      <label class="lbl" for="syPw">Mot de passe</label><input class="field" type="password" id="syPw" autocomplete="current-password"></div>
-      <div class="btns"><button class="btn primary" data-a="login">Se connecter</button></div>
-      <p>Compte créé par l'administrateur. Au premier envoi, si le serveur a déjà un plan ou des composants, c'est sa version qui est reprise (↶ pour revenir).</p>`;
+    return 'Plan mis à jour depuis un autre appareil — ↶ pour revenir.';
   }
-  openDlg(h, async (a, b) => {
-    if (a === 'logout'){ store.logout(); syncMsg = ''; sheetSync(); }
-    if (a === 'now'){ b.disabled = true; const r = await doSync(true); if (dlg.open) sheetSync(); if (r) toast('Synchronisé.'); }
-    if (a === 'login'){
-      const url = $('#syUrl').value.trim(), mail = $('#syMail').value.trim(), pw = $('#syPw').value;
-      if (!mail || !pw){ toast('Email et mot de passe, s\'il te plaît.', true); return; }
-      b.disabled = true; b.textContent = 'Connexion…';
-      try { await store.login(url, mail, pw); }
-      catch(e){ toast(e.status === 429 ? 'Trop d\'essais, attends quelques secondes.' : e.status === 400 ? 'Identifiants refusés.' : 'Connexion impossible : ' + (e.message || e), true); b.disabled = false; b.textContent = 'Se connecter'; return; }
-      store.adopt(['doc.v1', 'components.v1']);
-      await doSync(true);
-      if (dlg.open) sheetSync();
-      toast('Connecté.');
-    }
-  });
+  if (key === 'components.v1'){ reloadLocalLib(); render(); }
+  else if (key.startsWith('circuit.')){ const h = $('#dlgIn h2'); if (dlg.open && h && h.textContent === 'Charger un circuit') sheetLoad(); }
+  return null;
 }
-window.addEventListener('online', () => doSync(false));
-document.addEventListener('visibilitychange', () => { if (!document.hidden) doSync(false); });
 
 /* ---------- barres et clavier ---------- */
 $('#bUndo').onclick = undo; $('#bRedo').onclick = redo; $('#bFit').onclick = fit; $('#bMenu').onclick = sheetMenu;
@@ -1319,7 +1273,6 @@ window.addEventListener('resize', applyView);
 
 /* ---------- démarrage ---------- */
 migrateCircuits();
-store.adopt(['doc.v1', 'components.v1']);
 loadLocalLib();
 const savedView = load();
 try {   // circuit ouvert avant le rechargement de la page
@@ -1330,7 +1283,13 @@ setMode('sel');
 if (savedView && savedView.s){ view = savedView; bottom = !!view.b; applyView(); render(); } else fit();
 const missing = [...new Set(doc.parts.filter(p => !BUILTIN[p.type] && !LIB.has(p.type)).map(p => p.type))];
 if (missing.length) toast('Composant(s) introuvable(s) : ' + missing.join(', '), true);
-doSync(true);
+const sync = PBSync.init(store, {   // synchronise tout de suite, puis au retour en ligne / sur l'onglet
+  adopt: ['doc.v1', 'components.v1'],
+  summary: 'Le plan en cours, les circuits enregistrés et « Mes composants » sont synchronisés sur le serveur, les données sont stockées sans chiffrement.',
+  note: 'Au premier envoi, si le serveur a déjà un plan ou des composants, c\'est sa version qui est reprise (↶ pour revenir).',
+  onChange: syncChanged,
+  toast: toast,
+});
 </script>
 </body>
 </html>

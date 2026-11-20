@@ -2,7 +2,7 @@
 // Sans dependance. localStorage reste la source de verite locale (l'app marche hors ligne,
 // sans compte, sans reseau) ; PocketBase sert a retrouver les memes donnees sur les autres appareils.
 //
-//   <script src="pbstore.js"></script>
+//   <script src="pbstore.js">
 //   const store = new PBStore({ app: "slovingo", sharedAuth: true });   // sharedAuth : meme connexion pour toutes les apps de l'origine          // app : [a-z0-9][a-z0-9_-]*, <= 64 car.
 //   await store.login("https://store.lslinux.org", email, motDePasse);   // ecran de reglages
 //   store.set("progress", { level: 3 });                      // ecrit en local, pousse en arriere-plan
@@ -17,7 +17,7 @@
 //
 // Version « script classique » pour les pages de ce dépôt (comme common.js) : ouverte en file://, servie en http(s)
 // ou insérée par `build.py --standalone`, elle définit window.PBStore. Le code de la classe est celui du module ES
-// d'origine, seul le conteneur change : <script src="pbstore.js"></script>, puis new PBStore({ app: "...", prefix: "..." }).
+// d'origine, seul le conteneur change : la balise script de pbstore.js, puis new PBStore({ app: "...", prefix: "..." }).
 
 (function (global) {
   "use strict";

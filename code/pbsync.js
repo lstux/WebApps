@@ -1,7 +1,7 @@
 /* pbsync.js — écran « Synchronisation » partagé par les pages qui utilisent pbstore.js (PocketBase).
 
    À placer dans le <head> après common.js et pbstore.js :
-     <script src="common.js"></script> <script src="pbstore.js"></script> <script src="pbsync.js"></script>
+     common.js, pbstore.js puis pbsync.js (balises script src)
 
    const pb = new PBStore({ app: "todo", sharedAuth: true });   // sharedAuth : une seule connexion pour toutes les apps de l'origine
    const sync = PBSync.init(pb, {
@@ -9,6 +9,7 @@
      summary: "…",                       // phrase de l'écran connecté : ce qui est synchronisé, sans chiffrement
      note: "…",                          // phrase propre à l'app, ajoutée à l'écran de connexion
      onChange(key, value){ … return "message" },   // valeur remplacée par le serveur : relire, redessiner ; le texte renvoyé s'affiche
+     toast(texte, erreur){ … }           // facultatif : le message de l'app, à la place de celui de pbsync
      onStatus(texte){ … }                // « non connecté » ou l'email : pour l'entrée de menu
    });
    sync.open();                          // ouvre l'écran (depuis le menu de l'app)
@@ -26,6 +27,7 @@
 
     function status() { if (opts.onStatus) opts.onStatus(pb.connected ? pb.email : "non connecté"); }
     function toast(text, err) {
+      if (opts.toast) { opts.toast(text, err); return; }   // l'app a déjà son message : on l'utilise
       if (!toastEl) { toastEl = document.createElement("div"); toastEl.className = "toast"; toastEl.setAttribute("role", "status"); document.body.appendChild(toastEl); }
       toastEl.textContent = text; toastEl.className = "toast" + (err ? " err" : ""); toastEl.hidden = false;
       clearTimeout(toastTimer); toastTimer = setTimeout(function () { toastEl.hidden = true; }, err ? 7000 : 4000);
