@@ -74,6 +74,12 @@ store.onError  = (e) => { /* sinon console.warn ; e.status = code HTTP */ };
 - **`adopt(keys)`** : pour les données qui existaient avant la synchro. Elles sont envoyées si le serveur ne les a pas, mais **la version du serveur gagne en cas de conflit** (donc un second appareil avec des données locales différentes les perd au premier `sync`). À signaler à l'utilisateur dans l'écran de réglages si l'app le justifie.
 - Le jeton est rafraîchi à chaque `sync()`. Si le serveur répond 401/403, le module se déconnecte (`connected` devient faux) : redemander le mot de passe.
 
+## Dans ce dépôt
+
+- `code/pbstore.js` : le module (script classique).
+- `code/pbsync.js` : l'écran « Synchronisation » partagé (connexion, état, synchro à l'ouverture / au retour en ligne / au retour d'onglet, au plus toutes les 20 s) : `PBSync.init(pb, { adopt, note, onChange, onStatus })` puis `sync.open()` depuis un menu.
+- Utilisé par TODO (`app: todo`, clé `todo-tree-v1`), la Liseuse (`app: liseuse`, clé `favs`) et ProtoBoardDesigner (`app: protoboard`).
+
 ## Conseils d'intégration
 
 - **Ne rien casser sans réglage** : si `store.connected` est faux, `set`/`get` se comportent comme localStorage, `sync()` ne fait rien.

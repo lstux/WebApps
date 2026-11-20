@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="common.css">
 <link rel="icon" type="image/svg+xml" href="icons/todo.svg">
 <script src="common.js"></script>
+<script src="pbstore.js"></script>
+<script src="pbsync.js"></script>
 <style>
 /* TODO — styles spécifiques. Composants du système : .btn, .card, .ring, .cb, .progress, .pct, .sheet */
 body { padding-bottom: calc(150px + env(safe-area-inset-bottom,0px)); }
@@ -101,6 +103,7 @@ li.drag-src { opacity: .35; }
     <button class="item" data-act="import"><span class="ic">⬆</span> Importer…</button>
     <button class="item" data-act="json"><span class="ic">⬇</span> Exporter en JSON</button>
     <button class="item" data-act="txt"><span class="ic">📄</span> Exporter en texte</button>
+    <button class="item" data-act="sync"><span class="ic">☁</span> Synchronisation<span class="sw" id="syncSw">non connecté</span></button>
   </div>
 </dialog>
 
@@ -121,6 +124,7 @@ li.drag-src { opacity: .35; }
 
 <script>
 const KEY = 'todo-tree-v1', UIKEY = 'todo-tree-ui';
+const pb = new PBStore({ app: 'todo' });   // synchronisation facultative (menu → Synchronisation) ; clés localStorage inchangées
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -137,7 +141,7 @@ function normalize(arr) {
 }
 function load() { try { const d = JSON.parse(localStorage.getItem(KEY)); return normalize(d && d.nodes); } catch { return []; } }
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify({ version: 1, nodes })); }
+  try { pb.set(KEY, { version: 1, nodes }); }
   catch (e) { alert('Sauvegarde impossible : ' + e.message); }
 }
 let nodes = load();
@@ -250,6 +254,7 @@ document.addEventListener('click', e => {
     case 'import': $('#menuDlg').close(); $('#impText').value = ''; $('#impFile').value = ''; $('#impDlg').showModal(); return;
     case 'json': $('#menuDlg').close(); return download(`todo-${day()}.json`, JSON.stringify({ version: 1, nodes: strip(nodes) }, null, 2), 'application/json');
     case 'txt': $('#menuDlg').close(); return download(`todo-${day()}.txt`, toText(nodes), 'text/plain');
+    case 'sync': $('#menuDlg').close(); return sync.open();
     case 'impcancel': return $('#impDlg').close();
     case 'impreplace': return doImport(true);
     case 'impappend': return doImport(false);
@@ -292,6 +297,16 @@ document.addEventListener('dblclick', e => {
   ui.editing = li.dataset.id; ui.adding = null; ui.menu = null; render();
 });
 $('#btnMenu').onclick = () => { syncMenu(); $('#menuDlg').showModal(); };
+const sync = PBSync.init(pb, {
+  adopt: [KEY],
+  note: 'Au premier envoi, si le serveur a déjà une liste, c\'est sa version qui remplace celle de cet appareil : exporte-la en JSON avant si tu veux la garder.',
+  onChange(key, value) {
+    if (key !== KEY || !value) return null;
+    nodes = normalize(value.nodes); ui.adding = ui.editing = ui.menu = null; render();
+    return 'Liste mise à jour depuis un autre appareil.';
+  },
+  onStatus(t) { const e = document.getElementById('syncSw'); if (e) e.textContent = t; }
+});
 function syncMenu() { $('#hideSw').textContent = hideDone ? 'activé' : 'désactivé'; }
 function setCollapsed(list, v) { list.forEach(n => { n.collapsed = v; setCollapsed(n.children, v); }); }
 
