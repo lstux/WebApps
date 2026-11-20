@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="common.css">
 <link rel="icon" type="image/svg+xml" href="icons/protoboard_designer.svg">
 <script src="common.js"></script>
+<script src="pbstore.js"></script>
 <script>
 /* Registre des composants : chaque fichier de protoboard/components/ appelle ProtoBoard.component({…}).
    Défini avant les fichiers de composants, qui sont chargés en fin de page. */
@@ -170,6 +171,11 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
    ========================================================================== */
 const U = 20;
 const KEY_DOC = 'protoboard.doc.v1', KEY_VIEW = 'protoboard.view.v1', KEY_LIB = 'protoboard.components.v1', KEY_CIRC = 'protoboard.circuits.v1', KEY_CUR = 'protoboard.current.v1';
+/* Synchronisation facultative avec un serveur PocketBase (docs/SYNCHRO.md). localStorage reste la source locale :
+   protoboard.doc.v1 (plan en cours), protoboard.components.v1 (Mes composants), protoboard.circuit.<id> (un circuit
+   par clé). La vue et le circuit ouvert restent propres à chaque appareil. */
+const CIRC_PREFIX = 'protoboard.circuit.';
+const store = new PBStore({app:'protoboard', prefix:'protoboard.'});
 const $ = s => document.querySelector(s);
 const svg = $('#svg'), vp = $('#vp'), mir = $('#mir'), world = $('#world'), paper = $('#paper'), paperHalf = $('#paperHalf');
 const COLORS = ['#e53935','#212121','#1e88e5','#43a047','#fdd835','#fb8c00','#8e24aa','#f5f5f5'];
@@ -249,7 +255,7 @@ function register(def, src){
   return id;
 }
 function loadLocalLib(){ try { (JSON.parse(localStorage.getItem(KEY_LIB)) || []).forEach(d => { try { register(d, 'local'); } catch(e){} }); } catch(e){} }
-function saveLocalLib(){ try { localStorage.setItem(KEY_LIB, JSON.stringify([...LIB.values()].filter(e => e.src === 'local').map(e => e.def))); } catch(e){} }
+function saveLocalLib(){ try { store.set('components.v1', [...LIB.values()].filter(e => e.src === 'local').map(e => e.def)); } catch(e){} }
 ProtoBoard.list.forEach(d => { try { register(d, 'file'); } catch(e){ console.warn('ProtoBoard : composant ignoré', d && d.id, e.message); } });
 ProtoBoard.component = d => { try { register(d, 'file'); } catch(e){} };   // fichiers chargés plus tard
 /* Fichier de composant (.js) à partir d'une définition. */
@@ -529,7 +535,7 @@ function setSide(b){
 }
 
 /* ---------- historique et sauvegarde ---------- */
-function save(){ try { localStorage.setItem(KEY_DOC, lastJSON); } catch(e){} }
+function save(){ try { store.set('doc.v1', lastJSON); } catch(e){} }
 function commit(){
   const j = JSON.stringify(doc);
   if (j !== lastJSON){ undoStack.push(lastJSON); if (undoStack.length > 100) undoStack.shift(); redoStack = []; lastJSON = j; save(); }
@@ -904,12 +910,26 @@ function exportText(){
 /* ---------- bibliothèque de circuits (localStorage, enregistrement à la demande) ---------- */
 const fmtDate = t => new Date(t).toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'});
 function readCircuits(){
-  try { const a = JSON.parse(localStorage.getItem(KEY_CIRC)); return Array.isArray(a) ? a.filter(c => c && c.id && c.name && validDoc(c.doc)) : []; }
-  catch(e){ return []; }
+  const out = [];
+  for (let i = 0; i < localStorage.length; i++){
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(CIRC_PREFIX)) continue;
+    try { const c = JSON.parse(localStorage.getItem(k)); if (c && c.id && c.name && validDoc(c.doc)) out.push(c); } catch(e){}
+  }
+  return out;
 }
-function writeCircuits(a){
-  try { localStorage.setItem(KEY_CIRC, JSON.stringify(a)); return true; }
+function putCircuit(rec){
+  try { store.set('circuit.' + rec.id, rec); return true; }
   catch(e){ toast('Enregistrement impossible : le stockage du navigateur est plein.', true); return false; }
+}
+function delCircuit(id){ try { store.remove('circuit.' + id); } catch(e){} }
+/* Ancienne bibliothèque (une seule clé protoboard.circuits.v1) : un circuit par clé, pour pouvoir les synchroniser. */
+function migrateCircuits(){
+  try {
+    const old = JSON.parse(localStorage.getItem(KEY_CIRC));
+    if (Array.isArray(old)){ old.forEach(c => { if (c && c.id && c.name && validDoc(c.doc)) store.set('circuit.' + c.id, c); }); }
+    if (old !== null) localStorage.removeItem(KEY_CIRC);
+  } catch(e){}
 }
 function setCircuit(c){
   circuit = c; savedJSON = c ? JSON.stringify(doc) : '';
@@ -925,10 +945,8 @@ function updateTitle(){
   else { el.textContent = hasContent() ? 'Circuit sans nom' : 'Plaque à pastilles · pas 2,54 mm'; el.title = ''; }
 }
 function saveCircuit(name, id){
-  const lib = readCircuits(), rec = {id:id || uid(), name, t:Date.now(), doc:JSON.parse(JSON.stringify(doc)), components:usedComponents()};
-  const i = lib.findIndex(c => c.id === rec.id);
-  if (i >= 0) lib[i] = rec; else lib.push(rec);
-  if (!writeCircuits(lib)) return false;
+  const rec = {id:id || uid(), name, t:Date.now(), doc:JSON.parse(JSON.stringify(doc)), components:usedComponents()};
+  if (!putCircuit(rec)) return false;
   setCircuit({id:rec.id, name}); return true;
 }
 /* Remplace le plan par un plan lu (import ou bibliothèque) et ajoute à « Mes composants » ceux qui manquent. */
@@ -967,7 +985,7 @@ function sheetLoad(){
   let h = '<h2>Charger un circuit</h2>';
   h += lib.length ? lib.map(c => `<div class="lib"><div class="grow"><b>${esc(c.name)}</b>${circuit && circuit.id === c.id ? ' · ouvert' : ''}<small>${c.doc.parts.length} pièce(s) · ${c.doc.wires.length} fil(s) · ${fmtDate(c.t)}</small></div>
       <button class="btn primary" data-a="load" data-id="${esc(c.id)}">Charger</button><button class="btn" data-a="del" data-id="${esc(c.id)}" aria-label="Supprimer">🗑</button></div>`).join('')
-    : '<p>La bibliothèque est vide. Enregistre un circuit depuis le menu ou le bouton 💾.</p>';
+    : '<p>La bibliothèque est vide. Enregistre un circuit depuis le menu ☰.</p>';
   openDlg(h, (a, b) => {
     const rec = lib.find(c => c.id === b.dataset.id);
     if (!rec) return;
@@ -979,7 +997,7 @@ function sheetLoad(){
     }
     if (a === 'del'){
       if (!b.dataset.armed){ b.dataset.armed = 1; b.textContent = 'Supprimer ?'; return; }
-      writeCircuits(readCircuits().filter(c => c.id !== rec.id));
+      delCircuit(rec.id);
       if (circuit && circuit.id === rec.id) setCircuit(null);
       sheetLoad();
     }
@@ -1075,6 +1093,7 @@ function sheetMenu(){
     <button class="item" data-a="nets"><span class="ic">🔗</span> Liste des connexions</button>
     <button class="item" data-a="lib"><span class="ic">🧩</span> Composants</button>
     <button class="item" data-a="png"><span class="ic">🖼</span> Image PNG<span class="sw">${bottom ? 'dessous' : 'dessus'}</span></button>
+    <button class="item" data-a="sync"><span class="ic">☁</span> Synchronisation<span class="sw">${store.connected ? esc(store.email) : 'non connecté'}</span></button>
     <button class="item" data-a="export"><span class="ic">⬇</span> Exporter</button>
     <button class="item" data-a="import"><span class="ic">⬆</span> Importer</button>
     <button class="item" data-theme-toggle><span class="ic" data-theme-icon></span> Thème<span class="sw" data-theme-name></span></button>
@@ -1088,6 +1107,7 @@ function sheetMenu(){
     if (a === 'nets') sheetNets();
     if (a === 'lib') sheetLib();
     if (a === 'png'){ closeDlg(); exportPNG(); }
+    if (a === 'sync') sheetSync();
     if (a === 'export') sheetExport();
     if (a === 'import') sheetImport();
     if (a === 'help') sheetHelp();
@@ -1098,6 +1118,70 @@ function sheetMenu(){
   });
   if (window.WebAppsTheme) WebAppsTheme.set(WebAppsTheme.get());   // dessine l'icône du thème dans la feuille
 }
+
+
+/* ---------- synchronisation (PocketBase, facultative) ---------- */
+let syncing = false, lastSync = 0, syncMsg = '';
+function reloadLocalLib(){ [...LIB.entries()].forEach(([id, e]) => { if (e.src === 'local') LIB.delete(id); }); loadLocalLib(); }
+/* Une valeur vient d'être remplacée par la version du serveur. */
+store.onChange = (key, value) => {
+  if (key === 'doc.v1'){
+    if (!validDoc(value)) return;
+    undoStack.push(lastJSON); if (undoStack.length > 100) undoStack.shift(); redoStack = [];
+    doc = value; if (!doc.board) doc.board = {w:24, h:30, show:true};
+    lastJSON = JSON.stringify(doc); sel = null; cur = null; render(); updateCtx();
+    toast('Plan mis à jour depuis un autre appareil — ↶ pour revenir.');
+  } else if (key === 'components.v1'){ reloadLocalLib(); render(); }
+  else if (key.startsWith('circuit.')){ const h = $('#dlgIn h2'); if (dlg.open && h && h.textContent === 'Charger un circuit') sheetLoad(); }
+};
+store.onError = e => {
+  syncMsg = 'Erreur : ' + (e && e.message || e);
+  if (e && (e.status === 401 || e.status === 403)) toast('Synchronisation : reconnecte-toi (menu ☰ → Synchronisation).', true);
+  console.warn('pbstore :', e);
+};
+async function doSync(manual){
+  if (!store.connected || syncing) return null;
+  if (!manual && Date.now() - lastSync < 20000) return null;   // l'authentification du serveur est limitée en débit
+  syncing = true; lastSync = Date.now();
+  try {
+    const r = await store.sync();
+    syncMsg = `Synchronisé à ${new Date().toLocaleTimeString('fr-FR', {timeStyle:'short'})} · ${r.pushed} envoyé(s), ${r.pulled} reçu(s)`;
+    return r;
+  } catch(e){ store.onError(e); return null; }
+  finally { syncing = false; }
+}
+function sheetSync(){
+  let h = '<h2>Synchronisation</h2>';
+  if (store.connected){
+    h += `<p>Connecté : <b>${esc(store.email)}</b> · ${esc(store.url)}</p><p id="syMsg">${esc(syncMsg || 'Pas encore synchronisé sur cette page.')}</p>
+      <div class="btns"><button class="btn" data-a="logout">Se déconnecter</button><button class="btn primary" data-a="now">Synchroniser maintenant</button></div>
+      <p>Le plan en cours, les circuits enregistrés et « Mes composants » sont copiés sur le serveur. La dernière modification gagne, clé par clé (le plan, chaque circuit, les composants) : les horloges des appareils doivent être à peu près justes. Les valeurs sont lisibles par l'administrateur du serveur.</p>`;
+  } else {
+    h += `<p>Facultatif : retrouve ton plan et tes circuits sur tes autres appareils. Sans connexion, tout reste dans ce navigateur.</p>
+      <div class="form"><label class="lbl" for="syUrl">Serveur</label><input type="text" id="syUrl" value="${esc(store.url)}" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <label class="lbl" for="syMail">Email</label><input class="field" type="email" id="syMail" autocomplete="username" autocapitalize="off" spellcheck="false">
+      <label class="lbl" for="syPw">Mot de passe</label><input class="field" type="password" id="syPw" autocomplete="current-password"></div>
+      <div class="btns"><button class="btn primary" data-a="login">Se connecter</button></div>
+      <p>Les comptes sont créés par l'administrateur. Le mot de passe n'est pas gardé, seulement un jeton. Au premier envoi, si le serveur a déjà un plan en cours ou des composants, c'est sa version qui est reprise (↶ pour revenir) ; les circuits des deux côtés sont réunis.</p>`;
+  }
+  openDlg(h, async (a, b) => {
+    if (a === 'logout'){ store.logout(); syncMsg = ''; sheetSync(); }
+    if (a === 'now'){ b.disabled = true; const r = await doSync(true); if (dlg.open) sheetSync(); if (r) toast('Synchronisé.'); }
+    if (a === 'login'){
+      const url = $('#syUrl').value.trim(), mail = $('#syMail').value.trim(), pw = $('#syPw').value;
+      if (!mail || !pw){ toast('Email et mot de passe, s\'il te plaît.', true); return; }
+      b.disabled = true; b.textContent = 'Connexion…';
+      try { await store.login(url, mail, pw); }
+      catch(e){ toast(e.status === 429 ? 'Trop d\'essais, attends quelques secondes.' : e.status === 400 ? 'Identifiants refusés.' : 'Connexion impossible : ' + (e.message || e), true); b.disabled = false; b.textContent = 'Se connecter'; return; }
+      store.adopt(['doc.v1', 'components.v1']);
+      await doSync(true);
+      if (dlg.open) sheetSync();
+      toast('Connecté.');
+    }
+  });
+}
+window.addEventListener('online', () => doSync(false));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) doSync(false); });
 
 /* ---------- barres et clavier ---------- */
 $('#bUndo').onclick = undo; $('#bRedo').onclick = redo; $('#bFit').onclick = fit; $('#bMenu').onclick = sheetMenu;
@@ -1125,6 +1209,8 @@ document.addEventListener('keydown', e => {
 window.addEventListener('resize', applyView);
 
 /* ---------- démarrage ---------- */
+migrateCircuits();
+store.adopt(['doc.v1', 'components.v1']);
 loadLocalLib();
 const savedView = load();
 try {   // circuit ouvert avant le rechargement de la page
@@ -1135,6 +1221,7 @@ setMode('sel');
 if (savedView && savedView.s){ view = savedView; bottom = !!view.b; applyView(); render(); } else fit();
 const missing = [...new Set(doc.parts.filter(p => !BUILTIN[p.type] && !LIB.has(p.type)).map(p => p.type))];
 if (missing.length) toast('Composant(s) introuvable(s) : ' + missing.join(', '), true);
+doSync(true);
 </script>
 </body>
 </html>
