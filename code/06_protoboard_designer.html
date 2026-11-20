@@ -30,7 +30,8 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 .topbar, .dock { flex:none; }
 .topbar-in { max-width:none; gap:8px; }
 .topbar-in .iconbtn { --icon-size:38px; }
-@media (max-width:480px) { .topbar-in .appicon, .topbar .subtitle { display:none; } .brand { font-size:17px; } .topbar-in .iconbtn { --icon-size:34px; font-size:18px; } }
+#subtitle { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+@media (max-width:480px) { .topbar-in .appicon { display:none; } .topbar .subtitle { font-size:12px; } .brand { font-size:17px; } .topbar-in .iconbtn { --icon-size:34px; font-size:18px; } }
 
 .stage { position:relative; flex:1; min-height:0; }
 #svg { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
@@ -66,6 +67,7 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 .mainrow { display:flex; align-items:center; gap:8px; }
 .mainrow .chips { flex:1; }
 .mainrow .chip { flex:1; text-align:center; padding:9px 12px; }
+@media (max-width:400px) { .mainrow { gap:6px; } .mainrow .chip { padding:9px 6px; white-space:nowrap; } .mainrow .btn { padding-left:12px; padding-right:12px; } }
 .swatch { width:32px; height:32px; border-radius:50%; border:2px solid var(--card); box-shadow:0 0 0 1px var(--mut2); flex:none; transition:transform .2s var(--spring); }
 .swatch.on { box-shadow:0 0 0 3px var(--ac); }
 .swatch:active { transform:scale(.9); }
@@ -97,7 +99,7 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
     <a class="appicon" href="./" data-home aria-label="Accueil WebApps" title="Accueil WebApps"><img src="icons/protoboard_designer.svg" alt="" width="36" height="36"></a>
     <div class="grow">
       <h1 class="brand">ProtoBoardDesigner</h1>
-      <div class="subtitle">Plaque à pastilles · pas 2,54 mm</div>
+      <div class="subtitle" id="subtitle">Plaque à pastilles · pas 2,54 mm</div>
     </div>
     <button class="iconbtn" id="bUndo" title="Annuler (Ctrl+Z)" aria-label="Annuler">↶</button>
     <button class="iconbtn" id="bRedo" title="Rétablir (Ctrl+Maj+Z)" aria-label="Rétablir">↷</button>
@@ -167,7 +169,7 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
    Pièce : { id, type, x, y, r (quarts de tour), f (retournée), label, names[], n, rows, gap }
    ========================================================================== */
 const U = 20;
-const KEY_DOC = 'protoboard.doc.v1', KEY_VIEW = 'protoboard.view.v1', KEY_LIB = 'protoboard.components.v1';
+const KEY_DOC = 'protoboard.doc.v1', KEY_VIEW = 'protoboard.view.v1', KEY_LIB = 'protoboard.components.v1', KEY_CIRC = 'protoboard.circuits.v1', KEY_CUR = 'protoboard.current.v1';
 const $ = s => document.querySelector(s);
 const svg = $('#svg'), vp = $('#vp'), mir = $('#mir'), world = $('#world'), paper = $('#paper'), paperHalf = $('#paperHalf');
 const COLORS = ['#e53935','#212121','#1e88e5','#43a047','#fdd835','#fb8c00','#8e24aa','#f5f5f5'];
@@ -279,6 +281,7 @@ let mode = 'sel', sel = null, cur = null, hover = null;
 let wireColor = COLORS[0], ortho = true, showLabels = true, half = false, wireIso = false, bottom = false;
 const mirX = () => (doc.board.w - 1) * U;   // axe du miroir (dessous) : x → mirX − x
 let pinMap = new Map(), vtxKeys = new Set(), parent = new Map();
+let circuit = null, savedJSON = '';   // circuit ouvert depuis la bibliothèque : {id, name} ; savedJSON = son état enregistré
 const getPart = id => doc.parts.find(p => p.id === id);
 const getWire = id => doc.wires.find(w => w.id === id);
 const partName = p => BUILTIN[p.type] ? BUILTIN[p.type].name : (LIB.get(p.type) ? LIB.get(p.type).def.name : p.type + ' (introuvable)');
@@ -494,6 +497,7 @@ function render(){
   buildIndex();
   applyMirror();
   world.innerHTML = sceneHTML(false);
+  updateTitle();
   $('#bUndo').disabled = !undoStack.length; $('#bRedo').disabled = !redoStack.length;
 }
 /* Vue de dessous : le calque du plan est retourné autour de l'axe vertical de la plaque. */
@@ -729,7 +733,8 @@ function updateCtx(){
     const others = pins.filter(e => K(e.x,e.y) !== sel.key);
     h += `<div class="info">${others.length ? 'Relié à : ' + others.map(e => `<b>${pinTitle(e)}</b>`).join(', ') : 'Aucune connexion'}</div>`;
     netWarnings(pins).forEach(t => h += `<div class="warn">${t}</div>`);
-  } else h += `<div class="info">Touche une pièce, une broche ou un fil · glisse pour déplacer · pince pour zoomer</div>`;
+  } else h += `<div class="rowb"><button class="btn" data-a="save">💾 Enregistrer</button><button class="btn" data-a="load">📂 Charger</button></div>
+    <div class="info">Touche une pièce, une broche ou un fil · glisse pour déplacer · pince pour zoomer</div>`;
   $('#ctx').innerHTML = h;
 }
 $('#ctx').addEventListener('click', e => {
@@ -740,6 +745,8 @@ $('#ctx').addEventListener('click', e => {
       wireColor = b.dataset.v;
       if (sel && sel.t === 'wire' && getWire(id)){ getWire(id).c = wireColor; commit(); } else { render(); updateCtx(); }
       break;
+    case 'save': saveCmd(); break;
+    case 'load': sheetLoad(); break;
     case 'ortho': ortho = !ortho; updateCtx(); break;
     case 'half': half = !half; applyMirror(); updateCtx(); break;
     case 'iso':
@@ -889,10 +896,94 @@ function sheetNets(){
   openDlg(h, a => { if (a === 'copy') copyText(txt); });
 }
 /* Export : le plan, plus les définitions des composants qu'il utilise (pour l'ouvrir ailleurs). */
+const usedComponents = () => { const used = {}; doc.parts.forEach(p => { const e = LIB.get(p.type); if (e) used[p.type] = e.def; }); return used; };
 function exportText(){
-  const used = {};
-  doc.parts.forEach(p => { const e = LIB.get(p.type); if (e) used[p.type] = e.def; });
-  return JSON.stringify({app:'ProtoBoardDesigner', version:1, board:doc.board, parts:doc.parts, wires:doc.wires, components:used}, null, 1);
+  return JSON.stringify({app:'ProtoBoardDesigner', version:1, board:doc.board, parts:doc.parts, wires:doc.wires, components:usedComponents()}, null, 1);
+}
+
+/* ---------- bibliothèque de circuits (localStorage, enregistrement à la demande) ---------- */
+const fmtDate = t => new Date(t).toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'});
+function readCircuits(){
+  try { const a = JSON.parse(localStorage.getItem(KEY_CIRC)); return Array.isArray(a) ? a.filter(c => c && c.id && c.name && validDoc(c.doc)) : []; }
+  catch(e){ return []; }
+}
+function writeCircuits(a){
+  try { localStorage.setItem(KEY_CIRC, JSON.stringify(a)); return true; }
+  catch(e){ toast('Enregistrement impossible : le stockage du navigateur est plein.', true); return false; }
+}
+function setCircuit(c){
+  circuit = c; savedJSON = c ? JSON.stringify(doc) : '';
+  try { c ? localStorage.setItem(KEY_CUR, JSON.stringify(c)) : localStorage.removeItem(KEY_CUR); } catch(e){}
+  updateTitle();
+}
+const isDirty = () => JSON.stringify(doc) !== savedJSON;
+const hasContent = () => doc.parts.length || doc.wires.length;
+/* Sous le titre : le nom du circuit, avec • quand il a changé depuis son enregistrement. */
+function updateTitle(){
+  const el = $('#subtitle');
+  if (circuit){ el.textContent = circuit.name + (isDirty() ? ' •' : ''); el.title = isDirty() ? 'Modifications non enregistrées' : 'Enregistré'; }
+  else { el.textContent = hasContent() ? 'Circuit sans nom' : 'Plaque à pastilles · pas 2,54 mm'; el.title = ''; }
+}
+function saveCircuit(name, id){
+  const lib = readCircuits(), rec = {id:id || uid(), name, t:Date.now(), doc:JSON.parse(JSON.stringify(doc)), components:usedComponents()};
+  const i = lib.findIndex(c => c.id === rec.id);
+  if (i >= 0) lib[i] = rec; else lib.push(rec);
+  if (!writeCircuits(lib)) return false;
+  setCircuit({id:rec.id, name}); return true;
+}
+/* Remplace le plan par un plan lu (import ou bibliothèque) et ajoute à « Mes composants » ceux qui manquent. */
+function applyDoc(d, comps){
+  let added = 0;
+  Object.values(comps || {}).forEach(c => { if (c && c.id && !LIB.has(slug(c.id))){ try { register(c, 'local'); added++; } catch(e){} } });
+  if (added) saveLocalLib();
+  doc = {board:d.board || {w:24,h:30,show:true}, parts:d.parts, wires:d.wires};
+  sel = null; cur = null; commit(); fit();
+  return added;
+}
+/* Enregistrer : sur place si le circuit a déjà un nom, sinon on le demande. */
+function saveCmd(){
+  if (!circuit){ sheetSave(); return; }
+  if (saveCircuit(circuit.name, circuit.id)) toast(`Enregistré : ${circuit.name}`);
+}
+function sheetSave(){
+  const lib = readCircuits();
+  openDlg(`<h2>${circuit ? 'Enregistrer sous…' : 'Enregistrer le circuit'}</h2><div class="form"><label class="lbl" for="svName">Nom</label>
+    <input type="text" id="svName" maxlength="60" autocomplete="off" placeholder="Mon circuit" value="${esc(circuit ? circuit.name + ' (copie)' : '')}"></div>
+    <p>Le circuit va dans la bibliothèque de ce navigateur. Rien n'est enregistré automatiquement : touche Enregistrer pour mettre à jour.</p>
+    <div class="btns"><button class="btn primary" data-a="ok">Enregistrer</button></div>`, (a, b) => {
+    if (a !== 'ok') return;
+    const name = $('#svName').value.trim();
+    if (!name){ toast('Donne un nom au circuit.', true); return; }
+    const same = lib.find(c => c.name.toLowerCase() === name.toLowerCase());
+    if (same && !b.dataset.armed){ b.dataset.armed = 1; b.textContent = `Remplacer « ${name} » ?`; return; }
+    if (saveCircuit(name, same && same.id)){ closeDlg(); toast(`Enregistré : ${name}`); }
+  });
+  const inp = $('#svName'); inp.focus(); inp.select();
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') $('#dlgIn [data-a=ok]').click(); });
+  inp.addEventListener('input', () => { const b = $('#dlgIn [data-a=ok]'); delete b.dataset.armed; b.textContent = 'Enregistrer'; });
+}
+function sheetLoad(){
+  const lib = readCircuits().sort((a, b) => b.t - a.t);
+  let h = '<h2>Charger un circuit</h2>';
+  h += lib.length ? lib.map(c => `<div class="lib"><div class="grow"><b>${esc(c.name)}</b>${circuit && circuit.id === c.id ? ' · ouvert' : ''}<small>${c.doc.parts.length} pièce(s) · ${c.doc.wires.length} fil(s) · ${fmtDate(c.t)}</small></div>
+      <button class="btn primary" data-a="load" data-id="${esc(c.id)}">Charger</button><button class="btn" data-a="del" data-id="${esc(c.id)}" aria-label="Supprimer">🗑</button></div>`).join('')
+    : '<p>La bibliothèque est vide. Enregistre un circuit depuis le menu ou le bouton 💾.</p>';
+  openDlg(h, (a, b) => {
+    const rec = lib.find(c => c.id === b.dataset.id);
+    if (!rec) return;
+    if (a === 'load'){
+      if (hasContent() && (!circuit || isDirty()) && !b.dataset.armed){ b.dataset.armed = 1; b.textContent = 'Remplacer le plan actuel ?'; return; }
+      const added = applyDoc(JSON.parse(JSON.stringify(rec.doc)), rec.components);
+      setCircuit({id:rec.id, name:rec.name}); closeDlg();
+      toast(added ? `Chargé : ${rec.name} (${added} composant(s) ajouté(s)).` : `Chargé : ${rec.name} — ↶ pour revenir au plan précédent.`);
+    }
+    if (a === 'del'){
+      if (!b.dataset.armed){ b.dataset.armed = 1; b.textContent = 'Supprimer ?'; return; }
+      writeCircuits(readCircuits().filter(c => c.id !== rec.id));
+      if (circuit && circuit.id === rec.id) setCircuit(null);
+      sheetLoad();
+    }
+  });
 }
 /* Image PNG de la vue actuelle (dessus ou dessous), sur fond blanc, avec repères de colonnes (A, B…) et de
    lignes (1, 2…) : un guide pour souder. Fabriquée à partir du même dessin que l'écran, sans sélection. */
@@ -945,11 +1036,7 @@ function sheetImport(){
     if (a !== 'go') return;
     try {
       const d = JSON.parse($('#imTxt').value); if (!validDoc(d)) throw 0;
-      let added = 0;
-      Object.values(d.components || {}).forEach(c => { if (c && c.id && !LIB.has(slug(c.id))){ try { register(c, 'local'); added++; } catch(e){} } });
-      if (added) saveLocalLib();
-      doc = {board:d.board || {w:24,h:30,show:true}, parts:d.parts, wires:d.wires};
-      sel = null; cur = null; closeDlg(); commit(); fit();
+      closeDlg(); const added = applyDoc(d, d.components); setCircuit(null);
       toast(added ? `Plan chargé (${added} composant(s) ajouté(s) à « Mes composants »).` : 'Plan chargé.');
     } catch(e){ toast('Texte non reconnu.', true); }
   });
@@ -975,10 +1062,15 @@ function sheetHelp(){
     <p><b>Broche</b> : touche-la pour voir son rôle, ses mises en garde et tout ce qui y est relié. Deux fils ne sont reliés que s'ils partagent un point (une soudure) : se croiser ne suffit pas. Une barrette posée sur les broches d'un module est connectée.</p>
     <p><b>Composants</b> : un fichier par composant dans <code>code/protoboard/components/</code>. Pour les tiens sans toucher au dépôt : module générique → ✎ → « Enregistrer comme composant », ou menu → Composants → Importer.</p>
     <p><b>Clavier</b> : W fil, H demi-pas, D dessous/dessus, R pivoter, F retourner, Suppr effacer, Échap annuler, Ctrl+Z / Ctrl+Maj+Z.</p>
-    <p>Le plan est gardé dans ce navigateur ; Exporter / Importer pour le sauvegarder ou le passer sur un autre appareil.</p></div>` + typeLegend());
+    <p><b>Bibliothèque</b> : 💾 Enregistrer range le circuit dans ce navigateur sous un nom (Ctrl+S ensuite pour le mettre à jour) ; 📂 Charger en rouvre un. Le • à côté du nom signale des modifications non enregistrées. Rien n'est enregistré tout seul dans la bibliothèque.</p>
+    <p>Le plan en cours est gardé tout seul dans ce navigateur ; Exporter / Importer pour le passer sur un autre appareil.</p></div>` + typeLegend());
 }
 function sheetMenu(){
-  openDlg(`<button class="item" data-a="board"><span class="ic">▦</span> Plaque<span class="sw">${doc.board.w} × ${doc.board.h}</span></button>
+  const nc = readCircuits().length;
+  openDlg(`<button class="item" data-a="save"><span class="ic">💾</span> Enregistrer<span class="sw">${circuit ? esc(circuit.name) : 'nom à donner'}</span></button>
+    <button class="item" data-a="saveas"><span class="ic">📑</span> Enregistrer sous…</button>
+    <button class="item" data-a="load"><span class="ic">📂</span> Charger<span class="sw">${nc} circuit${nc > 1 ? 's' : ''}</span></button>
+    <button class="item" data-a="board"><span class="ic">▦</span> Plaque<span class="sw">${doc.board.w} × ${doc.board.h}</span></button>
     <button class="item" data-a="labels"><span class="ic">🏷</span> Noms des broches<span class="sw">${showLabels ? 'affichés' : 'masqués'}</span></button>
     <button class="item" data-a="nets"><span class="ic">🔗</span> Liste des connexions</button>
     <button class="item" data-a="lib"><span class="ic">🧩</span> Composants</button>
@@ -988,6 +1080,9 @@ function sheetMenu(){
     <button class="item" data-theme-toggle><span class="ic" data-theme-icon></span> Thème<span class="sw" data-theme-name></span></button>
     <button class="item" data-a="help"><span class="ic">?</span> Aide</button>
     <button class="item" data-a="new"><span class="ic">🗑</span> Nouveau plan</button>`, (a, b) => {
+    if (a === 'save'){ closeDlg(); saveCmd(); }
+    if (a === 'saveas') sheetSave();
+    if (a === 'load') sheetLoad();
     if (a === 'board') sheetBoard();
     if (a === 'labels'){ showLabels = !showLabels; closeDlg(); render(); }
     if (a === 'nets') sheetNets();
@@ -998,7 +1093,7 @@ function sheetMenu(){
     if (a === 'help') sheetHelp();
     if (a === 'new'){
       if (!b.dataset.armed){ b.dataset.armed = 1; b.lastChild.textContent = ' Confirmer : tout effacer ?'; return; }
-      doc = {board:Object.assign({}, doc.board), parts:[], wires:[]}; sel = null; cur = null; closeDlg(); commit(); fit();
+      doc = {board:Object.assign({}, doc.board), parts:[], wires:[]}; sel = null; cur = null; closeDlg(); commit(); fit(); setCircuit(null);
     }
   });
   if (window.WebAppsTheme) WebAppsTheme.set(WebAppsTheme.get());   // dessine l'icône du thème dans la feuille
@@ -1010,6 +1105,7 @@ $('#bSide').onclick = () => setSide(!bottom); $('#pillSide').onclick = () => set
 $('#bAdd').onclick = sheetAdd; $('#mSel').onclick = () => setMode('sel'); $('#mWire').onclick = () => setMode('wire');
 document.addEventListener('keydown', e => {
   if (dlg.open || (e.target.matches && e.target.matches('input,textarea,select'))) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's'){ e.preventDefault(); saveCmd(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'Escape'){ if (cur){ cur = null; hover = null; } else sel = null; render(); updateCtx(); }
@@ -1031,6 +1127,10 @@ window.addEventListener('resize', applyView);
 /* ---------- démarrage ---------- */
 loadLocalLib();
 const savedView = load();
+try {   // circuit ouvert avant le rechargement de la page
+  const c = JSON.parse(localStorage.getItem(KEY_CUR)), rec = c && readCircuits().find(r => r.id === c.id);
+  if (rec){ circuit = {id:rec.id, name:rec.name}; savedJSON = JSON.stringify(rec.doc); }
+} catch(e){}
 setMode('sel');
 if (savedView && savedView.s){ view = savedView; bottom = !!view.b; applyView(); render(); } else fit();
 const missing = [...new Set(doc.parts.filter(p => !BUILTIN[p.type] && !LIB.has(p.type)).map(p => p.type))];

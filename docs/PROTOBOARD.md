@@ -16,6 +16,7 @@ L'équivalent de la feuille à petits carreaux : une plaque au pas de 2,54 mm su
 - **Image PNG** : menu → Image PNG exporte la vue affichée (dessus ou dessous) sur fond blanc, avec repères de colonnes (A, B…) et de lignes (1, 2…) pour souder.
 - **Broches** : couleur selon le rôle (alimentation, masse, GPIO, strapping, UART, à éviter, contrôle), note propre au composant (LED intégrée, PSRAM, adresse I2C…), réseau relié surligné.
 - **Contrôles** : alerte si l'alimentation touche la masse, si 5V et 3V3 sont reliés, ou si une broche « à éviter » est utilisée. Liste complète des connexions, copiable.
+- **Bibliothèque de circuits** : 💾 Enregistrer range le circuit dans le navigateur (`localStorage`) sous un nom, demandé la première fois ; ensuite Enregistrer (ou Ctrl+S) le met à jour sur place, « Enregistrer sous… » en fait une copie. 📂 Charger rouvre un circuit de la liste ou le supprime. Le nom s'affiche sous le titre, suivi d'un • quand le plan a changé depuis son enregistrement. Rien n'est enregistré tout seul dans la bibliothèque ; le plan en cours, lui, est gardé automatiquement. Les composants « Mes composants » utilisés sont enregistrés avec le circuit et rétablis au chargement.
 - **Annuler / rétablir**, sauvegarde automatique dans le navigateur, export / import JSON, thème clair / sombre / auto.
 - **Clavier** (ordinateur) : W fil, H demi-pas, D dessous / dessus, R pivoter, F retourner, Suppr effacer, Échap annuler, Entrée terminer un fil, Ctrl+Z / Ctrl+Maj+Z.
 
@@ -79,7 +80,7 @@ Les brochages fournis sont vus de dessus, USB en haut : vérifie-les sur ta cart
 
 ## Données
 
-Clés `localStorage` : `protoboard.doc.v1` (plan), `protoboard.view.v1` (zoom et position), `protoboard.components.v1` (« Mes composants »). Rien n'est envoyé sur le réseau.
+Clés `localStorage` : `protoboard.doc.v1` (plan), `protoboard.view.v1` (zoom et position), `protoboard.components.v1` (« Mes composants »), `protoboard.circuits.v1` (bibliothèque de circuits) et `protoboard.current.v1` (circuit ouvert). Rien n'est envoyé sur le réseau.
 
 Export (`protoboard-plan.json`) :
 
