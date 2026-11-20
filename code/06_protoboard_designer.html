@@ -561,6 +561,10 @@ function sceneHTML(forExport){
   }
   h += '<g pointer-events="none">';
   if (net) netPins(net).forEach(e => h += `<circle class="pb-ring" cx="${e.x*U}" cy="${e.y*U}" r="${U*.52}" stroke-width="2.5"/>`);
+  if (sel_ && sel_.t === 'wire'){
+    const wr = getWire(sel_.id);
+    if (wr) wr.pts.forEach((pt,i) => h += `<circle class="pb-ring${i === sel_.vi ? ' here' : ''}" cx="${pt[0]*U}" cy="${pt[1]*U}" r="${U*(i === sel_.vi ? .5 : .3)}" stroke-width="${i === sel_.vi ? 3 : 1.8}" fill="none"/>`);
+  }
   if (sel_ && sel_.t === 'pin'){ const [x,y] = sel_.key.split(',').map(Number); h += `<circle class="pb-ring here" cx="${x*U}" cy="${y*U}" r="${U*.62}" stroke-width="3"/>`; }
   h += '</g>';
   return h;
@@ -673,7 +677,7 @@ svg.addEventListener('pointerdown', e => {
   if (sel && sel.t === 'wire'){
     const wr = getWire(sel.id); let idx = -1, best = .45*U;
     if (wr) wr.pts.forEach((pt,i) => { const d = Math.hypot(pt[0]*U - w.x, pt[1]*U - w.y); if (d < best){ best = d; idx = i; } });
-    if (idx >= 0) gest.vertex = {wr, idx};
+    if (idx >= 0){ gest.vertex = {wr, idx}; sel.vi = idx; }
   }
   if (!gest.vertex && e.target.closest){
     const pg = e.target.closest('[data-part]');
@@ -723,6 +727,11 @@ function handleTap(g){
   if (mode === 'wire'){ wireTap(snapPt(g.w)); return; }
   const near = Math.hypot(k[0]*U - g.w.x, k[1]*U - g.w.y) < .46*U;
   const t = g.target && g.target.closest ? g.target : null;
+  if (sel && sel.t === 'wire'){   // fil déjà sélectionné : toucher un point le choisit, toucher le fil y ajoute un point
+    const wr = getWire(sel.id);
+    if (wr && g.vertex){ sel = {t:'wire', id:sel.id, vi:g.vertex.idx}; render(); updateCtx(); return; }
+    if (wr && t && t.closest('[data-wire]') && t.closest('[data-wire]').dataset.wire === wr.id){ addWirePoint(wr, g.w); return; }
+  }
   if (near && pinMap.has(key)) sel = {t:'pin', key};
   else if (t && t.closest('[data-wire]')) sel = {t:'wire', id:t.closest('[data-wire]').dataset.wire};
   else if (t && t.closest('[data-part]')) sel = {t:'part', id:t.closest('[data-part]').dataset.part};
@@ -731,6 +740,28 @@ function handleTap(g){
 }
 
 /* ---------- fils ---------- */
+/* Ajoute un point sur le segment le plus proche du toucher (en restant sur le segment s'il est droit). */
+function addWirePoint(wr, w){
+  let best = Infinity, at = -1, q = null;
+  for (let i = 1; i < wr.pts.length; i++){
+    const [ax,ay] = wr.pts[i-1].map(v => v*U), [bx,by] = wr.pts[i].map(v => v*U), dx = bx-ax, dy = by-ay, L = dx*dx + dy*dy;
+    const t = L ? Math.max(0, Math.min(1, ((w.x-ax)*dx + (w.y-ay)*dy)/L)) : 0, px = ax + t*dx, py = ay + t*dy, d = Math.hypot(px-w.x, py-w.y);
+    if (d < best){ best = d; at = i; q = {x:px, y:py, h:dy === 0, v:dx === 0}; }
+  }
+  if (at < 0) return;
+  let k = snapPt(q);
+  if (q.h) k = [k[0], wr.pts[at][1]]; else if (q.v) k = [wr.pts[at][0], k[1]];
+  const a = wr.pts[at-1], b = wr.pts[at];
+  if ((k[0] === a[0] && k[1] === a[1]) || (k[0] === b[0] && k[1] === b[1])){ toast('Il y a déjà un point ici'); return; }
+  wr.pts.splice(at, 0, k); sel = {t:'wire', id:wr.id, vi:at}; commit();
+}
+function removeWirePoint(wr, i){
+  if (wr.pts.length <= 2 || i == null || i >= wr.pts.length) return;
+  const p = wr.pts[i], a = wr.pts[i-1], b = wr.pts[i+1];
+  wr.pts.splice(i, 1);
+  if (ortho && a && b && a[0] !== b[0] && a[1] !== b[1]) wr.pts.splice(i, 0, p[1] === a[1] ? [b[0], a[1]] : [a[0], b[1]]);
+  cleanWire(wr); sel = {t:'wire', id:wr.id}; commit();
+}
 function cleanWire(w){ w.pts = w.pts.filter((p,i,a) => i === 0 || p[0] !== a[i-1][0] || p[1] !== a[i-1][1]); if (w.pts.length < 2) doc.wires = doc.wires.filter(x => x !== w); }
 function wireTap(k){
   const key = K(...k);
@@ -793,7 +824,8 @@ function updateCtx(){
     if (w){
       const pins = netPins(netKeys(K(...w.pts[0])));
       h += swatches(w.c) + `<div class="rowb"><button class="chip ${w.iso ? 'on' : ''}" data-a="iso" title="Fil gainé, par-dessus les soudures">Fil isolé</button><button class="chip ${half ? 'on' : ''}" data-a="half" title="Déplacer les points entre les pastilles">½ Entre pastilles</button><button class="btn" data-a="delwire">🗑 Supprimer</button></div>`;
-      h += `<div class="info">Réseau : ${pins.length ? pins.map(e => `<b>${pinTitle(e)}</b>`).join(' ↔ ') : 'aucune broche'} · glisse un point du fil pour le déplacer</div>`;
+      if (sel.vi != null && sel.vi < w.pts.length) h += `<div class="rowb"><button class="btn" data-a="delpt" ${w.pts.length <= 2 ? 'disabled' : ''}>⌫ Retirer le point</button></div>`;
+      h += `<div class="info">Réseau : ${pins.length ? pins.map(e => `<b>${pinTitle(e)}</b>`).join(' ↔ ') : 'aucune broche'} · glisse un point pour le déplacer, touche le fil pour en ajouter un</div>`;
       netWarnings(pins).forEach(t => h += `<div class="warn">${t}</div>`);
     }
   } else if (sel && sel.t === 'pin'){
@@ -805,8 +837,7 @@ function updateCtx(){
     const others = pins.filter(e => K(e.x,e.y) !== sel.key);
     h += `<div class="info">${others.length ? 'Relié à : ' + others.map(e => `<b>${pinTitle(e)}</b>`).join(', ') : 'Aucune connexion'}</div>`;
     netWarnings(pins).forEach(t => h += `<div class="warn">${t}</div>`);
-  } else h += `<div class="rowb"><button class="btn" data-a="save">💾 Enregistrer</button><button class="btn" data-a="load">📂 Charger</button></div>
-    <div class="info">Touche une pièce, une broche ou un fil · glisse pour déplacer · pince pour zoomer</div>`;
+  } else h += `<div class="info">Touche une pièce, une broche ou un fil · glisse pour déplacer · pince pour zoomer</div>`;
   $('#ctx').innerHTML = h;
 }
 $('#ctx').addEventListener('click', e => {
@@ -819,6 +850,7 @@ $('#ctx').addEventListener('click', e => {
       break;
     case 'save': saveCmd(); break;
     case 'load': sheetLoad(); break;
+    case 'delpt': { const wr = getWire(id); if (wr) removeWirePoint(wr, sel.vi); break; }
     case 'ortho': ortho = !ortho; updateCtx(); break;
     case 'half': half = !half; applyMirror(); updateCtx(); break;
     case 'iso':
@@ -1156,7 +1188,8 @@ function sheetHelp(){
     <p><b>Broche</b> : touche-la pour voir son rôle, ses mises en garde et tout ce qui y est relié. Deux fils ne sont reliés que s'ils partagent un point (une soudure) : se croiser ne suffit pas. Une barrette posée sur les broches d'un module est connectée.</p>
     <p><b>Composants</b> : un fichier par composant dans <code>code/protoboard/components/</code>. Pour les tiens sans toucher au dépôt : module générique → ✎ → « Enregistrer comme composant », ou menu → Composants → Importer.</p>
     <p><b>Clavier</b> : W fil, H demi-pas, D dessous/dessus, R pivoter, F retourner, Suppr effacer, Échap annuler, Ctrl+Z / Ctrl+Maj+Z.</p>
-    <p><b>Bibliothèque</b> : 💾 Enregistrer range le circuit dans ce navigateur sous un nom (Ctrl+S ensuite pour le mettre à jour) ; 📂 Charger en rouvre un. Le • à côté du nom signale des modifications non enregistrées. Rien n'est enregistré tout seul dans la bibliothèque.</p>
+    <p><b>Bibliothèque</b> (menu ☰) : Enregistrer range le circuit dans ce navigateur sous un nom (Ctrl+S ensuite pour le mettre à jour) ; Charger en rouvre un. Le • à côté du nom signale des modifications non enregistrées. Rien n'est enregistré tout seul dans la bibliothèque.</p>
+    <p><b>Fils</b> : touche un fil pour le sélectionner, glisse ses points pour le modifier ; touche le fil pour ajouter un point, touche un point puis « Retirer le point » pour l'enlever.</p>
     <p>Le plan en cours est gardé tout seul dans ce navigateur ; Exporter / Importer pour le passer sur un autre appareil.</p></div>` + typeLegend());
 }
 function sheetMenu(){
