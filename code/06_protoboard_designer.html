@@ -226,7 +226,7 @@ const KEY_DOC = 'protoboard.doc.v1', KEY_VIEW = 'protoboard.view.v1', KEY_LIB = 
    protoboard.doc.v1 (plan en cours), protoboard.components.v1 (Mes composants), protoboard.circuit.<id> (un circuit
    par clé). La vue et le circuit ouvert restent propres à chaque appareil. */
 const CIRC_PREFIX = 'protoboard.circuit.';
-const store = new PBStore({app:'protoboard', prefix:'protoboard.'});
+const store = new PBStore({app:'protoboard', prefix:'protoboard.', sharedAuth:true});
 const $ = s => document.querySelector(s);
 const svg = $('#svg'), vp = $('#vp'), mir = $('#mir'), world = $('#world'), paper = $('#paper'), paperHalf = $('#paperHalf');
 const COLORS = ['#e53935','#212121','#1e88e5','#43a047','#fdd835','#fb8c00','#8e24aa','#f5f5f5'];
@@ -1264,14 +1264,14 @@ function sheetSync(){
   if (store.connected){
     h += `<p>Connecté : <b>${esc(store.email)}</b> · ${esc(store.url)}</p><p id="syMsg">${esc(syncMsg || 'Pas encore synchronisé sur cette page.')}</p>
       <div class="btns"><button class="btn" data-a="logout">Se déconnecter</button><button class="btn primary" data-a="now">Synchroniser maintenant</button></div>
-      <p>Le plan en cours, les circuits enregistrés et « Mes composants » sont copiés sur le serveur. La dernière modification gagne, clé par clé (le plan, chaque circuit, les composants) : les horloges des appareils doivent être à peu près justes. Les valeurs sont lisibles par l'administrateur du serveur.</p>`;
+      <p>Le plan en cours, les circuits enregistrés et « Mes composants » sont synchronisés sur le serveur, les données sont stockées sans chiffrement.</p>`;
   } else {
-    h += `<p>Facultatif : retrouve ton plan et tes circuits sur tes autres appareils. Sans connexion, tout reste dans ce navigateur.</p>
+    h += `<p>Facultatif : retrouve ton plan et tes circuits sur tes autres appareils.</p>
       <div class="form"><label class="lbl" for="syUrl">Serveur</label><input type="text" id="syUrl" value="${esc(store.url)}" autocomplete="off" autocapitalize="off" spellcheck="false">
       <label class="lbl" for="syMail">Email</label><input class="field" type="email" id="syMail" autocomplete="username" autocapitalize="off" spellcheck="false">
       <label class="lbl" for="syPw">Mot de passe</label><input class="field" type="password" id="syPw" autocomplete="current-password"></div>
       <div class="btns"><button class="btn primary" data-a="login">Se connecter</button></div>
-      <p>Les comptes sont créés par l'administrateur. Le mot de passe n'est pas gardé, seulement un jeton. Au premier envoi, si le serveur a déjà un plan en cours ou des composants, c'est sa version qui est reprise (↶ pour revenir) ; les circuits des deux côtés sont réunis.</p>`;
+      <p>Compte créé par l'administrateur. Au premier envoi, si le serveur a déjà un plan ou des composants, c'est sa version qui est reprise (↶ pour revenir).</p>`;
   }
   openDlg(h, async (a, b) => {
     if (a === 'logout'){ store.logout(); syncMsg = ''; sheetSync(); }

@@ -1045,7 +1045,7 @@ function loadFavs(){
   return defaultFavs();
 }
 let favs=loadFavs();
-const pb=new PBStore({app:'liseuse',prefix:'liseuse.'});   // synchronisation facultative des favoris (bouton du volet)
+const pb=new PBStore({app:'liseuse',prefix:'liseuse.',sharedAuth:true});   // synchronisation facultative des favoris (bouton du volet)
 const saveFavs=()=>{try{pb.set('favs',{v:1,items:favs})}catch(e){}};
 
 function locate(id,list,parent){
@@ -1289,7 +1289,8 @@ document.addEventListener('keydown',e=>{
 /* ---------- Synchronisation facultative des favoris (PocketBase) ---------- */
 const syncUi=PBSync.init(pb,{
   adopt:['favs'],
-  note:'Seuls les favoris sont synchronisés (pas le dernier document ouvert ni la taille du texte). Au premier envoi, si le serveur a déjà des favoris, ce sont eux qui remplacent ceux de cet appareil.',
+  summary:'Les favoris sont synchronisés sur le serveur, les données sont stockées sans chiffrement.',
+  note:'Au premier envoi, si le serveur a déjà des favoris, ce sont les siens qui sont repris.',
   onChange(key,value){
     if(key!=='favs'||!value||!Array.isArray(value.items)) return null;
     favs=value.items.map(i=>cleanItem(i,false)).filter(Boolean);
