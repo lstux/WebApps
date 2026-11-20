@@ -85,3 +85,7 @@ Tout est sauvegardé en `localStorage` de votre navigateur. Changer de navigateu
 ---
 
 Besoin de modifier ? Le code est léger et commenté. Bon rangement ! 🎉
+
+## Synchronisation (facultative)
+
+Menu → **Synchronisation** : serveur, email et mot de passe d'un compte PocketBase (voir [SYNCHRO.md](SYNCHRO.md)). Une fois connecté, la liste (clé `todo-tree-v1`) est copiée sur le serveur et retrouvée sur tes autres appareils : à l'ouverture, au retour en ligne, au retour sur l'onglet et à la demande. La dernière modification gagne, pour toute la liste. Au premier envoi, si le serveur a déjà une liste, c'est elle qui remplace celle de l'appareil : exporte la tienne en JSON avant si tu veux la garder. Sans connexion, rien ne change.

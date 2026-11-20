@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="common.css">
 <link rel="icon" type="image/svg+xml" href="icons/markdown_reader.svg">
 <script src="common.js"></script>
+<script src="pbstore.js"></script>
+<script src="pbsync.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&display=swap">
 <style>
 /* Mise en page : bandeau fin en haut, volet de documents à gauche, colonne de lecture étroite au centre, plan de la section à droite sur grand écran. */
@@ -263,6 +265,7 @@ body.is-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
       </form>
       <label class="sr" for="ls-q">Rechercher dans les documents</label>
       <input class="field" id="ls-q" type="search" spellcheck="false" placeholder="Rechercher   ( / )">
+      <button type="button" class="btn" id="ls-sync" style="margin-top:8px;width:100%">☁ Synchroniser les favoris <small id="ls-sync-sw" style="opacity:.7"></small></button>
     </div>
     <div class="tabs" role="group" aria-label="Contenu du volet">
       <button type="button" class="tab" id="ls-tab-favs" aria-pressed="true"></button>
@@ -1042,7 +1045,8 @@ function loadFavs(){
   return defaultFavs();
 }
 let favs=loadFavs();
-const saveFavs=()=>store.setJSON('favs',{v:1,items:favs});
+const pb=new PBStore({app:'liseuse',prefix:'liseuse.'});   // synchronisation facultative des favoris (bouton du volet)
+const saveFavs=()=>{try{pb.set('favs',{v:1,items:favs})}catch(e){}};
 
 function locate(id,list,parent){
   list=list||favs;
@@ -1281,6 +1285,20 @@ document.addEventListener('keydown',e=>{
   if(e.key==='/'){e.preventDefault();setNav(true);el.q.focus()}
   else if(e.key==='['||e.key===']') step(e.key===']'?1:-1);
 });
+
+/* ---------- Synchronisation facultative des favoris (PocketBase) ---------- */
+const syncUi=PBSync.init(pb,{
+  adopt:['favs'],
+  note:'Seuls les favoris sont synchronisés (pas le dernier document ouvert ni la taille du texte). Au premier envoi, si le serveur a déjà des favoris, ce sont eux qui remplacent ceux de cet appareil.',
+  onChange(key,value){
+    if(key!=='favs'||!value||!Array.isArray(value.items)) return null;
+    favs=value.items.map(i=>cleanItem(i,false)).filter(Boolean);
+    refreshFavUi();
+    return 'Favoris mis à jour depuis un autre appareil.';
+  },
+  onStatus(t){const e=$('ls-sync-sw'); if(e) e.textContent='· '+t;}
+});
+$('ls-sync').onclick=()=>syncUi.open();
 
 /* ---------- Démarrage : favoris, puis le dernier document ou Bienvenue ---------- */
 applySize();

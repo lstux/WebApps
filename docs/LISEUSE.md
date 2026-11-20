@@ -85,3 +85,7 @@ La page est un fichier `.html` autonome, qui dépend seulement de `common.css` (
 - L'ouvrir directement dans le navigateur
 - La servir avec un serveur web simple
 - L'intégrer dans une autre page (bien que ce soit moins recommandé)
+
+## Synchronisation (facultative)
+
+Le bouton **Synchroniser les favoris** du volet de gauche ouvre l'écran de connexion (serveur, email, mot de passe d'un compte PocketBase, voir [SYNCHRO.md](SYNCHRO.md)). Une fois connecté, les favoris (clé `liseuse.favs`, groupes compris) sont copiés sur le serveur et retrouvés sur tes autres appareils. Le dernier document ouvert et la taille du texte restent propres à chaque appareil. La dernière modification gagne, pour l'ensemble des favoris ; au premier envoi, si le serveur a déjà des favoris, ce sont eux qui remplacent ceux de l'appareil. Sans connexion, rien ne change.
