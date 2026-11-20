@@ -78,9 +78,13 @@ Une broche s'écrit `'NOM'` ou `'NOM:type'`, avec `type` parmi `power`, `gnd`, `
 
 Les brochages fournis sont vus de dessus, USB en haut : vérifie-les sur ta carte (certains clones diffèrent ; ⇋ retourne une carte montée à l'envers). Le DevKit S3 est dessiné avec 9 pas (22,86 mm) entre ses rangées : change `x` de la seconde colonne et `body.x1` si le tien est plus large.
 
+## Synchronisation (facultative)
+
+Menu ☰ → **Synchronisation** : serveur (`https://store.lslinux.org` par défaut), email et mot de passe d'un compte PocketBase créé par l'administrateur. Une fois connecté, le plan en cours, chaque circuit enregistré et « Mes composants » sont copiés sur le serveur et retrouvés sur tes autres appareils. La synchro tourne à l'ouverture, au retour en ligne, quand l'onglet redevient visible et à la demande (« Synchroniser maintenant »). La dernière modification gagne, clé par clé ; si le plan en cours change à distance, l'app le remplace et propose ↶ pour revenir. Le mot de passe n'est pas gardé, seulement un jeton. Sans connexion, rien ne change. Détails : [SYNCHRO.md](SYNCHRO.md) ; le module est [code/pbstore.js](../code/pbstore.js).
+
 ## Données
 
-Clés `localStorage` : `protoboard.doc.v1` (plan), `protoboard.view.v1` (zoom et position), `protoboard.components.v1` (« Mes composants »), `protoboard.circuits.v1` (bibliothèque de circuits) et `protoboard.current.v1` (circuit ouvert). Rien n'est envoyé sur le réseau.
+Clés `localStorage` : `protoboard.doc.v1` (plan), `protoboard.view.v1` (zoom et position), `protoboard.components.v1` (« Mes composants »), `protoboard.circuit.<id>` (un circuit de la bibliothèque par clé ; l'ancienne clé `protoboard.circuits.v1` est migrée au chargement) et `protoboard.current.v1` (circuit ouvert). La vue et le circuit ouvert restent propres à l'appareil. Sans synchronisation activée, rien n'est envoyé sur le réseau.
 
 Export (`protoboard-plan.json`) :
 
