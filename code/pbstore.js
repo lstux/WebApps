@@ -3,7 +3,7 @@
 // sans compte, sans reseau) ; PocketBase sert a retrouver les memes donnees sur les autres appareils.
 //
 //   <script src="pbstore.js"></script>
-//   const store = new PBStore({ app: "slovingo" });          // app : [a-z0-9][a-z0-9_-]*, <= 64 car.
+//   const store = new PBStore({ app: "slovingo", sharedAuth: true });   // sharedAuth : meme connexion pour toutes les apps de l'origine          // app : [a-z0-9][a-z0-9_-]*, <= 64 car.
 //   await store.login("https://store.lslinux.org", email, motDePasse);   // ecran de reglages
 //   store.set("progress", { level: 3 });                      // ecrit en local, pousse en arriere-plan
 //   store.get("progress");                                     // lecture locale, synchrone
@@ -24,7 +24,7 @@
   const DEFAULT_URL = "https://store.lslinux.org";
 
   class PBStore {
-    constructor({ app, prefix = "", storage = globalThis.localStorage, fetchImpl = globalThis.fetch.bind(globalThis) }) {
+    constructor({ app, prefix = "", sharedAuth = false, storage = globalThis.localStorage, fetchImpl = globalThis.fetch.bind(globalThis) }) {
       if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(app)) throw new Error("pbstore : nom d'app invalide");
       this.app = app;
       this.prefix = prefix;          // prefixe des cles localStorage de l'app (ex. "slovingo.")
@@ -33,7 +33,15 @@
       this.onChange = null;
       this.onError = null;           // (erreur) => void ; sinon console.warn
       this._timers = new Map();
-      this._auth = this._readJSON(this._k("auth"));   // { url, token, id, email }
+      // sharedAuth : la connexion est gardee sous une cle commune a toutes les apps de la meme origine
+      // (« pbstore:auth ») : un seul login pour toutes. Une connexion deja faite sous la cle de l'app est reprise.
+      this._shared = sharedAuth;
+      this._authKey = sharedAuth ? "pbstore:auth" : this._k("auth");
+      this._auth = this._readJSON(this._authKey);       // { url, token, id, email }
+      if (!this._auth && sharedAuth) {
+        this._auth = this._readJSON(this._k("auth"));
+        if (this._auth) { this._writeJSON(this._authKey, this._auth); this.ls.removeItem(this._k("auth")); }
+      }
     }
 
     // ---- etat -------------------------------------------------------------------------------
@@ -66,13 +74,13 @@
       url = String(url || DEFAULT_URL).replace(/\/+$/, "");
       const r = await this._raw(url, "POST", "/api/collections/users/auth-with-password", null, { identity: email, password });
       this._auth = { url, token: r.token, id: r.record.id, email: r.record.email || email };
-      this._writeJSON(this._k("auth"), this._auth);
+      this._writeJSON(this._authKey, this._auth);
       return this._auth.email;
     }
 
     logout() {
       this._auth = null;
-      this.ls.removeItem(this._k("auth"));
+      this.ls.removeItem(this._authKey);
     }
 
     // Declare des cles deja presentes dans localStorage avant l'activation de la synchro (donnees d'avant PocketBase).
@@ -86,6 +94,7 @@
     // ---- synchronisation ------------------------------------------------------------------------
     // Pousse les cles locales plus recentes, rapatrie les cles distantes plus recentes. Renvoie { pushed, pulled }.
     async sync() {
+      if (this._shared) this._auth = this._readJSON(this._authKey);   // connexion/deconnexion faite dans une autre app
       if (!this.connected) return { pushed: 0, pulled: 0 };
       await this._refresh();
       const remote = new Map();
@@ -169,7 +178,7 @@
       try {
         const r = await this._api("POST", "/api/collections/users/auth-refresh");
         this._auth.token = r.token;
-        this._writeJSON(this._k("auth"), this._auth);
+        this._writeJSON(this._authKey, this._auth);
       } catch (e) {
         if (e.status === 401 || e.status === 403) { this.logout(); }   // jeton expire : se reconnecter
         throw e;

@@ -78,6 +78,7 @@ store.onError  = (e) => { /* sinon console.warn ; e.status = code HTTP */ };
 
 - `code/pbstore.js` : le module (script classique).
 - `code/pbsync.js` : l'écran « Synchronisation » partagé (connexion, état, synchro à l'ouverture / au retour en ligne / au retour d'onglet, au plus toutes les 20 s) : `PBSync.init(pb, { adopt, note, onChange, onStatus })` puis `sync.open()` depuis un menu.
+- **Connexion partagée** : `new PBStore({ app, sharedAuth: true })` garde le jeton sous la clé `pbstore:auth`, commune à toutes les apps de la même origine (même navigateur, même site) : un seul login pour toutes. Se connecter ou se déconnecter dans l'une vaut pour les autres à leur prochaine synchro ou ouverture. Une connexion déjà faite sous la clé propre à l'app est reprise. Une autre origine (par exemple un autre site) demande sa propre connexion.
 - Utilisé par TODO (`app: todo`, clé `todo-tree-v1`), la Liseuse (`app: liseuse`, clé `favs`) et ProtoBoardDesigner (`app: protoboard`).
 
 ## Conseils d'intégration
