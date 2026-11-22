@@ -1203,6 +1203,7 @@ function sheetMenu(){
     <button class="item" data-a="labels"><span class="ic">🏷</span> Noms des broches<span class="sw">${showLabels ? 'affichés' : 'masqués'}</span></button>
     <button class="item" data-a="nets"><span class="ic">🔗</span> Liste des connexions</button>
     <button class="item" data-a="lib"><span class="ic">🧩</span> Composants</button>
+    <button class="item" data-a="pcb"><span class="ic">⧉</span> Circuit imprimé<span class="sw">Gerber</span></button>
     <button class="item" data-a="png"><span class="ic">🖼</span> Image PNG<span class="sw">${bottom ? 'dessous' : 'dessus'}</span></button>
     <button class="item" data-a="sync"><span class="ic">☁</span> Synchronisation<span class="sw">${store.connected ? esc(store.email) : 'non connecté'}</span></button>
     <button class="item" data-a="export"><span class="ic">⬇</span> Exporter</button>
@@ -1217,6 +1218,7 @@ function sheetMenu(){
     if (a === 'labels'){ showLabels = !showLabels; closeDlg(); render(); }
     if (a === 'nets') sheetNets();
     if (a === 'lib') sheetLib();
+    if (a === 'pcb') sheetPcb();
     if (a === 'png'){ closeDlg(); exportPNG(); }
     if (a === 'sync'){ closeDlg(); sync.open(); }
     if (a === 'export') sheetExport();
@@ -1228,6 +1230,177 @@ function sheetMenu(){
     }
   });
   if (window.WebAppsTheme) WebAppsTheme.set(WebAppsTheme.get());   // dessine l'icône du thème dans la feuille
+}
+
+/* ---------- circuit imprimé simple face (export Gerber + Excellon pour la gravure à l'anglaise) ----------
+   Composants traversants côté dessus, cuivre dessous. Fils normaux = pistes de cuivre ; fils
+   « isolés » = straps (fils soudés côté composants), avec un trou à chaque bout. Les fichiers sont
+   en vue de dessus (convention Gerber) : le logiciel de FAO retourne la couche dessous. */
+const PITCH = 2.54;
+const KEY_PCB = 'protoboard.pcb.v1';   // réglages, propres à ce navigateur
+const PCB_DEF = {trace:0.8, pad:1.8, drill:1.0, clear:0.4};
+function pcbOpts(){ try { return Object.assign({}, PCB_DEF, JSON.parse(localStorage.getItem(KEY_PCB)) || {}); } catch(e){ return Object.assign({}, PCB_DEF); } }
+function savePcbOpts(o){ try { localStorage.setItem(KEY_PCB, JSON.stringify(o)); } catch(e){} }
+
+/* Distance point–segment et segment–segment (unités de la grille). */
+function dPtSeg(px, py, ax, ay, bx, by){
+  const dx = bx - ax, dy = by - ay, l = dx*dx + dy*dy;
+  const t = l ? Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy) / l)) : 0;
+  return Math.hypot(px - ax - t*dx, py - ay - t*dy);
+}
+function dSegSeg(a, b){
+  const [ax,ay,bx,by] = a, [cx,cy,dx,dy] = b;
+  const o = (px,py,qx,qy,rx,ry) => Math.sign((qx-px)*(ry-py) - (qy-py)*(rx-px));
+  if (o(ax,ay,bx,by,cx,cy) * o(ax,ay,bx,by,dx,dy) < 0 && o(cx,cy,dx,dy,ax,ay) * o(cx,cy,dx,dy,bx,by) < 0) return 0;
+  return Math.min(dPtSeg(ax,ay,cx,cy,dx,dy), dPtSeg(bx,by,cx,cy,dx,dy), dPtSeg(cx,cy,ax,ay,bx,by), dPtSeg(dx,dy,ax,ay,bx,by));
+}
+
+/* Modèle du circuit : pastilles (broches + trous des straps), pistes, straps, problèmes. */
+function pcbModel(o){
+  buildIndex();
+  const net = (x,y) => find(K(x,y));
+  const pads = new Map();   // "x,y" → {x, y, net, name}
+  pinMap.forEach((list, k) => { const e = list[0]; pads.set(k, {x:e.x, y:e.y, net:net(e.x, e.y), name:`${e.p.label} ${e.q.name}`}); });
+  const traces = [], straps = [], issues = [];
+  doc.wires.forEach(w => {
+    if (w.pts.length < 2) return;
+    const n = net(...w.pts[0]);
+    if (w.iso){
+      const a = w.pts[0], b = w.pts[w.pts.length - 1];
+      straps.push({w, a, b, net:n});
+      [a, b].forEach(([x,y]) => { const k = K(x,y); if (!pads.has(k)) pads.set(k, {x, y, net:n, name:'strap'}); });
+    } else {
+      for (let i = 1; i < w.pts.length; i++){
+        const [ax,ay] = w.pts[i-1], [bx,by] = w.pts[i];
+        if (ax !== bx || ay !== by) traces.push({s:[ax,ay,bx,by], net:n, w});
+      }
+    }
+  });
+  // Un fil ne peut s'accrocher qu'aux extrémités d'un strap (c'est là que sont les trous)
+  doc.wires.forEach(w => { if (!w.iso) return;
+    w.pts.slice(1, -1).forEach(([x,y]) => { const k = K(x,y);
+      if (doc.wires.some(v => v !== w && v.pts.some(p => K(...p) === k)) || pinMap.has(k))
+        issues.push({x, y, msg:'Connexion au milieu d’un strap : le strap n’a de trous qu’à ses extrémités.'}); }); });
+  const P = PITCH, tw = o.trace / P, pr = o.pad / 2 / P, cl = o.clear / P;
+  const padList = [...pads.values()];
+  traces.forEach(t => padList.forEach(p => {
+    if (p.net === t.net) return;
+    const d = dPtSeg(p.x, p.y, ...t.s);
+    if (d < tw/2 + pr + cl) issues.push({x:p.x, y:p.y, msg:d < pr ? `Une piste passe sur ${p.name} (court-circuit).` : `Piste trop près de ${p.name}.`});
+  }));
+  for (let i = 0; i < traces.length; i++) for (let j = i + 1; j < traces.length; j++){
+    const a = traces[i], b = traces[j]; if (a.net === b.net) continue;
+    const d = dSegSeg(a.s, b.s);
+    if (d < tw + cl){
+      const [x,y] = d === 0 ? [(a.s[0]+a.s[2]+b.s[0]+b.s[2])/4, (a.s[1]+a.s[3]+b.s[1]+b.s[3])/4] : [(a.s[0]+a.s[2])/2, (a.s[1]+a.s[3])/2];
+      issues.push({x, y, msg:d === 0 ? 'Deux pistes de réseaux différents se croisent (court-circuit) : passer l’une en strap (fil isolé).' : 'Deux pistes de réseaux différents trop proches.'});
+    }
+  }
+  for (let i = 0; i < padList.length; i++) for (let j = i + 1; j < padList.length; j++){
+    const a = padList[i], b = padList[j];
+    if (a.net !== b.net && Math.hypot(a.x - b.x, a.y - b.y) < 2*pr + cl) issues.push({x:a.x, y:a.y, msg:`Pastilles trop proches : ${a.name} / ${b.name} (réduire le diamètre des pastilles).`});
+  }
+  const B = doc.board, out = q => q.x < 0 || q.y < 0 || q.x > B.w - 1 || q.y > B.h - 1;
+  padList.forEach(p => { if (out(p)) issues.push({x:p.x, y:p.y, msg:`${p.name} est hors de la plaque.`}); });
+  traces.forEach(t => { const [ax,ay,bx,by] = t.s; if (out({x:ax,y:ay}) || out({x:bx,y:by})) issues.push({x:ax, y:ay, msg:'Une piste sort de la plaque.'}); });
+  return {pads:padList, traces, straps, issues};
+}
+
+/* Coordonnées en mm, vue de dessus, origine en bas à gauche du contour (demi-pas autour des trous). */
+const mmX = x => (x + .5) * PITCH;
+const mmY = y => (doc.board.h - .5 - y) * PITCH;
+const g6 = v => Math.round(v * 1e6);   // format Gerber 4.6 en mm
+
+function gerberCopper(M, o, name){
+  const L = ['G04 ProtoBoardDesigner - ' + name + '*', '%TF.GenerationSoftware,lstux,ProtoBoardDesigner,1*%', '%TF.FileFunction,Copper,L1,Bot*%', '%TF.FilePolarity,Positive*%',
+    '%FSLAX46Y46*%', '%MOMM*%', '%LPD*%', `%ADD10C,${o.trace.toFixed(3)}*%`, `%ADD11C,${o.pad.toFixed(3)}*%`, 'G01*', 'D10*'];
+  M.traces.forEach(t => { const [ax,ay,bx,by] = t.s; L.push(`X${g6(mmX(ax))}Y${g6(mmY(ay))}D02*`, `X${g6(mmX(bx))}Y${g6(mmY(by))}D01*`); });
+  L.push('D11*'); M.pads.forEach(p => L.push(`X${g6(mmX(p.x))}Y${g6(mmY(p.y))}D03*`));
+  L.push('M02*'); return L.join('\n') + '\n';
+}
+function gerberOutline(name){
+  const W = doc.board.w * PITCH, H = doc.board.h * PITCH;
+  return ['G04 ProtoBoardDesigner - ' + name + ' contour*', '%TF.GenerationSoftware,lstux,ProtoBoardDesigner,1*%', '%TF.FileFunction,Profile,NP*%',
+    '%FSLAX46Y46*%', '%MOMM*%', '%LPD*%', '%ADD10C,0.100*%', 'G01*', 'D10*',
+    'X0Y0D02*', `X${g6(W)}Y0D01*`, `X${g6(W)}Y${g6(H)}D01*`, `X0Y${g6(H)}D01*`, 'X0Y0D01*', 'M02*'].join('\n') + '\n';
+}
+function excellon(M, o){
+  const f = v => v.toFixed(3);
+  return ['M48', '; ProtoBoardDesigner', 'FMAT,2', 'METRIC,TZ', `T1C${f(o.drill)}`, '%', 'G90', 'G05', 'T1',
+    ...M.pads.map(p => `X${f(mmX(p.x))}Y${f(mmY(p.y))}`), 'T0', 'M30'].join('\n') + '\n';
+}
+function strapList(M){
+  const where = ([x,y]) => { const e = (pinMap.get(K(x,y)) || [])[0]; return e ? `${e.p.label} ${e.q.name}` : `trou ${String.fromCharCode(65 + Math.min(25, x))}${y + 1}`; };
+  return M.straps.map((s,i) => `${i+1}. ${where(s.a)}  ->  ${where(s.b)}  (${(s.w.pts.reduce((l,p,j) => j ? l + Math.hypot(p[0]-s.w.pts[j-1][0], p[1]-s.w.pts[j-1][1]) : 0, 0) * PITCH / 10).toFixed(1)} cm)`).join('\n');
+}
+
+/* ZIP sans compression (format « stored ») : assez pour quelques fichiers texte. */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b){ let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipFiles(files){   // [{name, text}] → Blob
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const d = new Date(), dt = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)), dd = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate());
+  files.forEach(f => {
+    const name = enc.encode(f.name), data = enc.encode(f.text), crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30));
+    [[0,0x04034b50,4],[4,20,2],[6,0x0800,2],[8,0,2],[10,dt,2],[12,dd,2],[14,crc,4],[18,data.length,4],[22,data.length,4],[26,name.length,2],[28,0,2]]
+      .forEach(([o,v,n]) => n === 4 ? h.setUint32(o, v, true) : h.setUint16(o, v, true));
+    const c = new DataView(new ArrayBuffer(46));
+    [[0,0x02014b50,4],[4,20,2],[6,20,2],[8,0x0800,2],[10,0,2],[12,dt,2],[14,dd,2],[16,crc,4],[20,data.length,4],[24,data.length,4],[28,name.length,2],[30,0,2],[32,0,2],[34,0,2],[36,0,2],[38,0,4],[42,off,4]]
+      .forEach(([o,v,n]) => n === 4 ? c.setUint32(o, v, true) : c.setUint16(o, v, true));
+    parts.push(h, name, data); central.push(c, name); off += 30 + name.length + data.length;
+  });
+  const size = central.reduce((s, b) => s + b.byteLength, 0), e = new DataView(new ArrayBuffer(22));
+  [[0,0x06054b50,4],[4,0,2],[6,0,2],[8,files.length,2],[10,files.length,2],[12,size,4],[16,off,4],[20,0,2]]
+    .forEach(([o,v,n]) => n === 4 ? e.setUint32(o, v, true) : e.setUint16(o, v, true));
+  return new Blob([...parts, ...central, e], {type:'application/zip'});
+}
+
+/* Aperçu SVG : côté cuivre vu de dessous (comme sur la plaque à graver) ou vue de dessus. */
+function pcbSvg(M, o, mirror){
+  const P = PITCH, W = doc.board.w * P, H = doc.board.h * P;
+  const X = x => mirror ? W - mmX(x) : mmX(x), Y = y => H - mmY(y);
+  let s = `<svg viewBox="-1 -1 ${W + 2} ${H + 2}" style="width:100%;max-height:52vh;background:#0e3b2e;border-radius:8px;display:block">`;
+  s += `<rect x="0" y="0" width="${W}" height="${H}" fill="#1f5c45" stroke="#9fd3b8" stroke-width=".15"/>`;
+  M.straps.forEach(t => s += `<polyline points="${t.w.pts.map(([x,y]) => X(x) + ',' + Y(y)).join(' ')}" fill="none" stroke="#7fb2ff" stroke-width=".35" stroke-dasharray=".8 .5" opacity=".8"/>`);
+  M.traces.forEach(t => { const [ax,ay,bx,by] = t.s; s += `<line x1="${X(ax)}" y1="${Y(ay)}" x2="${X(bx)}" y2="${Y(by)}" stroke="#d08a46" stroke-width="${o.trace}" stroke-linecap="round"/>`; });
+  M.pads.forEach(p => s += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${o.pad/2}" fill="#d08a46"/><circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${o.drill/2}" fill="#0e3b2e"/>`);
+  M.issues.forEach(i => s += `<circle cx="${X(i.x)}" cy="${Y(i.y)}" r="1.6" fill="none" stroke="#ff4d4d" stroke-width=".35"/>`);
+  return s + '</svg>';
+}
+
+function sheetPcb(mirror = true){
+  const o = pcbOpts(), M = pcbModel(o);
+  const uniq = [...new Map(M.issues.map(i => [i.msg, i])).values()];
+  const num = (id, label, v, step) => `<div><label class="lbl" for="${id}">${label}</label><input type="number" id="${id}" min="0.1" max="5" step="${step}" value="${v}" inputmode="decimal"></div>`;
+  openDlg(`<h2>Circuit imprimé (simple face)</h2>
+    <p>Fils normaux = pistes de cuivre, fils isolés = straps soudés côté composants. Export Gerber + perçage pour un logiciel de FAO (FlatCAM, pcb2gcode…).</p>
+    ${pcbSvg(M, o, mirror)}
+    <p style="margin-top:6px">${mirror ? 'Côté cuivre, vu de dessous (comme la plaque à graver).' : 'Vue de dessus (transparence).'} ${M.traces.length} segments de piste · ${M.pads.length} trous · ${M.straps.length} strap${M.straps.length > 1 ? 's' : ''}.</p>
+    <div class="form"><div class="three">${num('pTr', 'Piste (mm)', o.trace, .1)}${num('pPad', 'Pastille (mm)', o.pad, .1)}${num('pDr', 'Perçage (mm)', o.drill, .1)}</div>
+    <div class="three">${num('pCl', 'Isolement min. (mm)', o.clear, .05)}</div></div>
+    ${uniq.length ? `<div class="net"><div class="warn">${uniq.length} problème${uniq.length > 1 ? 's' : ''} (cerclé${uniq.length > 1 ? 's' : ''} en rouge) :</div>${uniq.slice(0, 12).map(i => `<div>• ${esc(i.msg)}</div>`).join('')}${uniq.length > 12 ? `<div>… et ${uniq.length - 12} autre(s)</div>` : ''}</div>` : '<div class="net">✓ Aucun problème détecté.</div>'}
+    <div class="btns"><button class="btn" data-a="flip">${mirror ? 'Vue de dessus' : 'Côté cuivre'}</button><button class="btn" data-a="apply">Appliquer</button><button class="btn primary" data-a="zip">Exporter (ZIP)</button></div>`, a => {
+    const read = () => { const v = id => Math.max(.1, Math.min(5, parseFloat($(id).value) || 0)); return {trace:v('#pTr'), pad:v('#pPad'), drill:Math.min(v('#pDr'), v('#pPad') - .2), clear:v('#pCl')}; };
+    if (a === 'flip'){ savePcbOpts(read()); sheetPcb(!mirror); }
+    if (a === 'apply'){ savePcbOpts(read()); sheetPcb(mirror); }
+    if (a === 'zip'){
+      const opts = read(); savePcbOpts(opts);
+      const m = pcbModel(opts), name = slug(circuit ? circuit.name : 'protoboard');
+      const readme = [`${circuit ? circuit.name : 'Circuit'} : circuit imprimé simple face (ProtoBoardDesigner)`, '',
+        `${name}-B_Cu.gbl     cuivre dessous (vue de dessus, comme tout Gerber : à retourner dans la FAO)`,
+        `${name}-Edge_Cuts.gm1 contour de la carte (${(doc.board.w*PITCH).toFixed(2)} x ${(doc.board.h*PITCH).toFixed(2)} mm)`,
+        `${name}.drl          perçages (Excellon, mm), ${m.pads.length} trous de ${opts.drill} mm`, '',
+        `Pistes ${opts.trace} mm, pastilles ${opts.pad} mm, isolement visé ${opts.clear} mm.`,
+        m.issues.length ? `ATTENTION : ${m.issues.length} problème(s) signalé(s) à la vérification.` : 'Vérification : aucun problème détecté.', '',
+        'Straps (fils côté composants) :', strapList(m) || '(aucun)'].join('\n') + '\n';
+      const blob = zipFiles([{name:`${name}-B_Cu.gbl`, text:gerberCopper(m, opts, name)}, {name:`${name}-Edge_Cuts.gm1`, text:gerberOutline(name)},
+        {name:`${name}.drl`, text:excellon(m, opts)}, {name:`${name}-LISEZMOI.txt`, text:readme}]);
+      const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${name}-pcb.zip`;
+      document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      toast(m.issues.length ? `Exporté, avec ${m.issues.length} problème(s) signalé(s).` : 'Exporté.', m.issues.length > 0);
+    }
+  });
 }
 
 
