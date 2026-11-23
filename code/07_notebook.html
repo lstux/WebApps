@@ -21,7 +21,7 @@ main { max-width: 760px; margin: 0 auto; padding: 12px 12px 0; }
 /* Recherche et étiquettes */
 .search { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .search input { flex: 1; min-width: 0; }
-.chips { margin: 0 0 12px; }
+.chips { margin: 0 0 8px; }
 .tagline { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--ac-soft); color: var(--ac); font-weight: 600; }
 button.tag { cursor: pointer; }
@@ -39,43 +39,51 @@ button.tag { cursor: pointer; }
 .sect { margin: 18px 4px 8px; color: var(--mut); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 
 /* En-tête de projet */
-.phead { display: flex; align-items: center; gap: 10px; margin: 2px 0 12px; }
-.phead .em { font-size: 30px; line-height: 1; }
-.phead h2 { margin: 0; font-size: 22px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phead { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.phead .em { font-size: 24px; line-height: 1; }
+.phead h2 { margin: 0; font-size: 19px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .phead .bar { width: 6px; align-self: stretch; border-radius: 3px; background: var(--c, var(--ac)); }
 
 /* Éléments */
-.items { display: grid; gap: 10px; }
-.it { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--shadow); padding: 10px 12px 12px; position: relative; }
+.items { display: grid; gap: 6px; }
+.it { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: var(--shadow); padding: 4px 6px 4px 2px; position: relative; }
+.it.x, .it:has(.edit) { padding-bottom: 10px; }
 .it.drag-src { opacity: .35; }
 .it.flash { animation: flash 1.2s ease-out; }
 @keyframes flash { from { box-shadow: 0 0 0 4px var(--ac-soft); } to { box-shadow: var(--shadow); } }
 @media (prefers-reduced-motion: reduce) { .it.flash { animation: none; } }
-.ih { display: flex; align-items: center; gap: 8px; }
-.ih .ty { font-size: 20px; flex: none; width: 26px; text-align: center; }
-.ih .tt { flex: 1; min-width: 0; font-weight: 650; overflow-wrap: anywhere; }
+.ih { display: flex; align-items: center; gap: 4px; min-height: 40px; cursor: pointer; }
+.ih .ty { font-size: 16px; flex: none; width: 22px; text-align: center; }
+.ih .tt { flex: 1; min-width: 0; font-weight: 650; font-size: 15px; line-height: 1.25; }
+.ih .tt > a, .ih .tt > .nm { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ih .sum { display: block; color: var(--mut); font-size: 12.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ih .bar { display: block; height: 3px; border-radius: 2px; background: var(--line); margin-top: 3px; overflow: hidden; }
+.ih .bar i { display: block; height: 100%; background: var(--ok); }
+.ih .go { color: var(--ac); font-weight: 500; }
 .ih .tt a { color: inherit; text-decoration: none; }
 .ih .tt a:hover { text-decoration: underline; }
 .ih .proj-of { color: var(--mut); font-size: 12px; font-weight: 600; }
-.ib { margin: 6px 0 0 34px; }
+.ib { margin: 0 6px 0 56px; }
+.ib:empty { display: none; }
+.ib:has(.edit) { margin-left: 10px; }
 .sm { color: var(--mut); font-size: 13px; overflow-wrap: anywhere; }
 .note { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 4px; font-size: 14px; }
-.mini { background: none; color: var(--mut); width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 15px; }
+.mini { background: none; color: var(--mut); width: 32px; height: 32px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 15px; }
 .mini:hover { background: var(--hover); color: var(--fg); }
-.dh { width: 30px; height: 34px; flex: none; display: grid; place-items: center; color: var(--mut2); cursor: grab; border-radius: var(--r-m);
+.dh { width: 24px; height: 36px; flex: none; display: grid; place-items: center; color: var(--mut2); cursor: grab; border-radius: var(--r-m);
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .dh::before { content: ""; width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.6px, transparent 1.8px) 0 0 / 6px 6px; }
 .drop-ind { position: fixed; z-index: 30; pointer-events: none; height: 3px; border-radius: 2px; background: var(--ac); box-shadow: 0 0 0 3px var(--ac-soft); }
 body.dragging { user-select: none; -webkit-user-select: none; }
 .gh-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; color: var(--mut); font-size: 13px; }
 .rows { display: grid; gap: 2px; margin-top: 4px; }
-.row { display: flex; align-items: center; gap: 8px; min-height: 38px; }
+.row { display: flex; align-items: center; gap: 8px; min-height: 32px; }
 .row .t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .row.done .t { color: var(--mut); text-decoration: line-through; }
 .row .q { color: var(--mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .row .pr { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
 .row a { text-decoration: none; }
-.cb { --cb-box: 34px; }
+.cb { --cb-box: 30px; }
 .totals { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 14px; }
 .totals b { font-variant-numeric: tabular-nums; }
 .addrow { display: flex; gap: 6px; margin-top: 6px; }
@@ -114,6 +122,8 @@ body.dragging { user-select: none; -webkit-user-select: none; }
 .fab { position: fixed; right: max(16px, calc(50vw - 380px + 16px)); bottom: calc(18px + env(safe-area-inset-bottom,0px)); z-index: 9; height: 54px; padding: 0 22px; border-radius: 999px;
   background: var(--grad); color: var(--on-ac); font-weight: 700; font-size: 16px; box-shadow: 0 8px 22px color-mix(in srgb, var(--ac) 40%, transparent); transition: transform .12s; }
 .fab:active { transform: scale(.95); }
+/* Pendant une saisie, le bouton cacherait le formulaire (et le clavier remonte tout) */
+body:has(.edit) .fab, body:has(main input:focus, main textarea:focus) .fab { display: none; }
 
 /* Feuilles */
 .types { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -128,7 +138,7 @@ body.dragging { user-select: none; -webkit-user-select: none; }
 .sheet textarea { height: 30vh; font-family: var(--f-mono); font-size: 13px; }
 .pick { display: grid; gap: 6px; }
 .it a.btn { text-decoration: none; }
-.mapprev { display: block; width: 100%; height: auto; max-height: 170px; background: var(--card2); border-radius: var(--r-m); margin: 2px 0 6px; }
+.mapprev { display: block; width: 100%; height: auto; max-height: 120px; background: var(--card2); border-radius: var(--r-m); margin: 2px 0 6px; }
 .pick .btn { justify-content: flex-start; text-align: left; }
 
 .empty { text-align: center; color: var(--mut); padding: 48px 20px; }
@@ -204,7 +214,7 @@ function save(p){ pb.set(PK(p.id), p); }
 function sorted(list){ return list.slice().sort((a, b) => (b.pinned - a.pinned) || (a.pos - b.pos) || a.name.localeCompare(b.name)); }
 
 /* ---------- état de l'affichage (adresse : #p/<id>, pour le bouton retour du téléphone) ---------- */
-const ui = { pid: null, editing: null, q: '', tag: null, archived: false, open: new Set() };
+const ui = { pid: null, editing: null, q: '', tag: null, archived: false, open: new Set(), exp: new Set() };
 function route(){
   const m = location.hash.match(/^#p\/([\w-]+)/);
   ui.pid = m && getP(m[1]) ? m[1] : null; ui.editing = null;
@@ -399,31 +409,63 @@ function projectHTML(p){
   if (!p.items.length) return h + `<div class="empty"><b class="bob">${esc(p.emoji)}</b>Projet vide.<br>« + Ajouter » : lien, dépôt GitHub, note, liste, achats, circuit, TODO, carte…</div>`;
   return h + `<div class="items" id="ilist">${list.map(it => itemHTML(p, it, false)).join('')}</div>`;
 }
+/* Une ligne par élément : titre + résumé ; toucher la ligne déplie le détail (lignes à cocher, note, étiquettes…). */
+function summary(it){
+  const pl = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
+  switch (it.type){
+    case 'link': case 'doc': return [it.url && host(it.url), it.note && it.note.split('\n')[0]].filter(Boolean).join(' · ');
+    case 'gh': { const i = it.info; if (!i) return 'infos non chargées'; return [i.lang, `★ ${i.stars}`, i.prs != null && `${i.prs} PR`, pl(i.issues, 'issue'), i.pushed && `push ${ago(i.pushed)}`].filter(Boolean).join(' · '); }
+    case 'note': return (it.md || '').split('\n').map(x => x.replace(/^[#>*\-\s]+/, '').trim()).find(x => x && x !== it.title) || '';
+    case 'check': { const d = it.rows.filter(r => r.done).length; return it.rows.length ? `${d} / ${it.rows.length}` : 'vide'; }
+    case 'buy': { const tot = it.rows.reduce((s, r) => s + num(r.qty || 1) * num(r.price), 0), left = it.rows.filter(r => !r.done).reduce((s, r) => s + num(r.qty || 1) * num(r.price), 0);
+      return it.rows.length ? `reste ${euro(left)} · total ${euro(tot)}` : 'vide'; }
+    case 'pbd': { const c = pbdCircuit(it.cid); return c ? `${pl(c.doc.parts.length, 'pièce')} · ${pl(c.doc.wires.length, 'fil')}` : '⚠ introuvable'; }
+    case 'todo': { const l = todoList(it.lid); if (!l) return '⚠ introuvable'; const left = l.total - l.done;
+      return l.total ? `${l.done} / ${l.total} · ${left ? (l.next[0] ? '→ ' + l.next[0] : pl(left, 'restant')) : 'tout est fait ✓'}` : 'vide'; }
+    case 'map': { const r = mapRec(it.mid); if (!r) return '⚠ introuvable'; const st = mapStats(r);
+      return [st.markers && pl(st.markers, 'point'), st.paths && `${pl(st.paths, 'tracé')} · ${fmtLen(st.len)}`].filter(Boolean).join(' · ') || 'vide'; }
+  }
+  return '';
+}
+function progressOf(it){
+  if (it.type === 'check' && it.rows.length) return it.rows.filter(r => r.done).length / it.rows.length;
+  if (it.type === 'todo'){ const l = todoList(it.lid); if (l && l.total) return l.done / l.total; }
+  return null;
+}
+function itemLink(it){
+  if ((it.type === 'link') && it.url) return { href: safeUrl(it.url), ext: true };
+  if (it.type === 'gh' && it.owner) return { href: `https://github.com/${it.owner}/${it.repo}`, ext: true };
+  if (it.type === 'doc' && it.url) return { href: `${readerPage()}#url=${encodeURIComponent(safeUrl(it.url))}` };
+  if (it.type === 'pbd' && pbdCircuit(it.cid)) return { href: `${pbdPage()}#open=${encodeURIComponent(it.cid)}` };
+  if (it.type === 'todo' && todoList(it.lid)) return { href: `${todoPage()}#list=${encodeURIComponent(it.lid)}` };
+  if (it.type === 'map' && mapRec(it.mid)) return { href: `${mapPage()}#open=${encodeURIComponent(it.mid)}` };
+  return null;
+}
 function itemHTML(p, it, withProject){
-  const t = TYPES[it.type], ed = ui.editing === it.id;
-  let head = `<div class="ih">${withProject ? '' : '<span class="dh" data-drag aria-label="Déplacer"></span>'}<span class="ty">${t.ic}</span><span class="tt">`;
-  if (it.type === 'link' && it.url) head += `<a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener">${esc(itemTitle(it))}</a>`;
-  else if (it.type === 'doc' && it.url) head += `<a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener">${esc(itemTitle(it))}</a>`;
-  else if (it.type === 'gh' && it.owner) head += `<a href="https://github.com/${esc(it.owner)}/${esc(it.repo)}" target="_blank" rel="noopener">${esc(itemTitle(it))}</a>`;
-  else head += esc(itemTitle(it));
-  if (withProject) head += ` <span class="proj-of">· ${esc(p.emoji)} ${esc(p.name)}</span>`;
+  const t = TYPES[it.type], ed = ui.editing === it.id, x = ed || ui.exp.has(it.id), ln = itemLink(it), pr = progressOf(it);
+  const name = esc(itemTitle(it)) + (ln && !ln.ext ? ' <span class="go">↗</span>' : '');
+  let head = `<div class="ih" data-a="exp">${withProject ? '' : '<span class="dh" data-drag aria-label="Déplacer"></span>'}<span class="ty">${t.ic}</span><span class="tt">`;
+  head += ln ? `<a href="${esc(ln.href)}"${ln.ext ? ' target="_blank" rel="noopener"' : ''}>${name}</a>` : `<span class="nm">${name}</span>`;
+  const sum = ed ? '' : summary(it);
+  head += `<span class="sum">${withProject ? `${esc(p.emoji)} ${esc(p.name)}${sum ? ' · ' : ''}` : ''}${esc(sum)}</span>`;
+  if (pr != null && !x) head += `<span class="bar"><i style="width:${Math.round(pr * 100)}%"></i></span>`;
   head += `</span>`;
-  if (it.type === 'gh' && it.owner && !ed) head += `<button class="mini" data-a="ghref" title="Rafraîchir les infos GitHub">↻</button>`;
+  if (it.type === 'gh' && it.owner && x && !ed) head += `<button class="mini" data-a="ghref" title="Rafraîchir les infos GitHub">↻</button>`;
   head += withProject ? `<button class="mini" data-a="goto" title="Ouvrir le projet">›</button>` : `<button class="mini" data-a="edit" aria-label="Modifier" title="Modifier">✎</button>`;
   head += '</div>';
-  let body = ed ? editHTML(p, it) : viewHTML(p, it);
-  const tags = !ed && it.tags.length ? `<div class="tagline">${it.tags.map(x => `<button class="tag" data-a="tag" data-v="${esc(x)}">#${esc(x)}</button>`).join('')}</div>` : '';
-  return `<article class="it" data-pid="${p.id}" data-id="${it.id}">${head}<div class="ib">${body}${tags}</div></article>`;
+  const body = ed ? editHTML(p, it) : x ? viewHTML(p, it) : '';
+  const tags = x && !ed && it.tags.length ? `<div class="tagline">${it.tags.map(v => `<button class="tag" data-a="tag" data-v="${esc(v)}">#${esc(v)}</button>`).join('')}</div>` : '';
+  return `<article class="it${x ? ' x' : ''}" data-pid="${p.id}" data-id="${it.id}">${head}<div class="ib">${body}${tags}</div></article>`;
 }
 function viewHTML(p, it){
   const note = it.note ? `<div class="note">${esc(it.note)}</div>` : '';
   switch (it.type){
-    case 'link': return `<div class="sm">${esc(host(it.url))}</div>${note}`;
+    case 'link': return note || `<div class="sm">${esc(it.url || '')}</div>`;
     case 'gh': {
       const i = it.info;
       if (!i) return `<div class="sm">Infos non chargées · ↻ pour les récupérer</div>${note}`;
       const bits = [i.lang && `● ${esc(i.lang)}`, `★ ${i.stars}`, i.pushed && `dernier push ${ago(i.pushed)}`, i.prs != null && `${i.prs} PR`, `${i.issues} issue${i.issues > 1 ? 's' : ''}`, i.archived && 'archivé', i.fork && 'fork'].filter(Boolean);
-      return `${i.desc ? `<div>${esc(i.desc)}</div>` : ''}<div class="gh-meta">${bits.map(b => `<span>${b}</span>`).join('')}</div><div class="sm" style="font-size:12px;margin-top:2px">infos du ${new Date(i.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>${note}`;
+      return `${i.desc ? `<div class="note">${esc(i.desc)}</div>` : ''}<div class="gh-meta">${bits.map(b => `<span>${b}</span>`).join('')}</div><div class="sm" style="font-size:12px;margin-top:2px">infos du ${new Date(i.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>${note}`;
     }
     case 'note': {
       const long = (it.md || '').split('\n').length > 10 || (it.md || '').length > 600, open = ui.open.has(it.id);
@@ -431,8 +473,7 @@ function viewHTML(p, it){
     }
     case 'check': {
       const done = it.rows.filter(r => r.done).length;
-      return `${it.rows.length ? `<div class="progress"><i style="--c:var(--ok);width:${it.rows.length ? done / it.rows.length * 100 : 0}%"></i></div><div class="sm">${done} / ${it.rows.length}</div>` : ''}
-        <div class="rows">${it.rows.map(r => `<div class="row ${r.done ? 'done' : ''}"><button class="cb ${r.done ? 'on' : ''}" data-a="tick" data-r="${r.id}" aria-label="Cocher"></button><span class="t">${esc(r.t)}</span></div>`).join('')}</div>
+      return `<div class="rows">${it.rows.map(r => `<div class="row ${r.done ? 'done' : ''}"><button class="cb ${r.done ? 'on' : ''}" data-a="tick" data-r="${r.id}" aria-label="Cocher"></button><span class="t">${esc(r.t)}</span></div>`).join('')}</div>
         <form class="addrow" data-a="addrow"><input type="text" name="t" placeholder="Ajouter une ligne…" autocomplete="off"><button class="btn">+</button></form>`;
     }
     case 'buy': {
@@ -446,27 +487,22 @@ function viewHTML(p, it){
       const c = pbdCircuit(it.cid);
       if (!c) return `<div class="sm">⚠ Circuit introuvable dans la bibliothèque de ProtoBoard de ce navigateur (supprimé, ou pas encore synchronisé).</div>${note}`;
       const d = c.doc, when = c.t;
-      return `<div class="sm">${d.parts.length} pièce(s) · ${d.wires.length} fil(s)${d.board ? ` · plaque ${d.board.w} × ${d.board.h}` : ''}${when ? ' · modifié ' + ago(when) : ''}</div>${note}
-        <div style="margin-top:8px"><a class="btn" href="${pbdPage()}#open=${encodeURIComponent(c.id)}">🧩 Ouvrir dans ProtoBoard</a></div>`;
+      return `<div class="sm">${d.board ? `plaque ${d.board.w} × ${d.board.h}` : ''}${when ? (d.board ? ' · ' : '') + 'modifié ' + ago(when) : ''}</div>${note}`;
     }
     case 'todo': {
       const l = todoList(it.lid);
       if (!l) return `<div class="sm">⚠ Liste introuvable dans l'app TODO de ce navigateur (supprimée, ou pas encore synchronisée).</div>${note}`;
       const pct = l.total ? Math.round(l.done / l.total * 100) : 0, left = l.total - l.done;
-      return `${l.total ? `<div class="progress"><i style="--c:var(--ok);width:${pct}%"></i></div><div class="sm">${l.done} / ${l.total} faits · ${left ? `${left} restant${left > 1 ? 's' : ''}` : 'tout est fait ✓'}</div>` : '<div class="sm">Liste vide</div>'}
-        ${l.next.length ? `<div class="rows">${l.next.map(t => `<div class="row"><span class="cb" aria-hidden="true"></span><span class="t">${esc(t)}</span></div>`).join('')}</div>` : ''}${note}
-        <div style="margin-top:8px"><a class="btn" href="${todoPage()}#list=${encodeURIComponent(l.id)}">✅ Ouvrir dans TODO</a></div>`;
+      return `${l.next.length ? `<div class="rows">${l.next.map(t => `<div class="row"><span class="cb" aria-hidden="true"></span><span class="t">${esc(t)}</span></div>`).join('')}</div>` : ''}${note}`;
     }
     case 'map': {
       const r = mapRec(it.mid);
       if (!r) return `<div class="sm">⚠ Carte introuvable dans « Mes cartes » de ce navigateur (supprimée, ou pas encore synchronisée).</div>${note}`;
       const st = mapStats(r), bits = [st.markers && `${st.markers} point${st.markers > 1 ? 's' : ''}`, st.paths && `${st.paths} tracé${st.paths > 1 ? 's' : ''} · ${fmtLen(st.len)}`, r.t && 'modifiée ' + ago(r.t)].filter(Boolean);
-      return `${mapSVG(r)}<div class="sm">${bits.join(' · ') || 'Carte vide'}</div>${note}
-        <div style="margin-top:8px"><a class="btn" href="${mapPage()}#open=${encodeURIComponent(r.id)}">🗺️ Ouvrir dans Cartes</a></div>`;
+      return `${mapSVG(r)}${r.t ? `<div class="sm">modifiée ${ago(r.t)}</div>` : ''}${note}`;
     }
     case 'doc':
-      return `<div class="sm">${esc(host(it.url))}</div>${note}
-        ${it.url ? `<div style="margin-top:8px"><a class="btn" href="${readerPage()}#url=${encodeURIComponent(safeUrl(it.url))}">📖 Lire dans la Liseuse</a></div>` : ''}`;
+      return `${note}<div class="sm"><a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener">${esc(it.url || '')}</a></div>`;
   }
   return '';
 }
@@ -573,6 +609,12 @@ document.addEventListener('click', e => {
       p.items = p.items.filter(x => x !== it); ui.editing = null; save(p); render(); toast('Élément supprimé.'); break;
     case 'emove': sheetMove(p, it); break;
     case 'rdel': b.closest('.erow').remove(); break;
+    case 'exp': {
+      if (e.target.closest('a, [data-drag]') || ui.editing === it.id) return;
+      ui.exp.has(it.id) ? ui.exp.delete(it.id) : ui.exp.add(it.id);
+      const el = b.closest('.it'); el.outerHTML = itemHTML(p, it, !!el.querySelector('[data-a=goto]'));
+      break;
+    }
     case 'toggle': ui.open.has(it.id) ? ui.open.delete(it.id) : ui.open.add(it.id); render(); break;
     case 'ghref': ghRefresh(p, it); break;
     case 'tick': { const r = it.rows.find(x => x.id === b.dataset.r); if (r){ r.done = !r.done; save(p); render(); } break; }
@@ -588,7 +630,7 @@ document.addEventListener('submit', e => {
     it.rows.push(r); save(p); render();
     const nf = document.querySelector(`.it[data-id="${it.id}"] .addrow input`); if (nf) nf.focus();
   }
-  if (f.dataset.a === 'eform'){ if (readForm(f, p, it)){ ui.editing = null; save(p); render(); } }
+  if (f.dataset.a === 'eform'){ if (readForm(f, p, it)){ ui.editing = null; if (it.type === 'check' || it.type === 'buy') ui.exp.add(it.id); save(p); render(); } }
 });
 document.addEventListener('input', e => { if (e.target.id === 'q'){ ui.q = e.target.value; $('#hbody').innerHTML = homeBody(); } });
 $('#fab').onclick = () => { const p = ui.pid && getP(ui.pid); if (p) sheetAdd(p); else newProject(); };

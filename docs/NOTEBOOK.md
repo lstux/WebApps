@@ -13,6 +13,8 @@ Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main. Li
 
 **+ Ajouter** dans un projet, puis ✎ sur un élément pour le modifier, le **déplacer** vers un autre projet ou le supprimer. La poignée ⋮⋮ réordonne au doigt.
 
+Chaque élément tient sur une ligne : titre et résumé (avancement, prochaine tâche, reste à acheter, étoiles et PR…). Le titre ouvre la cible (le site, le dépôt, ou l'app liée, marquée ↗) ; toucher le reste de la ligne déplie le détail (lignes à cocher, note, étiquettes, aperçu de carte). Le bouton « + Ajouter » se cache pendant une saisie.
+
 | Type | Contenu |
 |------|---------|
 | 🔗 Lien | adresse (`https://` ajouté si besoin), titre (le nom du site par défaut), note |
