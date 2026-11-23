@@ -559,9 +559,10 @@ function sceneHTML(forExport){
     h += `<rect x="${-U/2}" y="${-U/2}" width="${B.w*U}" height="${B.h*U}" fill="url(#holes)" pointer-events="none"/>`;
   }
   doc.parts.forEach(p => { const g = geo(p);
-    h += partSVG(p, g, sel_ && sel_.t === 'part' && sel_.id === p.id) + '<g pointer-events="none">' + labelsSVG(p, g) + '</g>'; });
+    h += partSVG(p, g, sel_ && ((sel_.t === 'part' && sel_.id === p.id) || (sel_.t === 'multi' && sel_.parts.includes(p.id)))) + '<g pointer-events="none">' + labelsSVG(p, g) + '</g>'; });
   if (!forExport) doc.parts.forEach(p => { if (p.lk) h += lockSVG(bboxW(p, geo(p))); });
-  doc.wires.forEach(w => h += wireSVG(w, net && !net.has(K(...w.pts[0])), sel_ && sel_.t === 'wire' && sel_.id === w.id));
+  doc.wires.forEach(w => h += wireSVG(w, net && !net.has(K(...w.pts[0])), sel_ && ((sel_.t === 'wire' && sel_.id === w.id) || (sel_.t === 'multi' && sel_.wires.includes(w.id)))));
+  if (!forExport && rectSel){ const r = rectSel; h += `<rect class="pb-ring" x="${Math.min(r.x0,r.x1)}" y="${Math.min(r.y0,r.y1)}" width="${Math.abs(r.x1-r.x0)}" height="${Math.abs(r.y1-r.y0)}" fill="var(--ac)" fill-opacity=".08" stroke-width="1.5" stroke-dasharray="6 4" pointer-events="none"/>`; }
   if (cur_){
     const pts = cur_.pts.slice();
     if (hover){ const l = pts[pts.length-1]; if (ortho && l[0] !== hover[0] && l[1] !== hover[1]) pts.push([hover[0], l[1]]); pts.push(hover); }
@@ -675,7 +676,7 @@ svg.addEventListener('pointerdown', e => {
   try { svg.setPointerCapture(e.pointerId); } catch(_){}
   ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if (ptrs.size === 2){
-    if (gest && gest.moved && (gest.part || gest.vertex)) commit();
+    if (gest && gest.moved && (gest.part || gest.vertex || (gest.group && typeof gest.group === 'object'))) commit();
     const [a,b] = [...ptrs.values()], m = mid(a,b), r = svg.getBoundingClientRect();
     gest = {type:'pinch', d0:dist(a,b) || 1, s0:view.s, wm:{x:(m.x - r.left - view.tx)/view.s, y:(m.y - r.top - view.ty)/view.s}};
     return;
@@ -689,9 +690,12 @@ svg.addEventListener('pointerdown', e => {
     if (wr) wr.pts.forEach((pt,i) => { const d = Math.hypot(pt[0]*U - w.x, pt[1]*U - w.y); if (d < best){ best = d; idx = i; } });
     if (idx >= 0){ gest.vertex = {wr, idx}; sel.vi = idx; }
   }
+  gest.shift = e.shiftKey;
+  const pg = e.target.closest ? e.target.closest('[data-part]') : null, wg = e.target.closest ? e.target.closest('[data-wire]') : null;
+  if (isMulti() && ((pg && !wg && sel.parts.includes(pg.dataset.part)) || (wg && sel.wires.includes(wg.dataset.wire)))){ gest.group = true; return; }
+  if ((isMulti() || e.shiftKey) && !pg && !wg){ gest.rect = {x0:w.x, y0:w.y, x1:w.x, y1:w.y}; return; }
   if (!gest.vertex && e.target.closest){
-    const pg = e.target.closest('[data-part]');
-    if (pg && !e.target.closest('[data-wire]')){ const p = getPart(pg.dataset.part); if (p && !p.lk){ gest.part = p; gest.p0 = {x:p.x, y:p.y}; gest.att = attached(p); } }
+    if (pg && !wg && !e.shiftKey){ const p = getPart(pg.dataset.part); if (p && !p.lk){ gest.part = p; gest.p0 = {x:p.x, y:p.y}; gest.att = attached(p); } }
   }
 });
 svg.addEventListener('pointermove', e => {
@@ -712,6 +716,13 @@ svg.addEventListener('pointermove', e => {
   const dx = e.clientX - gest.sx, dy = e.clientY - gest.sy;
   if (!gest.moved && Math.hypot(dx,dy) > 7) gest.moved = true;
   if (!gest.moved) return;
+  if (gest.group){
+    if (gest.group === true){ gest.group = startGroupMove(); if (!gest.group){ gest.group = 'locked'; return; } }
+    if (gest.group === 'locked') return;
+    if (applyGroupMove(gest.group, Math.round((bottom ? -dx : dx)/view.s/U), Math.round(dy/view.s/U))) render();
+    return;
+  }
+  if (gest.rect){ const q = toWorld(e.clientX, e.clientY); gest.rect.x1 = q.x; gest.rect.y1 = q.y; rectSel = gest.rect; render(); return; }
   if (gest.vertex){
     const k = snapPt(toWorld(e.clientX, e.clientY)), pt = gest.vertex.wr.pts[gest.vertex.idx];
     if (pt[0] !== k[0] || pt[1] !== k[1]){ gest.vertex.wr.pts[gest.vertex.idx] = k; render(); }
@@ -725,6 +736,8 @@ function endPtr(e, cancel){
   if (!gest) return;
   if (gest.type === 'pinch'){ if (!ptrs.size) gest = null; return; }
   const g = gest; gest = null;
+  if (g.rect){ rectSel = null; if (g.moved && !cancel){ selectRect(g.rect, g.shift); render(); updateCtx(); return; } }
+  if (g.group && g.moved){ if (typeof g.group === 'object') commit(); return; }
   if (g.moved && (g.part || g.vertex)){ if (g.vertex) cleanWire(g.vertex.wr); commit(); return; }
   if (!cancel && !g.moved) handleTap(g);
 }
@@ -741,6 +754,13 @@ function handleTap(g){
     const wr = getWire(sel.id);
     if (wr && g.vertex){ sel = {t:'wire', id:sel.id, vi:g.vertex.idx}; render(); updateCtx(); return; }
     if (wr && t && t.closest('[data-wire]') && t.closest('[data-wire]').dataset.wire === wr.id){ addWirePoint(wr, g.w); return; }
+  }
+  if (isMulti() || g.shift){
+    const wg = t && t.closest('[data-wire]'), pg = t && t.closest('[data-part]');
+    if (wg) multiToggle('wires', wg.dataset.wire);
+    else if (pg) multiToggle('parts', pg.dataset.part);
+    else if (!g.shift) sel = null;   // toucher le vide : on sort de la sélection multiple
+    render(); updateCtx(); return;
   }
   if (near && pinMap.has(key)) sel = {t:'pin', key};
   else if (t && t.closest('[data-wire]')) sel = {t:'wire', id:t.closest('[data-wire]').dataset.wire};
@@ -794,6 +814,66 @@ function finishWire(){
 }
 
 /* ---------- modes et pièces ---------- */
+/* ---------- sélection multiple : sel = {t:'multi', parts:[ids], wires:[ids]} ---------- */
+let rectSel = null;   // rectangle de sélection en cours (coordonnées du monde, en px)
+const isMulti = () => sel && sel.t === 'multi';
+function multiToggle(kind, id){
+  if (!isMulti()) sel = {t:'multi', parts:[], wires:[]};
+  const a = sel[kind], i = a.indexOf(id);
+  if (i >= 0) a.splice(i, 1); else a.push(id);
+}
+/* Fils qui suivent le groupe en entier : sélectionnés, ou accrochés par leurs deux bouts à des pièces du groupe */
+function groupWires(parts){
+  const pins = new Set(parts.flatMap(p => pinKeys(p).map(k => K(...k))));
+  return doc.wires.filter(w => sel.wires.includes(w.id) || (pins.has(K(...w.pts[0])) && pins.has(K(...w.pts[w.pts.length-1]))));
+}
+function startGroupMove(){
+  const parts = sel.parts.map(getPart).filter(Boolean);
+  if (parts.some(p => p.lk)){ toast('Le groupe contient des pièces verrouillées.'); return null; }
+  const moving = groupWires(parts), mset = new Set(moving);
+  return {parts: parts.map(p => ({p, x:p.x, y:p.y, att: attached(p).filter(([w]) => !mset.has(w))})),
+    wires: moving.map(w => ({w, pts: w.pts.map(q => q.slice())})), dx:0, dy:0};
+}
+function applyGroupMove(G, dx, dy){
+  if (dx === G.dx && dy === G.dy) return false;
+  G.dx = dx; G.dy = dy;
+  G.parts.forEach(e => { e.p.x = e.x + dx; e.p.y = e.y + dy; });
+  G.wires.forEach(e => { e.w.pts = e.pts.map(([x,y]) => [x + dx, y + dy]); });
+  G.parts.forEach(e => reattach(e.p, e.att));
+  return true;
+}
+/* Rectangle (monde, px) → pièces entièrement dedans, fils dont tous les points sont dedans */
+function selectRect(r, add){
+  const x0 = Math.min(r.x0, r.x1)/U, x1 = Math.max(r.x0, r.x1)/U, y0 = Math.min(r.y0, r.y1)/U, y1 = Math.max(r.y0, r.y1)/U;
+  const inR = (x,y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  const parts = doc.parts.filter(p => { const b = bboxW(p, geo(p)); return inR(b.x0, b.y0) && inR(b.x1, b.y1); }).map(p => p.id);
+  const wires = doc.wires.filter(w => w.pts.every(([x,y]) => inR(x,y))).map(w => w.id);
+  if (!(add && isMulti())) sel = {t:'multi', parts:[], wires:[]};
+  parts.forEach(id => { if (!sel.parts.includes(id)) sel.parts.push(id); });
+  wires.forEach(id => { if (!sel.wires.includes(id)) sel.wires.push(id); });
+}
+function groupDelete(){
+  const locked = sel.parts.filter(id => getPart(id) && getPart(id).lk);
+  doc.parts = doc.parts.filter(p => !sel.parts.includes(p.id) || p.lk);
+  doc.wires = doc.wires.filter(w => !sel.wires.includes(w.id));
+  sel = locked.length ? {t:'multi', parts:locked, wires:[]} : null; commit();
+  if (locked.length) toast(`${locked.length} pièce(s) verrouillée(s) conservée(s).`);
+}
+function groupDup(){
+  const parts = sel.parts.map(getPart).filter(Boolean); if (!parts.length && !sel.wires.length) return;
+  const wires = groupWires(parts);
+  const xs = [...parts.flatMap(p => { const b = bboxW(p, geo(p)); return [b.x0, b.x1]; }), ...wires.flatMap(w => w.pts.map(q => q[0]))];
+  const off = Math.ceil(Math.max(...xs) - Math.min(...xs)) + 1;
+  const np = parts.map(p => { const q = JSON.parse(JSON.stringify(p)); q.id = uid(); q.x += off; delete q.lk; return q; });
+  const nw = wires.map(w => { const q = JSON.parse(JSON.stringify(w)); q.id = uid(); q.pts = q.pts.map(([x,y]) => [x + off, y]); return q; });
+  doc.parts.push(...np); doc.wires.push(...nw);
+  sel = {t:'multi', parts: np.map(p => p.id), wires: nw.map(w => w.id)}; commit();
+}
+function groupLock(){
+  const parts = sel.parts.map(getPart).filter(Boolean), all = parts.length && parts.every(p => p.lk);
+  parts.forEach(p => { if (all) delete p.lk; else p.lk = true; }); commit();
+}
+
 function setMode(m){
   if (mode === 'wire' && m !== 'wire' && cur) finishWire();
   mode = m; if (m === 'wire') sel = null;
@@ -826,11 +906,15 @@ function updateCtx(){
     h += swatches(wireColor) + `<div class="rowb"><button class="chip ${ortho ? 'on' : ''}" data-a="ortho">⌐ Angles droits</button><button class="chip ${half ? 'on' : ''}" data-a="half" title="Accrocher entre les pastilles">½ Entre pastilles</button><button class="chip ${wireIso ? 'on' : ''}" data-a="iso" title="Fil gainé, par-dessus les soudures">Fil isolé</button></div>`;
     if (cur) h += `<div class="rowb"><button class="btn" data-a="pop" title="Retirer le dernier point">⌫</button><button class="btn primary" data-a="finish">✓ Terminer</button><button class="btn" data-a="cancel">✕</button></div>`;
     h += `<div class="info">${cur ? `${cur.pts.length} point(s) — touche les coudes, puis une broche ou un fil pour terminer (ou retouche le dernier point).` : 'Touche un point de départ : une broche ou un trou.'}</div>`;
+  } else if (isMulti()){
+    const np = sel.parts.length, nw = sel.wires.length, parts = sel.parts.map(getPart).filter(Boolean), all = np && parts.every(p => p.lk);
+    h += `<div class="info"><b>Sélection multiple</b> — ${np} pièce${np > 1 ? 's' : ''}, ${nw} fil${nw > 1 ? 's' : ''} · touche pour ajouter ou retirer, trace un rectangle sur le vide, glisse un élément pour tout déplacer</div>
+      <div class="rowb"><button class="btn" data-a="glock" ${np ? '' : 'disabled'} title="Verrouiller / déverrouiller (L)">${all ? '🔒' : '🔓'}</button><button class="btn" data-a="gdup" ${np + nw ? '' : 'disabled'} title="Dupliquer">⧉</button><button class="btn" data-a="gdel" ${np + nw ? '' : 'disabled'} title="Supprimer">🗑</button><button class="btn" data-a="gall">Tout</button><button class="btn" data-a="gquit">✕ Terminer</button></div>`;
   } else if (sel && sel.t === 'part'){
     const p = getPart(sel.id);
     if (p){ const lk = p.lk ? 'disabled' : '';
       h += `<div class="info"><b>${esc(p.label)}</b> — ${esc(partName(p))}${p.lk ? ' · verrouillée' : ''}</div>
-      <div class="rowb"><button class="btn ${p.lk ? 'on' : ''}" data-a="lock" title="${p.lk ? 'Déverrouiller' : 'Verrouiller : ni déplacement, ni rotation, ni suppression'} (L)">${p.lk ? '🔒' : '🔓'}</button><button class="btn" data-a="rot" title="Pivoter (R)" ${lk}>⟳</button><button class="btn" data-a="flip" title="Retourner (F)" ${lk}>⇋</button><button class="btn" data-a="edit">✎ Modifier</button><button class="btn" data-a="dup" title="Dupliquer">⧉</button><button class="btn" data-a="delpart" title="Supprimer" ${lk}>🗑</button></div>`; }
+      <div class="rowb"><button class="btn ${p.lk ? 'on' : ''}" data-a="lock" title="${p.lk ? 'Déverrouiller' : 'Verrouiller : ni déplacement, ni rotation, ni suppression'} (L)">${p.lk ? '🔒' : '🔓'}</button><button class="btn" data-a="rot" title="Pivoter (R)" ${lk}>⟳</button><button class="btn" data-a="flip" title="Retourner (F)" ${lk}>⇋</button><button class="btn" data-a="edit">✎ Modifier</button><button class="btn" data-a="dup" title="Dupliquer">⧉</button><button class="btn" data-a="delpart" title="Supprimer" ${lk}>🗑</button><button class="btn" data-a="multi" title="Sélectionner plusieurs éléments (ou Maj+clic)">⬚ Plusieurs</button></div>`; }
   } else if (sel && sel.t === 'wire'){
     const w = getWire(sel.id);
     if (w){
@@ -849,7 +933,7 @@ function updateCtx(){
     const others = pins.filter(e => K(e.x,e.y) !== sel.key);
     h += `<div class="info">${others.length ? 'Relié à : ' + others.map(e => `<b>${pinTitle(e)}</b>`).join(', ') : 'Aucune connexion'}</div>`;
     netWarnings(pins).forEach(t => h += `<div class="warn">${t}</div>`);
-  } else h += `<div class="info">Touche une pièce, une broche ou un fil · glisse pour déplacer · pince pour zoomer</div>`;
+  } else h += `<div class="info">Touche une pièce, une broche ou un fil · glisse pour déplacer · pince pour zoomer</div><div class="rowb"><button class="btn" data-a="multi" title="Sélectionner plusieurs éléments (ou Maj+clic, Maj+glisser)">⬚ Sélection multiple</button></div>`;
   $('#ctx').innerHTML = h;
 }
 $('#ctx').addEventListener('click', e => {
@@ -875,6 +959,12 @@ $('#ctx').addEventListener('click', e => {
     case 'rot': transformPart(id, p => p.r = (p.r + 1) % 4); break;
     case 'flip': transformPart(id, p => p.f = !p.f); break;
     case 'edit': sheetEdit(id); break;
+    case 'multi': sel = {t:'multi', parts: sel && sel.t === 'part' ? [sel.id] : [], wires: []}; render(); updateCtx(); break;
+    case 'gquit': sel = null; render(); updateCtx(); break;
+    case 'gall': sel = {t:'multi', parts: doc.parts.map(p => p.id), wires: doc.wires.map(w => w.id)}; render(); updateCtx(); break;
+    case 'glock': groupLock(); break;
+    case 'gdup': groupDup(); break;
+    case 'gdel': groupDelete(); break;
     case 'lock': { const p = getPart(id); if (p){ if (p.lk) delete p.lk; else p.lk = true; commit(); } break; }
     case 'dup': { const p = getPart(id), bb = bboxW(p, geo(p)), q = JSON.parse(JSON.stringify(p));
       q.id = uid(); delete q.lk; q.x += Math.ceil(bb.x1 - bb.x0) + 1; doc.parts.push(q); sel = {t:'part', id:q.id}; commit(); break; }
@@ -1200,7 +1290,7 @@ function sheetHelp(){
     <p><b>⇄ Dessous</b> : vue de la plaque retournée comme une feuille (miroir gauche-droite) : les modules deviennent des empreintes pâles, il ne reste que les pastilles à souder. Le plan ne change pas, on peut y éditer aussi. L'export PNG suit la vue affichée.</p>
     <p><b>Broche</b> : touche-la pour voir son rôle, ses mises en garde et tout ce qui y est relié. Deux fils ne sont reliés que s'ils partagent un point (une soudure) : se croiser ne suffit pas. Une barrette posée sur les broches d'un module est connectée.</p>
     <p><b>Composants</b> : un fichier par composant dans <code>code/protoboard/components/</code>. Pour les tiens sans toucher au dépôt : module générique → ✎ → « Enregistrer comme composant », ou menu → Composants → Importer.</p>
-    <p><b>Clavier</b> : W fil, H demi-pas, D dessous/dessus, R pivoter, F retourner, L verrouiller, Suppr effacer, Échap annuler, Ctrl+Z / Ctrl+Maj+Z.</p>
+    <p><b>Clavier</b> : W fil, H demi-pas, D dessous/dessus, R pivoter, F retourner, L verrouiller, Maj+clic / Maj+glisser sélection multiple, Suppr effacer, Échap annuler, Ctrl+Z / Ctrl+Maj+Z.</p>
     <p><b>Bibliothèque</b> (menu ☰) : Enregistrer range le circuit dans ce navigateur sous un nom (Ctrl+S ensuite pour le mettre à jour) ; Charger en rouvre un. Le • à côté du nom signale des modifications non enregistrées. Rien n'est enregistré tout seul dans la bibliothèque.</p>
     <p><b>Fils</b> : touche un fil pour le sélectionner, glisse ses points pour le modifier ; touche le fil pour ajouter un point, touche un point puis « Retirer le point » pour l'enlever.</p>
     <p>Le plan en cours est gardé tout seul dans ce navigateur ; Exporter / Importer pour le passer sur un autre appareil.</p></div>` + typeLegend());
@@ -1690,6 +1780,8 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'h'){ half = !half; applyMirror(); updateCtx(); }
   else if (sel && sel.t === 'part' && e.key === 'r') transformPart(sel.id, p => p.r = (p.r + 1) % 4);
   else if (sel && sel.t === 'part' && e.key === 'f') transformPart(sel.id, p => p.f = !p.f);
+  else if (isMulti() && e.key === 'l') groupLock();
+  else if (isMulti() && (e.key === 'Delete' || e.key === 'Backspace')) groupDelete();
   else if (sel && sel.t === 'part' && e.key === 'l'){ const p = getPart(sel.id); if (p){ if (p.lk) delete p.lk; else p.lk = true; commit(); } }
   else if ((e.key === 'Delete' || e.key === 'Backspace') && sel){
     if (sel.t === 'part' && getPart(sel.id) && getPart(sel.id).lk){ toast('Pièce verrouillée.'); return; }
