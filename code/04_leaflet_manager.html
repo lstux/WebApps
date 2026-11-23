@@ -16,7 +16,17 @@ body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; 
 .topbar-in { max-width: none; gap: 8px; }
 .topbar-in .iconbtn { --icon-size: 38px; }
 .topbar-in .btn { padding: 9px 14px; }
-@media (max-width: 480px) { .topbar-in .appicon { display: none; } }   /* barre trop pleine : l'icône cède la place au titre */
+/* Téléphone : icône d'accueil réduite, titre et sous-titre sur une ligne (coupés au besoin),
+   pour que la barre reste basse même avec une grande taille de police. */
+@media (max-width: 480px) {
+  .topbar-in { gap: 6px; }
+  .topbar-in .appicon { width: 30px; height: 30px; border-radius: 9px; }
+  .brand { font-size: 20px; }
+  .brand, .subtitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-in .iconbtn { --icon-size: 34px; }
+  .topbar-in .btn { padding: 8px 11px; }
+}
+@media (max-width: 400px) { #btnExport .lbl { display: none; } }
 
 /* Mise en page : panneau à gauche, carte à droite ; sur mobile, outils, carte, puis le reste */
 .app { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); }
@@ -32,7 +42,9 @@ body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; 
   .panel { display: contents; }
   .panel .card { margin: 12px 12px 0; }
   #cTools { order: 1; }
-  .stage { order: 2; height: min(62vh, 520px); min-height: 320px; margin-top: 12px; }
+  /* La carte tient dans la place sous la barre du haut (--tb, mesurée en JS) : sa barre de tracé
+     reste visible ; scroll-margin pour que scrollIntoView ne la glisse pas sous la barre collante. */
+  .stage { order: 2; height: min(62vh, 520px, calc(100dvh - var(--tb, 70px) - 24px)); min-height: 260px; margin-top: 12px; scroll-margin-top: calc(var(--tb, 70px) + 8px); }
   #cProps { order: 3; } #cItems { order: 4; } #cMap { order: 5; }
 }
 
@@ -125,7 +137,7 @@ input[type=range] { width: 100%; accent-color: var(--ac); }
     </div>
     <button class="iconbtn" id="btnUndo" aria-label="Annuler" title="Annuler (Ctrl+Z)">↶</button>
     <button class="iconbtn" id="btnRedo" aria-label="Rétablir" title="Rétablir (Ctrl+Maj+Z)">↷</button>
-    <button class="btn primary" id="btnExport">‹/› Exporter</button>
+    <button class="btn primary" id="btnExport" aria-label="Exporter" title="Exporter">‹/›<span class="lbl"> Exporter</span></button>
     <button class="iconbtn" id="btnMenu" aria-label="Menu">⋯</button>
   </div>
 </header>
@@ -625,6 +637,16 @@ function fitAll() {
 }
 
 /* ---------- Modes d’outil ---------- */
+/* Hauteur de la barre du haut, pour dimensionner la carte sur téléphone */
+const topbar = document.querySelector('.topbar');
+new ResizeObserver(() => document.documentElement.style.setProperty('--tb', topbar.offsetHeight + 'px')).observe(topbar);
+/* Sur téléphone (page qui défile), amène toute la carte à l'écran : sa barre de tracé est en bas */
+function showStage() {
+  if (!matchMedia('(max-width: 899px)').matches) return;
+  const r = document.querySelector('.stage').getBoundingClientRect();
+  if (r.top < topbar.offsetHeight || r.bottom > innerHeight) document.querySelector('.stage').scrollIntoView({ block: r.top < topbar.offsetHeight ? 'start' : 'end', behavior: 'smooth' });
+}
+
 function setMode(m) {
   if (S.mode === m) return;
   cancelDraw(); cancelFree();
@@ -637,6 +659,7 @@ function setMode(m) {
   if (m !== 'select' && S.sel) { S.sel = null; renderProps(); renderList(); }
   applySel();
   $('#toolHint').textContent = HINTS[m];
+  if (m !== 'select') showStage();
 }
 $('#tools').addEventListener('click', e => { const b = e.target.closest('.tool'); if (b) setMode(b.dataset.mode); });
 
@@ -649,8 +672,9 @@ map.on('click', e => {
 /* ---------- Tracé point par point ---------- */
 const D = { pts: [], line: null, rub: null };
 function drawInfo() {
-  const bar = $('#drawbar');
+  const bar = $('#drawbar'), was = !bar.hidden;
   bar.hidden = !D.pts.length;
+  if (!was && !bar.hidden) showStage();   // la barre vient d'apparaître : qu'elle soit visible
   $('#drawInfo').textContent = plural(D.pts.length, 'point') + (D.pts.length > 1 ? ' · ' + fmtLen(plen(D.pts)) : '');
 }
 function drawPoint(ll) {
