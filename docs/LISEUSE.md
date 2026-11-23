@@ -21,6 +21,7 @@ Une page unique HTML/CSS/JavaScript qui affiche des fichiers Markdown comme on l
 - **Adresse** : l'URL d'un fichier `.md`, ou celle d'un dépôt GitHub pour parcourir tous ses documents
 - **Glisser-déposer** : dépose un fichier ou dossier n'importe où sur la page
 - **Coller** : `Ctrl`+`V` pour afficher du Markdown depuis le presse-papiers
+- **Lien direct** : `markdown_reader.html#url=<adresse encodée>` ouvre ce document (utilisé par le Notebook)
 
 Rien n'est envoyé nulle part : tout est lu localement dans le navigateur.
 

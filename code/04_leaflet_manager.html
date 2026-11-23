@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="common.css">
 <link rel="icon" type="image/svg+xml" href="icons/leaflet_manager.svg">
 <script src="common.js"></script>
+<script src="pbstore.js"></script>
+<script src="pbsync.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 /* Cartes Leaflet — styles spécifiques. Composants du système : .topbar, .btn, .iconbtn, .card, .chips, .sheet, .toast */
@@ -125,6 +127,14 @@ input[type=range] { width: 100%; accent-color: var(--ac); }
 .expopts label { font-size: 13.5px; color: var(--mut); white-space: nowrap; }
 .expopts input { max-width: 200px; }
 #expTabs { margin: 4px 8px 0; flex-wrap: wrap; }
+/* Bibliothèque de cartes */
+.lib { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: var(--r-m); }
+.lib:hover { background: var(--hover); }
+.lib .grow { min-width: 0; }
+.lib b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib small { display: block; color: var(--mut); font-size: 12.5px; }
+.lib .btn { padding: 8px 12px; font-size: 14px; flex: none; }
+#libDlg .form { margin: 0 8px; }
 </style>
 </head>
 <body>
@@ -199,12 +209,21 @@ input[type=range] { width: 100%; accent-color: var(--ac); }
 <dialog class="sheet" id="menuDlg">
   <div class="inner">
     <div class="grab"></div>
+    <button class="item" data-act="new"><span class="ic">＋</span> Nouvelle carte</button>
+    <button class="item" data-act="save"><span class="ic">💾</span> Enregistrer<span class="sw" id="saveSw"></span></button>
+    <button class="item" data-act="saveas"><span class="ic">⎘</span> Enregistrer sous…</button>
+    <button class="item" data-act="open"><span class="ic">📂</span> Mes cartes…</button>
     <button class="item" data-act="import"><span class="ic">⬆</span> Importer…</button>
     <button class="item" data-act="fit"><span class="ic">⤢</span> Cadrer sur les éléments</button>
     <button class="item" data-act="locate"><span class="ic">◎</span> Ma position</button>
     <button class="item" data-theme-toggle><span class="ic" data-theme-icon></span> Thème<span class="sw" data-theme-name></span></button>
     <button class="item" data-act="clear"><span class="ic">🗑</span> Tout effacer</button>
+    <button class="item" data-act="sync"><span class="ic">☁</span> Synchronisation<span class="sw" id="syncSw">non connecté</span></button>
   </div>
+</dialog>
+
+<dialog class="sheet" id="libDlg">
+  <div class="inner"><div class="grab"></div><div id="libBody"></div></div>
 </dialog>
 
 <dialog class="sheet" id="impDlg">
@@ -410,7 +429,7 @@ function commit() {
     if (hist.length > 100) hist.shift();
     hi = hist.length - 1; updUndo();
   }
-  save();
+  save(); updSub();
 }
 function jump(k) {
   if (k < 0 || k >= hist.length) return;
@@ -764,7 +783,7 @@ function statOf(it) {
 function renderList() {
   const n = S.items.length;
   $('#itemCount').textContent = n ? String(n) : '';
-  $('#sub').textContent = 'Leaflet · ' + plural(n, 'élément');
+  updSub();
   $('#list').innerHTML = n ? S.items.map(it =>
     '<li><button class="li' + (it.id === S.sel ? ' on' : '') + '" data-id="' + it.id + '"><span class="mk"><i class="' + (it.type === 'path' ? 'ln' : '') + '" style="--c:' + it.color + '"></i></span>' +
     '<span class="tx"><span class="t">' + esc(nameOf(it)) + '</span><span class="s">' + esc(statOf(it)) + '</span></span></button></li>').join('')
@@ -1114,11 +1133,136 @@ document.addEventListener('keydown', e => {
   }
 });
 
+/* ---------- Bibliothèque de cartes (enregistrement à la demande, synchronisable) ----------
+   Une carte par clé « leaflet.map.<id> » : { id, name, t, data } où data est le JSON d'export.
+   La carte en cours (KEY) reste locale ; « leaflet-manager-cur » retient laquelle est ouverte. */
+const store = new PBStore({ app: 'leaflet', sharedAuth: true });
+const MAP_PFX = 'leaflet.map.', CUR_KEY = 'leaflet-manager-cur';
+const fmtDate = t => new Date(t).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+let curMap = null, savedSnap = '';
+const dsnap = d => { const r = fromData(d); return JSON.stringify({ o: r.opts, i: r.items.map(exportItem) }); };
+try { curMap = JSON.parse(localStorage.getItem(CUR_KEY)); } catch (e) {}
+function readMaps() {
+  const out = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(MAP_PFX)) continue;
+    try { const r = JSON.parse(localStorage.getItem(k)); if (r && r.id && r.name && r.data) out.push(r); } catch (e) {}
+  }
+  return out.sort((a, b) => b.t - a.t);
+}
+const readMap = id => readMaps().find(r => r.id === id) || null;
+function setCurMap(c) {
+  curMap = c; savedSnap = c ? dsnap(toData()) : '';
+  try { c ? localStorage.setItem(CUR_KEY, JSON.stringify(c)) : localStorage.removeItem(CUR_KEY); } catch (e) {}
+  updSub();
+}
+const isDirty = () => dsnap(toData()) !== savedSnap;
+function updSub() {
+  const n = S.items.length, el = $('#sub');
+  el.textContent = (curMap ? curMap.name + (isDirty() ? ' •' : '') : 'Leaflet') + ' · ' + plural(n, 'élément');
+  el.title = curMap && isDirty() ? 'Modifications non enregistrées' : '';
+  const sw = $('#saveSw'); if (sw) sw.textContent = curMap ? curMap.name : '';
+}
+function saveMap(name, id) {
+  const rec = { id: id || uid(), name, t: Date.now(), data: toData() };
+  try { store.set('leaflet.map.' + rec.id, rec); }
+  catch (e) { toast('Enregistrement impossible : le stockage du navigateur est plein.', true); return false; }
+  setCurMap({ id: rec.id, name }); return true;
+}
+function loadMap(rec) {
+  const r = fromData(rec.data || {});
+  S.items = r.items; S.opts = r.opts; S.sel = null;
+  cancelDraw(); applyOpts(); renderAll(); commit();
+  if (r.view) map.setView(r.view.center, r.view.zoom); else if (S.items.length) fitAll();
+  setCurMap({ id: rec.id, name: rec.name });
+}
+const libBody = h => { $('#libBody').innerHTML = h; if (!$('#libDlg').open) $('#libDlg').showModal(); };
+function sheetSave() {
+  libBody('<h2>' + (curMap ? 'Enregistrer sous…' : 'Enregistrer la carte') + '</h2><div class="form"><label class="lbl" for="svName">Nom</label>' +
+    '<input type="text" id="svName" maxlength="60" autocomplete="off" placeholder="Ma carte" value="' + esc(curMap ? curMap.name + ' (copie)' : '') + '"></div>' +
+    '<p>La carte va dans « Mes cartes » de ce navigateur (et sur le serveur si la synchro est active). Rien n\'est enregistré automatiquement.</p>' +
+    '<div class="btns"><button class="btn primary" data-act="svok">Enregistrer</button></div>');
+  const inp = $('#svName'); inp.focus(); inp.select();
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('[data-act=svok]').click(); } });
+  inp.addEventListener('input', () => { const b = $('[data-act=svok]'); delete b.dataset.armed; b.textContent = 'Enregistrer'; });
+}
+function sheetOpen() {
+  const lib = readMaps();
+  libBody('<h2>Mes cartes</h2>' + (lib.length ? lib.map(r => {
+    const n = Array.isArray(r.data.items) ? r.data.items.length : 0;
+    return '<div class="lib"><div class="grow"><b>' + esc(r.name) + '</b><small>' + (curMap && curMap.id === r.id ? 'ouverte · ' : '') + plural(n, 'élément') + ' · ' + fmtDate(r.t) + '</small></div>' +
+      '<button class="btn primary" data-act="libload" data-id="' + esc(r.id) + '">Ouvrir</button><button class="btn" data-act="libdel" data-id="' + esc(r.id) + '" aria-label="Supprimer">🗑</button></div>';
+  }).join('') : '<p>Aucune carte enregistrée. Menu ⋯ → Enregistrer.</p>'));
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  switch (b.dataset.act) {
+    case 'new':
+      $('#menuDlg').close();
+      if (S.items.length && (!curMap || isDirty()) && !confirm('Commencer une nouvelle carte ? Les éléments non enregistrés seront perdus (↶ pour revenir).')) return;
+      S.items = []; S.sel = null; cancelDraw(); renderAll(); commit(); setCurMap(null);
+      break;
+    case 'save':
+      $('#menuDlg').close();
+      if (!curMap) sheetSave(); else if (saveMap(curMap.name, curMap.id)) toast('Enregistrée : ' + curMap.name);
+      break;
+    case 'saveas': $('#menuDlg').close(); sheetSave(); break;
+    case 'open': $('#menuDlg').close(); sheetOpen(); break;
+    case 'sync': $('#menuDlg').close(); sync.open(); break;
+    case 'svok': {
+      const name = $('#svName').value.trim();
+      if (!name) { toast('Donne un nom à la carte.', true); return; }
+      const same = readMaps().find(r => r.name.toLowerCase() === name.toLowerCase());
+      if (same && !b.dataset.armed) { b.dataset.armed = 1; b.textContent = 'Remplacer « ' + name + ' » ?'; return; }
+      if (saveMap(name, same && same.id)) { $('#libDlg').close(); toast('Enregistrée : ' + name); }
+      break;
+    }
+    case 'libload': {
+      const rec = readMap(b.dataset.id); if (!rec) return;
+      if (S.items.length && (!curMap || isDirty()) && !b.dataset.armed) { b.dataset.armed = 1; b.textContent = 'Remplacer ?'; return; }
+      loadMap(rec); $('#libDlg').close(); toast('Ouverte : ' + rec.name + ' — ↶ pour revenir à la carte précédente.');
+      break;
+    }
+    case 'libdel': {
+      if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = 'Supprimer ?'; return; }
+      store.remove('leaflet.map.' + b.dataset.id);
+      if (curMap && curMap.id === b.dataset.id) setCurMap(null);
+      sheetOpen();
+      break;
+    }
+  }
+});
+/* Lien direct vers une carte enregistrée (ex. depuis le Notebook) : leaflet_manager.html#open=<id> */
+function openFromHash() {
+  const m = location.hash.match(/^#open=([\w-]+)/); if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  const rec = readMap(m[1]);
+  if (!rec) { toast('Carte introuvable dans « Mes cartes » de ce navigateur.', true); return; }
+  if (curMap && curMap.id === rec.id && !isDirty()) { if (S.items.length) fitAll(); return; }
+  loadMap(rec); toast('Ouverte : ' + rec.name + ' — ↶ pour revenir à la carte précédente.');
+}
+const sync = PBSync.init(store, {
+  summary: 'Les cartes enregistrées (« Mes cartes ») sont synchronisées sur le serveur, les données sont stockées sans chiffrement. La carte en cours d\'édition reste sur cet appareil.',
+  onChange(key, value) {
+    if (!key.startsWith(MAP_PFX)) return null;
+    if ($('#libDlg').open && $('#libBody h2') && $('#libBody h2').textContent === 'Mes cartes') sheetOpen();
+    if (curMap && key === MAP_PFX + curMap.id && !value) { setCurMap(null); return 'Carte supprimée depuis un autre appareil.'; }
+    return 'Cartes mises à jour depuis un autre appareil.';
+  },
+  onStatus(t) { const e = document.getElementById('syncSw'); if (e) e.textContent = t; },
+  toast: toast
+});
+
 /* ---------- Démarrage ---------- */
 mapEl.classList.add('mode-select');
 $('#toolHint').textContent = HINTS.select;
 applyOpts(); updView(); renderAll();
 hist = [snap()]; hi = 0; updUndo();
+if (curMap) { const r = readMap(curMap.id); savedSnap = r ? dsnap(r.data) : ''; if (!r) setCurMap(null); }
+updSub();
+openFromHash(); window.addEventListener('hashchange', openFromHash);
 })();
 </script>
 </body>

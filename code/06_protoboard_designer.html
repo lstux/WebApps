@@ -1819,6 +1819,20 @@ setMode('sel');
 if (savedView && savedView.s){ view = savedView; bottom = !!view.b; applyView(); render(); } else fit();
 const missing = [...new Set(doc.parts.filter(p => !BUILTIN[p.type] && !LIB.has(p.type)).map(p => p.type))];
 if (missing.length) toast('Composant(s) introuvable(s) : ' + missing.join(', '), true);
+/* Ouverture directe d'un circuit de la bibliothèque : page#open=<id> (lien depuis le Notebook).
+   Même chemin que Charger : le plan précédent reste récupérable avec ↶. */
+function openFromHash(){
+  const m = location.hash.match(/^#open=([\w-]+)/); if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  const rec = readCircuits().find(r => r.id === m[1]);
+  if (!rec){ toast('Circuit introuvable dans la bibliothèque de ce navigateur.', true); return; }
+  if (circuit && circuit.id === rec.id && !isDirty()){ fit(); return; }
+  const added = applyDoc(JSON.parse(JSON.stringify(rec.doc)), rec.components);
+  setCircuit({id:rec.id, name:rec.name}); fit();
+  toast(added ? `Ouvert : ${rec.name} (${added} composant(s) ajouté(s)).` : `Ouvert : ${rec.name} — ↶ pour revenir au plan précédent.`);
+}
+openFromHash();
+window.addEventListener('hashchange', openFromHash);
 const sync = PBSync.init(store, {   // synchronise tout de suite, puis au retour en ligne / sur l'onglet
   adopt: ['doc.v1', 'components.v1'],
   summary: 'Le plan en cours, les circuits enregistrés et « Mes composants » sont synchronisés sur le serveur, les données sont stockées sans chiffrement.',
