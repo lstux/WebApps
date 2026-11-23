@@ -1303,7 +1303,15 @@ $('ls-sync').onclick=()=>syncUi.open();
 
 /* ---------- Démarrage : favoris, puis le dernier document ou Bienvenue ---------- */
 applySize();
-const last=store.getJSON('last',null);
+/* Lien direct (ex. depuis le Notebook) : markdown_reader.html#url=<adresse encodée> ouvre ce document */
+function hashUrl(){
+  const m=location.hash.match(/^#url=(.+)$/); if(!m) return '';
+  history.replaceState(null,'',location.pathname+location.search);
+  try{return decodeURIComponent(m[1])}catch(e){return m[1]}
+}
+window.addEventListener('hashchange',()=>{const u=hashUrl(); if(u) loadUrl(u,{tab:'docs'})});
+const linked=hashUrl();
+const last=linked?{t:'link',url:linked}:store.getJSON('last',null);
 const remote=!!(last&&last.t==='link'&&typeof last.url==='string'&&/^https?:\/\//i.test(last.url));
 setSource({label:'Liseuse',kind:'sample',key:'sample',files:sampleFiles,
   start:(last&&last.t==='sample'&&last.file)||'Bienvenue.md',tab:'favs',noOpen:remote});

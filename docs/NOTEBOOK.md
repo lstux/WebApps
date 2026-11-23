@@ -2,7 +2,7 @@
 
 📦 [code/07_notebook.html](../code/07_notebook.html)
 
-Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main. Liens, dépôts GitHub, notes, listes, achats, circuits ProtoBoard. Une page, sans serveur ; synchronisation facultative.
+Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main. Liens, dépôts GitHub, notes, listes, achats, circuits ProtoBoard, listes TODO, cartes, documents à lire. Une page, sans serveur ; synchronisation facultative.
 
 ## Projets
 
@@ -21,6 +21,11 @@ Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main. Li
 | ☑️ Liste à cocher | lignes à cocher, avancement ; ajout direct sous la liste |
 | 🛒 Liste d'achat | article, quantité, prix unitaire (€), lien vers la boutique ; « Reste à acheter » (non cochés) et total |
 | 🧩 Circuit ProtoBoard | **référencé**, pas copié : le Notebook lit la bibliothèque de ProtoBoard (`protoboard.circuit.<id>`, même navigateur), affiche son résumé et « Ouvrir dans ProtoBoard » l'ouvre directement (`protoboard_designer.html#open=<id>`, même chemin que Charger : ↶ y rend le plan précédent) |
+| ✅ Liste TODO | **référencée** : une liste de l'app TODO (`todo-tree-v1` pour « Ma liste », `todo-list.<id>` pour les autres). Avancement, nombre restant, les 3 prochaines tâches ; « Ouvrir dans TODO » ouvre cette liste (`todo.html#list=<id>`) |
+| 🗺️ Carte | **référencée** : une carte de « Mes cartes » de l'app Cartes (`leaflet.map.<id>`). Aperçu des formes et des points (sans fond de carte), nombre d'éléments, longueur des tracés ; « Ouvrir dans Cartes » l'ouvre (`leaflet_manager.html#open=<id>`, ↶ y rend la carte précédente) |
+| 📖 Document | adresse d'un fichier Markdown (GitHub compris), titre (le nom du fichier par défaut), note ; « Lire dans la Liseuse » l'ouvre (`markdown_reader.html#url=<adresse encodée>`) |
+
+Les éléments référencés sont lus dans le stockage du navigateur : ils doivent avoir été créés (ou synchronisés) dans la même origine. Le Notebook se met à jour quand tu reviens sur son onglet.
 
 ## Étiquettes et recherche
 
@@ -31,4 +36,4 @@ Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main. Li
 
 - Stockage local (`localStorage`) : une clé par projet, `notebook.p.<id>` = `{id, name, emoji, color, pinned, archived, pos, items: […]}`.
 - Menu ⋯ → **Exporter** (`notebook.json` : `{app: "notebook", version: 1, projects: […]}`) / **Importer** (les projets de même identifiant sont remplacés, les autres ajoutés).
-- **Synchronisation** (menu ⋯, facultative) : PocketBase, connexion partagée avec les autres WebApps (voir [SYNCHRO.md](SYNCHRO.md)). Chaque projet est synchronisé séparément (le plus récent l'emporte, projet par projet). Les circuits référencés sont synchronisés par ProtoBoard.
+- **Synchronisation** (menu ⋯, facultative) : PocketBase, connexion partagée avec les autres WebApps (voir [SYNCHRO.md](SYNCHRO.md)). Chaque projet est synchronisé séparément (le plus récent l'emporte, projet par projet). Les circuits, listes TODO et cartes référencés sont synchronisés par leur propre app.

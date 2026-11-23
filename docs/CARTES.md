@@ -13,6 +13,8 @@ Une page unique pour composer une carte [Leaflet](https://leafletjs.com) à la s
 - **Export en fenêtre** : fragment HTML à insérer, page complète, JSON, GeoJSON. Copier, télécharger, ou ouvrir un aperçu.
 - **Import** : JSON de cette page ou GeoJSON quelconque (Point, LineString, Polygon et leurs variantes multiples), en remplaçant ou en ajoutant.
 - **Annuler / rétablir** (100 niveaux), sauvegarde automatique dans le navigateur (`localStorage`).
+- **Mes cartes** : menu ⋯ → **Enregistrer** / **Enregistrer sous…** / **Mes cartes…** / **Nouvelle carte**. Le nom de la carte ouverte est sous le titre, avec • quand elle a changé depuis son enregistrement. Chaque carte est sous `leaflet.map.<id>` = `{id, name, t, data}` (data : le JSON d'export). Lien direct : `leaflet_manager.html#open=<id>` (utilisé par le Notebook).
+- **Synchronisation** (menu ⋯, facultative) : PocketBase, connexion partagée avec les autres WebApps (voir [SYNCHRO.md](SYNCHRO.md)). Les cartes enregistrées sont synchronisées, une par une ; la carte en cours d'édition reste sur l'appareil (elle change à chaque déplacement de la vue).
 - **Recherche d'un lieu** (Nominatim) et **ma position**.
 - Interface mobile-first : sur téléphone, les outils sont au-dessus de la carte, les propriétés en dessous.
 

@@ -127,6 +127,8 @@ body.dragging { user-select: none; -webkit-user-select: none; }
 .colors button.on { box-shadow: 0 0 0 3px var(--ac); }
 .sheet textarea { height: 30vh; font-family: var(--f-mono); font-size: 13px; }
 .pick { display: grid; gap: 6px; }
+.it a.btn { text-decoration: none; }
+.mapprev { display: block; width: 100%; height: auto; max-height: 170px; background: var(--card2); border-radius: var(--r-m); margin: 2px 0 6px; }
 .pick .btn { justify-content: flex-start; text-align: left; }
 
 .empty { text-align: center; color: var(--mut); padding: 48px 20px; }
@@ -160,7 +162,8 @@ body.dragging { user-select: none; -webkit-user-select: none; }
    Un projet = une clé « notebook.p.<id> » (synchronisée à part : deux appareils peuvent modifier deux
    projets différents sans conflit). Un projet : {id, name, emoji, color, pinned, archived, pos, items:[…]}.
    Éléments : link {url,title,note} · gh {url,owner,repo,note,info} · note {title,md} · check {title,rows:[{id,t,done}]}
-   · buy {title,rows:[{id,t,qty,price,url,done}]} · pbd {cid,name,note}. Tous : id, tags[]. */
+   · buy {title,rows:[{id,t,qty,price,url,done}]} · pbd {cid,name,note} · todo {lid,name,note} · map {mid,name,note}
+   · doc {url,title,note}. Tous : id, tags[]. pbd, todo et map référencent un élément d'une autre app (même navigateur). */
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const uid = () => Math.random().toString(36).slice(2, 9);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -174,6 +177,9 @@ const TYPES = {
   check: { ic: '☑️', name: 'Liste à cocher', help: 'outillage, étapes…' },
   buy:   { ic: '🛒', name: 'Liste d\'achat', help: 'quantités, prix, liens' },
   pbd:   { ic: '🧩', name: 'Circuit ProtoBoard', help: 'un circuit de la bibliothèque' },
+  todo:  { ic: '✅', name: 'Liste TODO', help: 'une liste de l\'app TODO' },
+  map:   { ic: '🗺️', name: 'Carte', help: 'une carte de « Mes cartes »' },
+  doc:   { ic: '📖', name: 'Document', help: 'un Markdown à lire dans la Liseuse' },
 };
 const EMOJIS = ['📁','🤖','🛰️','🚗','🔌','💡','🌱','🎮','⌚','📟','🖥️','🧪','🔧','📡','🎛️','🏠','📚','✈️','🎵','⭐'];
 const COLORS = ['#7c5cff','#e0457b','#ff9f43','#f5c518','#1fbf8f','#0a7c9c','#3b82f6','#8b5e3c','#6b7280'];
@@ -230,12 +236,15 @@ function md(text){
   return `<p style="white-space:pre-wrap">${esc(text)}</p>`;
 }
 function itemText(it){
-  return [it.title, it.url, it.note, it.md, it.name, it.owner, it.repo, it.info && it.info.desc, ...(it.rows || []).map(r => r.t), ...(it.tags || [])].filter(Boolean).join(' ').toLowerCase();
+  return [it.title, it.url, it.note, it.md, it.name, (it.type === 'todo' || it.type === 'map' || it.type === 'doc') && itemTitle(it), it.owner, it.repo, it.info && it.info.desc, ...(it.rows || []).map(r => r.t), ...(it.tags || [])].filter(Boolean).join(' ').toLowerCase();
 }
 function itemTitle(it){
   if (it.type === 'link') return it.title || host(it.url) || 'Lien';
   if (it.type === 'gh') return it.owner ? `${it.owner}/${it.repo}` : 'Dépôt GitHub';
   if (it.type === 'pbd') { const c = pbdCircuit(it.cid); return c ? c.name : (it.name || 'Circuit'); }
+  if (it.type === 'todo') { const l = todoList(it.lid); return l ? l.name : (it.name || 'Liste TODO'); }
+  if (it.type === 'map') { const m = mapRec(it.mid); return m ? m.name : (it.name || 'Carte'); }
+  if (it.type === 'doc') return it.title || docName(it.url) || 'Document';
   return it.title || TYPES[it.type].name;
 }
 
@@ -252,7 +261,67 @@ function pbdCircuits(){
 }
 const pbdCircuit = id => { try { const c = JSON.parse(localStorage.getItem(PBD_PREFIX + id)); return c && c.doc ? c : null; } catch { return null; } };
 // En développement les pages gardent leur préfixe d'ordre (06_…) ; publiées (build.py), elles le perdent.
-const pbdPage = () => (/\/\d+_[^/]*$/.test(location.pathname) ? '06_' : '') + 'protoboard_designer.html';
+const appPage = (pre, name) => (/\/\d+_[^/]*$/.test(location.pathname) ? pre : '') + name;
+const pbdPage = () => appPage('06_', 'protoboard_designer.html');
+const todoPage = () => appPage('01_', 'todo.html'), mapPage = () => appPage('04_', 'leaflet_manager.html'), readerPage = () => appPage('02_', 'markdown_reader.html');
+const readLS = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+
+/* ---------- listes de l'app TODO : « todo-tree-v1 » (Ma liste, id main) et « todo-list.<id> » ---------- */
+const todoKey = id => id === 'main' ? 'todo-tree-v1' : 'todo-list.' + id;
+function todoList(id){
+  const d = readLS(todoKey(id)); if (!d || !Array.isArray(d.nodes)) return null;
+  const st = n => { const ch = Array.isArray(n.children) ? n.children : []; if (!ch.length) return { done: n.done ? 1 : 0, total: 1 };
+    return ch.map(st).reduce((a, b) => ({ done: a.done + b.done, total: a.total + b.total }), { done: 0, total: 0 }); };
+  const s = st({ children: d.nodes }), next = [];
+  (function walk(list){ for (const n of list){ if (next.length >= 3) return; const ch = Array.isArray(n.children) ? n.children : [];
+    if (ch.length) walk(ch); else if (!n.done) next.push(String(n.title || '')); } })(d.nodes);
+  return { id, name: d.name || (id === 'main' ? 'Ma liste' : 'Sans nom'), done: s.total ? s.done : 0, total: d.nodes.length ? s.total : 0, next, c: d.c || 0 };
+}
+function todoLists(){
+  const ids = localStorage.getItem('todo-tree-v1') !== null ? ['main'] : [];
+  for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith('todo-list.')) ids.push(k.slice(10)); }
+  return ids.map(todoList).filter(Boolean).sort((a, b) => a.c - b.c);
+}
+
+/* ---------- cartes de l'app Cartes : « leaflet.map.<id> » = {id, name, t, data:{map, items}} ---------- */
+const mapRec = id => { const r = readLS('leaflet.map.' + id); return r && r.data && r.name ? r : null; };
+function mapRecs(){
+  const out = [];
+  for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith('leaflet.map.')){ const r = mapRec(k.slice(12)); if (r) out.push(r); } }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+const mapItems = r => (Array.isArray(r.data.items) ? r.data.items : []).filter(x => x && (x.type === 'marker' ? Array.isArray(x.pos) : Array.isArray(x.pts) && x.pts.length > 1));
+function geoDist(a, b){
+  const R = 6371e3, r = Math.PI / 180, dl = (b[0] - a[0]) * r, dn = (b[1] - a[1]) * r;
+  const h = Math.sin(dl / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dn / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function mapStats(r){
+  const it = mapItems(r), m = it.filter(x => x.type === 'marker').length, paths = it.filter(x => x.type !== 'marker');
+  const len = paths.reduce((s, x) => { let l = 0; for (let i = 1; i < x.pts.length; i++) l += geoDist(x.pts[i - 1], x.pts[i]); if (x.closed && x.pts.length > 2) l += geoDist(x.pts[x.pts.length - 1], x.pts[0]); return s + l; }, 0);
+  return { markers: m, paths: paths.length, len };
+}
+const fmtLen = m => m < 1000 ? Math.round(m) + ' m' : (m / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' km';
+/* Aperçu sans fond de carte : les formes et les points, projetés (équirectangulaire) dans un SVG. */
+function mapSVG(r){
+  const it = mapItems(r); if (!it.length) return '';
+  const all = it.flatMap(x => x.type === 'marker' ? [x.pos] : x.pts);
+  const lat0 = all.reduce((s, p) => s + p[0], 0) / all.length, k = Math.cos(lat0 * Math.PI / 180);
+  const P = p => [p[1] * k, -p[0]], xy = all.map(P);
+  let x0 = Math.min(...xy.map(p => p[0])), x1 = Math.max(...xy.map(p => p[0])), y0 = Math.min(...xy.map(p => p[1])), y1 = Math.max(...xy.map(p => p[1]));
+  const W = 320, H = 150, pad = 14, sp = Math.max(x1 - x0, y1 - y0, 1e-6);
+  const sc = Math.min((W - 2 * pad) / Math.max(x1 - x0, sp / 50), (H - 2 * pad) / Math.max(y1 - y0, sp / 50));
+  const ox = (W - (x1 - x0) * sc) / 2, oy = (H - (y1 - y0) * sc) / 2;
+  const T = p => { const q = P(p); return [(q[0] - x0) * sc + ox, (q[1] - y0) * sc + oy].map(v => v.toFixed(1)).join(','); };
+  const col = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c : '#1e88e5';
+  const shapes = it.filter(x => x.type !== 'marker').map(x => x.closed
+    ? `<polygon points="${x.pts.map(T).join(' ')}" fill="${col(x.color)}" fill-opacity="${Math.min(+x.fill || 0.2, 0.6)}" stroke="${col(x.color)}" stroke-width="2" stroke-linejoin="round"/>`
+    : `<polyline points="${x.pts.map(T).join(' ')}" fill="none" stroke="${col(x.color)}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"${x.dash ? ' stroke-dasharray="6 5"' : ''}/>`).join('');
+  const pins = it.filter(x => x.type === 'marker').map(x => { const [a, b] = T(x.pos).split(','); return `<circle cx="${a}" cy="${b}" r="5" fill="${col(x.color || '#e53935')}" stroke="#fff" stroke-width="2"/>`; }).join('');
+  return `<svg class="mapprev" viewBox="0 0 ${W} ${H}" role="img" aria-label="Aperçu de la carte">${shapes}${pins}</svg>`;
+}
+/* Documents : le nom du fichier d'une adresse */
+const docName = u => { try { const p = new URL(safeUrl(u)).pathname.split('/').filter(Boolean).pop(); return p ? decodeURIComponent(p) : host(u); } catch { return ''; } };
 
 /* ---------- GitHub : infos publiques du dépôt (API sans compte : ~60 requêtes / heure) ---------- */
 async function ghFetch(it){
@@ -327,13 +396,14 @@ function projectHTML(p){
   const tags = allTags([p]);
   h += tagChips(tags);
   const list = p.items.filter(it => !ui.tag || it.tags.includes(ui.tag));
-  if (!p.items.length) return h + `<div class="empty"><b class="bob">${esc(p.emoji)}</b>Projet vide.<br>« + Ajouter » : lien, dépôt GitHub, note, liste, achats, circuit…</div>`;
+  if (!p.items.length) return h + `<div class="empty"><b class="bob">${esc(p.emoji)}</b>Projet vide.<br>« + Ajouter » : lien, dépôt GitHub, note, liste, achats, circuit, TODO, carte…</div>`;
   return h + `<div class="items" id="ilist">${list.map(it => itemHTML(p, it, false)).join('')}</div>`;
 }
 function itemHTML(p, it, withProject){
   const t = TYPES[it.type], ed = ui.editing === it.id;
   let head = `<div class="ih">${withProject ? '' : '<span class="dh" data-drag aria-label="Déplacer"></span>'}<span class="ty">${t.ic}</span><span class="tt">`;
   if (it.type === 'link' && it.url) head += `<a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener">${esc(itemTitle(it))}</a>`;
+  else if (it.type === 'doc' && it.url) head += `<a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener">${esc(itemTitle(it))}</a>`;
   else if (it.type === 'gh' && it.owner) head += `<a href="https://github.com/${esc(it.owner)}/${esc(it.repo)}" target="_blank" rel="noopener">${esc(itemTitle(it))}</a>`;
   else head += esc(itemTitle(it));
   if (withProject) head += ` <span class="proj-of">· ${esc(p.emoji)} ${esc(p.name)}</span>`;
@@ -379,6 +449,24 @@ function viewHTML(p, it){
       return `<div class="sm">${d.parts.length} pièce(s) · ${d.wires.length} fil(s)${d.board ? ` · plaque ${d.board.w} × ${d.board.h}` : ''}${when ? ' · modifié ' + ago(when) : ''}</div>${note}
         <div style="margin-top:8px"><a class="btn" href="${pbdPage()}#open=${encodeURIComponent(c.id)}">🧩 Ouvrir dans ProtoBoard</a></div>`;
     }
+    case 'todo': {
+      const l = todoList(it.lid);
+      if (!l) return `<div class="sm">⚠ Liste introuvable dans l'app TODO de ce navigateur (supprimée, ou pas encore synchronisée).</div>${note}`;
+      const pct = l.total ? Math.round(l.done / l.total * 100) : 0, left = l.total - l.done;
+      return `${l.total ? `<div class="progress"><i style="--c:var(--ok);width:${pct}%"></i></div><div class="sm">${l.done} / ${l.total} faits · ${left ? `${left} restant${left > 1 ? 's' : ''}` : 'tout est fait ✓'}</div>` : '<div class="sm">Liste vide</div>'}
+        ${l.next.length ? `<div class="rows">${l.next.map(t => `<div class="row"><span class="cb" aria-hidden="true"></span><span class="t">${esc(t)}</span></div>`).join('')}</div>` : ''}${note}
+        <div style="margin-top:8px"><a class="btn" href="${todoPage()}#list=${encodeURIComponent(l.id)}">✅ Ouvrir dans TODO</a></div>`;
+    }
+    case 'map': {
+      const r = mapRec(it.mid);
+      if (!r) return `<div class="sm">⚠ Carte introuvable dans « Mes cartes » de ce navigateur (supprimée, ou pas encore synchronisée).</div>${note}`;
+      const st = mapStats(r), bits = [st.markers && `${st.markers} point${st.markers > 1 ? 's' : ''}`, st.paths && `${st.paths} tracé${st.paths > 1 ? 's' : ''} · ${fmtLen(st.len)}`, r.t && 'modifiée ' + ago(r.t)].filter(Boolean);
+      return `${mapSVG(r)}<div class="sm">${bits.join(' · ') || 'Carte vide'}</div>${note}
+        <div style="margin-top:8px"><a class="btn" href="${mapPage()}#open=${encodeURIComponent(r.id)}">🗺️ Ouvrir dans Cartes</a></div>`;
+    }
+    case 'doc':
+      return `<div class="sm">${esc(host(it.url))}</div>${note}
+        ${it.url ? `<div style="margin-top:8px"><a class="btn" href="${readerPage()}#url=${encodeURIComponent(safeUrl(it.url))}">📖 Lire dans la Liseuse</a></div>` : ''}`;
   }
   return '';
 }
@@ -405,6 +493,18 @@ function editHTML(p, it){
       f = `<label>Circuit</label><select name="cid">${list.map(c => `<option value="${esc(c.id)}" ${c.id === it.cid ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}${list.some(c => c.id === it.cid) ? '' : `<option value="${esc(it.cid)}" selected>${esc(it.name || 'introuvable')}</option>`}</select>${note}`;
       break;
     }
+    case 'todo': {
+      const list = todoLists();
+      f = `<label>Liste</label><select name="lid">${list.map(l => `<option value="${esc(l.id)}" ${l.id === it.lid ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}${list.some(l => l.id === it.lid) ? '' : `<option value="${esc(it.lid)}" selected>${esc(it.name || 'introuvable')}</option>`}</select>${note}`;
+      break;
+    }
+    case 'map': {
+      const list = mapRecs();
+      f = `<label>Carte</label><select name="mid">${list.map(r => `<option value="${esc(r.id)}" ${r.id === it.mid ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}${list.some(r => r.id === it.mid) ? '' : `<option value="${esc(it.mid)}" selected>${esc(it.name || 'introuvable')}</option>`}</select>${note}`;
+      break;
+    }
+    case 'doc': f = `<label>Adresse du fichier Markdown</label><input type="url" name="url" value="${esc(it.url || '')}" placeholder="https://github.com/…/README.md" inputmode="url" autocomplete="off">
+      <label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="(par défaut : le nom du fichier)">${note}`; break;
   }
   return `<form class="edit" data-a="eform" novalidate>${f}${tags}${btns}</form>`;
 }
@@ -422,7 +522,7 @@ function newProject(){
 function addItem(p, type, extra){
   const it = { id: uid(), type, tags: ui.tag ? [ui.tag] : [], ...(type === 'check' || type === 'buy' ? { rows: [] } : {}), ...extra };
   p.items.unshift(it); save(p);
-  ui.editing = type === 'pbd' ? null : it.id; render();
+  ui.editing = ['pbd', 'todo', 'map'].includes(type) ? null : it.id; render();
   const el = document.querySelector(`.it[data-id="${it.id}"]`);
   if (el){ el.scrollIntoView({ block: 'center' }); const i = el.querySelector('.edit input,.edit textarea'); if (i) i.focus(); }
 }
@@ -450,6 +550,9 @@ function readForm(form, p, it){
     }).filter(r => r.t);
   }
   if (it.type === 'pbd'){ it.cid = v('cid'); const c = pbdCircuit(it.cid); if (c) it.name = c.name; }
+  if (it.type === 'todo'){ it.lid = v('lid'); const l = todoList(it.lid); if (l) it.name = l.name; }
+  if (it.type === 'map'){ it.mid = v('mid'); const r = mapRec(it.mid); if (r) it.name = r.name; }
+  if (it.type === 'doc'){ it.url = safeUrl(v('url')); it.title = v('title'); }
   return true;
 }
 
@@ -503,6 +606,8 @@ function sheetAdd(p){
     `<button class="btn" data-a="t" data-v="${k}"><b>${t.ic} ${t.name}</b><small>${t.help}</small></button>`).join('')}</div>`, (a, b) => {
     if (a !== 't') return;
     if (b.dataset.v === 'pbd') return sheetPbd(p);
+    if (b.dataset.v === 'todo') return sheetTodo(p);
+    if (b.dataset.v === 'map') return sheetMap(p);
     closeDlg(); addItem(p, b.dataset.v);
   });
 }
@@ -514,6 +619,26 @@ function sheetPbd(p){
     <div class="btns"><a class="btn" href="${pbdPage()}">Ouvrir ProtoBoard</a></div>`, (a, b) => {
     if (a !== 'c') return;
     const c = pbdCircuit(b.dataset.id); closeDlg(); addItem(p, 'pbd', { cid: b.dataset.id, name: c ? c.name : '' });
+  });
+}
+function sheetTodo(p){
+  const list = todoLists();
+  openDlg(`<h2>✅ Liste TODO</h2>${list.length ? `<p>Le Notebook garde un lien vers la liste : elle reste dans l'app TODO, toujours à jour.</p>
+    <div class="pick">${list.map(l => `<button class="btn" data-a="c" data-id="${esc(l.id)}">✅ ${esc(l.name)} <small class="muted">· ${l.total ? `${l.done} / ${l.total}` : 'vide'}</small></button>`).join('')}</div>`
+    : `<p>Aucune liste dans l'app TODO sur ce navigateur.</p>`}
+    <div class="btns"><a class="btn" href="${todoPage()}">Ouvrir TODO</a></div>`, (a, b) => {
+    if (a !== 'c') return;
+    const l = todoList(b.dataset.id); closeDlg(); addItem(p, 'todo', { lid: b.dataset.id, name: l ? l.name : '' });
+  });
+}
+function sheetMap(p){
+  const list = mapRecs();
+  openDlg(`<h2>🗺️ Carte</h2>${list.length ? `<p>Le Notebook garde un lien vers la carte : elle reste dans « Mes cartes » de l'app Cartes, toujours à jour.</p>
+    <div class="pick">${list.map(r => `<button class="btn" data-a="c" data-id="${esc(r.id)}">🗺️ ${esc(r.name)} <small class="muted">· ${mapItems(r).length} élément(s)</small></button>`).join('')}</div>`
+    : `<p>Aucune carte enregistrée sur ce navigateur. Dans Cartes : menu ⋯ → Enregistrer, puis reviens ici.</p>`}
+    <div class="btns"><a class="btn" href="${mapPage()}">Ouvrir Cartes</a></div>`, (a, b) => {
+    if (a !== 'c') return;
+    const r = mapRec(b.dataset.id); closeDlg(); addItem(p, 'map', { mid: b.dataset.id, name: r ? r.name : '' });
   });
 }
 function sheetMove(p, it){
@@ -621,7 +746,7 @@ document.addEventListener('pointercancel', endDrag);
 /* ---------- synchronisation ---------- */
 const sync = PBSync.init(pb, {
   adopt: projects.map(p => PK(p.id)),
-  summary: 'Les projets du Notebook sont synchronisés sur le serveur, les données sont stockées sans chiffrement. Les circuits ProtoBoard référencés le sont par ProtoBoard.',
+  summary: 'Les projets du Notebook sont synchronisés sur le serveur, les données sont stockées sans chiffrement. Les circuits, listes TODO et cartes référencés le sont par leur propre app.',
   note: 'Chaque projet est synchronisé à part : le plus récent l\'emporte, projet par projet.',
   onChange(key, value){
     if (!key.startsWith('p.')) return null;
@@ -636,6 +761,12 @@ const sync = PBSync.init(pb, {
   onStatus(t){ const e = document.getElementById('syncSw'); if (e) e.textContent = t; },
 });
 
+// Les autres apps (TODO, Cartes, ProtoBoard) écrivent dans le même localStorage : on se met à jour au retour
+// sur l'onglet, ou tout de suite si une autre page les modifie (sauf pendant une saisie).
+function refreshRefs(){ if (!ui.editing && !dlg.open && !document.querySelector('.edit') && !(document.activeElement && document.activeElement.matches('input,textarea,select'))) render(); }
+window.addEventListener('storage', e => { if (e.key && !e.key.startsWith(PREFIX)) refreshRefs(); });
+window.addEventListener('pageshow', e => { if (e.persisted) refreshRefs(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshRefs(); });
 route();
 </script>
 </body>

@@ -8,6 +8,7 @@ Une page unique pour gérer une liste de todos hiérarchique et illimitée en pr
 - **Taux d'achèvement** : chaque parent affiche un pourcentage calculé sur le nombre de feuilles (sous-todos terminés / total).
 - **Couleur adaptive** : la barre et le pourcentage changent de couleur, du rouge (0%) au vert (100%).
 - **Description facultative** : chaque todo peut avoir un titre et une description multi-ligne.
+- **Plusieurs listes** : menu ⋯ → **Listes…** pour créer, renommer, supprimer une liste et passer de l'une à l'autre. Le nom de la liste ouverte est sous le titre.
 - **Stockage local** : données sauvegardées automatiquement dans `localStorage` du navigateur.
 - **Glisser-déposer** : réordonnez et changez de parent depuis la poignée ⠿, à la souris comme au doigt.
 - **Import/Export** : exportez en JSON ou en texte indenté (`*`, `+`, `-`), et importez en remplaçant ou ajoutant.
@@ -86,6 +87,13 @@ Tout est sauvegardé en `localStorage` de votre navigateur. Changer de navigateu
 
 Besoin de modifier ? Le code est léger et commenté. Bon rangement ! 🎉
 
+## Listes
+
+- Menu ⋯ → **Listes…** : la liste ouverte est cochée, avec son avancement. Toucher une liste l'ouvre ; ✎ la renomme ; ✕ la supprime (après confirmation). **＋ Nouvelle liste** en crée une vide et l'ouvre.
+- « Ma liste » est la liste d'origine : elle garde la clé `todo-tree-v1` (rien ne change pour une liste existante ni pour sa synchro). Elle se renomme mais ne se supprime pas. Les autres listes sont sous `todo-list.<id>`. Valeur : `{version: 1, name, c (date de création), nodes: […]}`.
+- Import, export, tout replier, masquer les faits : agissent sur la liste ouverte. L'export porte le nom de la liste.
+- Lien direct vers une liste : `todo.html#list=<id>` (`main` pour « Ma liste ») ; c'est ce qu'utilise le Notebook.
+
 ## Synchronisation (facultative)
 
-Menu → **Synchronisation** : serveur, email et mot de passe d'un compte PocketBase (voir [SYNCHRO.md](SYNCHRO.md)). Une fois connecté, la liste (clé `todo-tree-v1`) est copiée sur le serveur et retrouvée sur tes autres appareils : à l'ouverture, au retour en ligne, au retour sur l'onglet et à la demande. La dernière modification gagne, pour toute la liste. Au premier envoi, si le serveur a déjà une liste, c'est elle qui remplace celle de l'appareil : exporte la tienne en JSON avant si tu veux la garder. Sans connexion, rien ne change.
+Menu → **Synchronisation** : serveur, email et mot de passe d'un compte PocketBase (voir [SYNCHRO.md](SYNCHRO.md)). Une fois connecté, les listes (une clé par liste) sont copiées sur le serveur et retrouvées sur tes autres appareils : à l'ouverture, au retour en ligne, au retour sur l'onglet et à la demande. La dernière modification gagne, liste par liste ; une liste supprimée l'est aussi sur les autres appareils. Au premier envoi, si le serveur a déjà une liste, c'est elle qui remplace celle de l'appareil : exporte la tienne en JSON avant si tu veux la garder. Sans connexion, rien ne change.

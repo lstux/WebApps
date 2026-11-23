@@ -24,6 +24,7 @@ Un gestionnaire de tâches hiérarchique avec:
 - Arbre de todos à profondeur illimitée
 - Pourcentage d'achèvement coloré, calculé sur les feuilles
 - Glisser-déposer pour réordonner ou changer de parent (souris et tactile)
+- Plusieurs listes (menu Listes…), synchronisation facultative
 - Import/export JSON et texte indenté
 - Sauvegarde locale, interface mobile-first
 
@@ -45,6 +46,7 @@ Un gestionnaire de cartes Leaflet avec:
 - Fonds de carte au choix (OpenStreetMap, CARTO, relief, satellite…)
 - Export du code HTML à insérer dans une page (fragment ou page complète), du JSON et du GeoJSON
 - Import JSON / GeoJSON, annuler / rétablir, sauvegarde locale
+- « Mes cartes » : enregistrer, ouvrir, synchronisation facultative
 
 📄 **[Documentation](docs/CARTES.md)** · 📦 **[04_leaflet_manager.html](code/04_leaflet_manager.html)**
 
@@ -62,7 +64,8 @@ Un plan de câblage sur plaque à pastilles (pas 2,54 mm), façon feuille à pet
 
 Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main.
 - Liens, dépôts GitHub (description, activité, PR et issues), notes Markdown, listes à cocher, listes d'achat avec totaux
-- Circuits ProtoBoard référencés, ouverts d'un toucher dans ProtoBoard
+- Circuits ProtoBoard, listes TODO et cartes référencés (résumé, aperçu), ouverts d'un toucher dans leur app
+- Documents Markdown à lire dans la Liseuse
 - Étiquettes, recherche dans tous les projets, réordonner au doigt, épingler, archiver
 - Export / import JSON, synchronisation facultative
 

@@ -74,6 +74,11 @@ li.drag-src { opacity: .35; }
 /* Dialogs d'import/export */
 .sheet textarea { height: 34vh; font-family: var(--f-mono); font-size: 14px; }
 .sheet input[type=file] { flex: 1; min-width: 0; }
+.lrow { display: flex; align-items: center; gap: 4px; }
+.lrow .item { flex: 1; min-width: 0; }
+.lrow .item .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lrow .item.cur { background: var(--card2); font-weight: 700; }
+.lrow .iconbtn { --icon-size: 38px; flex: none; font-size: 15px; }
 </style>
 </head>
 <body>
@@ -97,6 +102,7 @@ li.drag-src { opacity: .35; }
 <dialog class="sheet" id="menuDlg">
   <div class="inner">
     <div class="grab"></div>
+    <button class="item" data-act="lists"><span class="ic">🗂</span> Listes…<span class="sw" id="listSw"></span></button>
     <button class="item" data-act="hide"><span class="ic">👁</span> Masquer les faits<span class="sw" id="hideSw"></span></button>
     <button class="item" data-act="collapse"><span class="ic">⊟</span> Tout replier</button>
     <button class="item" data-act="expand"><span class="ic">⊞</span> Tout déplier</button>
@@ -104,6 +110,15 @@ li.drag-src { opacity: .35; }
     <button class="item" data-act="json"><span class="ic">⬇</span> Exporter en JSON</button>
     <button class="item" data-act="txt"><span class="ic">📄</span> Exporter en texte</button>
     <button class="item" data-act="sync"><span class="ic">☁</span> Synchronisation<span class="sw" id="syncSw">non connecté</span></button>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="listDlg">
+  <div class="inner">
+    <div class="grab"></div>
+    <h2>Listes</h2>
+    <div id="listBody"></div>
+    <button class="item" data-act="lnew"><span class="ic">＋</span> Nouvelle liste</button>
   </div>
 </dialog>
 
@@ -139,14 +154,35 @@ function normalize(arr) {
     children: normalize(n.children)
   }));
 }
-function load() { try { const d = JSON.parse(localStorage.getItem(KEY)); return normalize(d && d.nodes); } catch { return []; } }
+// Plusieurs listes : la liste historique garde la clé KEY (id « main », synchro inchangée),
+// les autres sont sous « todo-list.<id> ». Valeur : { version, name, c (création), nodes }.
+const LPFX = 'todo-list.';
+const lkey = id => id === 'main' ? KEY : LPFX + id;
+function readList(id) { try { return JSON.parse(localStorage.getItem(lkey(id))); } catch { return null; } }
+function listIds() {
+  const ids = [];
+  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(LPFX)) ids.push(k.slice(LPFX.length)); }
+  const c = Object.fromEntries(ids.map(id => [id, (readList(id) || {}).c || 0]));
+  return ['main', ...ids.sort((a, b) => c[a] - c[b])];
+}
+const listExists = id => id === 'main' || localStorage.getItem(lkey(id)) !== null;
+function listName(id) { const d = readList(id); return (d && d.name) || (id === 'main' ? 'Ma liste' : 'Sans nom'); }
+let ui0 = {};
+try { ui0 = JSON.parse(localStorage.getItem(UIKEY)) || {}; } catch {}
+let cur = listExists(ui0.list) ? ui0.list : 'main';
+let curMeta = {};
+function load() {
+  const d = readList(cur);
+  curMeta = { name: listName(cur), c: (d && d.c) || (cur === 'main' ? 1 : Date.now()) };
+  return normalize(d && d.nodes);
+}
 function save() {
-  try { pb.set(KEY, { version: 1, nodes }); }
+  try { pb.set(lkey(cur), { version: 1, name: curMeta.name, c: curMeta.c, nodes }); }
   catch (e) { alert('Sauvegarde impossible : ' + e.message); }
 }
 let nodes = load();
-let hideDone = false;
-try { hideDone = !!JSON.parse(localStorage.getItem(UIKEY)).hideDone; } catch {}
+let hideDone = !!ui0.hideDone;
+function saveUI() { try { localStorage.setItem(UIKEY, JSON.stringify({ hideDone, list: cur })); } catch {} }
 const ui = { adding: null, editing: null, menu: null, addDesc: false };
 
 function find(id, list = nodes) {
@@ -231,13 +267,28 @@ function render() {
     ring.hidden = false;
     ring.style.setProperty('--p', pct); ring.style.setProperty('--c', color(pct));
     $('#ringTxt').textContent = pct + '%';
-    $('#sub').textContent = `${s.done} / ${s.total} faits`;
-  } else { ring.hidden = true; $('#sub').textContent = 'Liste vide'; }
+    $('#sub').textContent = `${curMeta.name} · ${s.done} / ${s.total} faits`;
+  } else { ring.hidden = true; $('#sub').textContent = `${curMeta.name} · vide`; }
 
   if (ui.editing) { const e = tree.querySelector('.e-title'); if (e) { e.focus(); e.select(); } }
   else if (ui.adding) { const a = tree.querySelector('.a-title'); if (a) { a.focus(); a.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
 }
 function commit() { save(); render(); }
+
+function switchList(id) {
+  if (!listExists(id)) id = 'main';
+  cur = id; nodes = load(); ui.adding = ui.editing = ui.menu = null; saveUI(); render();
+}
+function renderLists() {
+  $('#listBody').innerHTML = listIds().map(id => {
+    const d = readList(id), s = stats({ children: normalize(d && d.nodes), done: false });
+    return `<div class="lrow">
+      <button class="item ${id === cur ? 'cur' : ''}" data-act="lsel" data-id="${esc(id)}"><span class="ic">${id === cur ? '✓' : '☰'}</span><span class="nm">${esc(listName(id))}</span><span class="sw">${s.total ? `${s.done} / ${s.total}` : 'vide'}</span></button>
+      <button class="iconbtn" data-act="lren" data-id="${esc(id)}" aria-label="Renommer">✎</button>
+      ${id === 'main' ? '<span style="width:38px"></span>' : `<button class="iconbtn" data-act="ldel" data-id="${esc(id)}" aria-label="Supprimer">✕</button>`}
+    </div>`;
+  }).join('');
+}
 
 $('#composer').innerHTML = addFormHTML('root', false, false);
 
@@ -248,12 +299,36 @@ document.addEventListener('click', e => {
   const act = b.dataset.act;
 
   switch (act) {
-    case 'hide': hideDone = !hideDone; try { localStorage.setItem(UIKEY, JSON.stringify({ hideDone })); } catch {} syncMenu(); return render();
+    case 'hide': hideDone = !hideDone; saveUI(); syncMenu(); return render();
+    case 'lists': $('#menuDlg').close(); renderLists(); $('#listDlg').showModal(); return;
+    case 'lsel': switchList(b.dataset.id); $('#listDlg').close(); return;
+    case 'lnew': {
+      const name = (prompt('Nom de la nouvelle liste :', '') || '').trim();
+      if (!name) return;
+      const id = uid();
+      pb.set(lkey(id), { version: 1, name, c: Date.now(), nodes: [] });
+      switchList(id); $('#listDlg').close(); return;
+    }
+    case 'lren': {
+      const id = b.dataset.id, old = listName(id);
+      const name = (prompt('Renommer la liste :', old) || '').trim();
+      if (!name || name === old) return;
+      if (id === cur) { curMeta.name = name; save(); render(); }
+      else { const d = readList(id) || { version: 1, nodes: [] }; d.name = name; pb.set(lkey(id), d); }
+      return renderLists();
+    }
+    case 'ldel': {
+      const id = b.dataset.id, d = readList(id), n = d ? stats({ children: normalize(d.nodes), done: false }).total : 0;
+      if (!confirm(`Supprimer la liste « ${listName(id)} »${n ? ` et ses ${n} todo(s)` : ''} ?`)) return;
+      pb.remove(lkey(id));
+      if (id === cur) switchList('main');
+      return renderLists();
+    }
     case 'collapse': setCollapsed(nodes, true); $('#menuDlg').close(); return commit();
     case 'expand': setCollapsed(nodes, false); $('#menuDlg').close(); return commit();
     case 'import': $('#menuDlg').close(); $('#impText').value = ''; $('#impFile').value = ''; $('#impDlg').showModal(); return;
-    case 'json': $('#menuDlg').close(); return download(`todo-${day()}.json`, JSON.stringify({ version: 1, nodes: strip(nodes) }, null, 2), 'application/json');
-    case 'txt': $('#menuDlg').close(); return download(`todo-${day()}.txt`, toText(nodes), 'text/plain');
+    case 'json': $('#menuDlg').close(); return download(`todo-${fname()}-${day()}.json`, JSON.stringify({ version: 1, nodes: strip(nodes) }, null, 2), 'application/json');
+    case 'txt': $('#menuDlg').close(); return download(`todo-${fname()}-${day()}.txt`, toText(nodes), 'text/plain');
     case 'sync': $('#menuDlg').close(); return sync.open();
     case 'impcancel': return $('#impDlg').close();
     case 'impreplace': return doImport(true);
@@ -298,17 +373,28 @@ document.addEventListener('dblclick', e => {
 });
 $('#btnMenu').onclick = () => { syncMenu(); $('#menuDlg').showModal(); };
 const sync = PBSync.init(pb, {
-  adopt: [KEY],
-  summary: 'La liste est synchronisée sur le serveur, les données sont stockées sans chiffrement.',
+  adopt: listIds().map(lkey),
+  summary: 'Les listes sont synchronisées sur le serveur, les données sont stockées sans chiffrement.',
   note: 'Au premier envoi, si le serveur a déjà une liste, c\'est la sienne qui est reprise (exporte la tienne avant si besoin).',
   onChange(key, value) {
-    if (key !== KEY || !value) return null;
-    nodes = normalize(value.nodes); ui.adding = ui.editing = ui.menu = null; render();
+    if (key !== KEY && !key.startsWith(LPFX)) return null;
+    if ($('#listDlg').open) renderLists();
+    if (key !== lkey(cur)) return null;
+    if (!value) { switchList('main'); return 'Liste supprimée depuis un autre appareil.'; }
+    nodes = load(); ui.adding = ui.editing = ui.menu = null; render();
     return 'Liste mise à jour depuis un autre appareil.';
   },
   onStatus(t) { const e = document.getElementById('syncSw'); if (e) e.textContent = t; }
 });
-function syncMenu() { $('#hideSw').textContent = hideDone ? 'activé' : 'désactivé'; }
+function syncMenu() { $('#hideSw').textContent = hideDone ? 'activé' : 'désactivé'; $('#listSw').textContent = curMeta.name; }
+// Lien direct vers une liste (ex. depuis le Notebook) : todo.html#list=<id>
+function openFromHash() {
+  const m = location.hash.match(/^#list=([\w-]+)/); if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  if (!listExists(m[1])) { sync.toast('Liste introuvable dans ce navigateur.'); return; }
+  switchList(m[1]);
+}
+openFromHash(); window.addEventListener('hashchange', openFromHash);
 function setCollapsed(list, v) { list.forEach(n => { n.collapsed = v; setCollapsed(n.children, v); }); }
 
 document.addEventListener('submit', e => {
@@ -381,6 +467,7 @@ function toText(list, d = 0) {
     return s + toText(n.children, d + 1);
   }).join('');
 }
+function fname() { return curMeta.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'liste'; }
 function download(name, text, type) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type }));
