@@ -37,5 +37,12 @@ Les éléments référencés sont lus dans le stockage du navigateur : ils doive
 ## Données
 
 - Stockage local (`localStorage`) : une clé par projet, `notebook.p.<id>` = `{id, name, emoji, color, pinned, archived, pos, items: […]}`.
-- Menu ⋯ → **Exporter** (`notebook.json` : `{app: "notebook", version: 1, projects: […]}`) / **Importer** (les projets de même identifiant sont remplacés, les autres ajoutés).
+- **Exporter** : ✎ du projet → « Exporter ce projet… », ou menu ⋯ → « Exporter tout… ».
+  - **JSON** (`notebook-<projet>.json` : `{app: "notebook", version: 1, projects: […], refs}`), réimportable.
+  - **Markdown** (`.md`), à lire ou à partager : liens et références en tête, puis listes (`- [x]`), achats (tableau et totaux) et notes, chacun sous son titre.
+  - Option **« Embarquer les listes TODO, cartes et circuits liés »**, cochée par défaut. En JSON, ils sont copiés dans `refs` (`todo`, `map`, `pbd` par identifiant) et recréés à l'import. En Markdown, l'arbre de la liste TODO et les points de la carte (liens OpenStreetMap) sont ajoutés.
+- **Importer** (menu ⋯) : un export d'un projet ou de tous. Si un projet existe déjà, on choisit :
+  - **Remplacer** : même identifiant, et les éléments liés embarqués écrasent ceux du navigateur.
+  - **Importer en copie** : nouveau projet « … (copie) ». Un élément lié déjà présent mais différent est copié lui aussi.
+  - Les éléments liés sont écrits par le module de synchro de leur app : avec une connexion, ils partent tout de suite sur le serveur.
 - **Synchronisation** (menu ⋯, facultative) : PocketBase, connexion partagée avec les autres WebApps (voir [SYNCHRO.md](SYNCHRO.md)). Chaque projet est synchronisé séparément (le plus récent l'emporte, projet par projet). Les circuits, listes TODO et cartes référencés sont synchronisés par leur propre app.

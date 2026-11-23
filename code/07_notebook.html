@@ -137,6 +137,8 @@ body:has(.edit) .fab, body:has(main input:focus, main textarea:focus) .fab { dis
 .colors button.on { box-shadow: 0 0 0 3px var(--ac); }
 .sheet textarea { height: 30vh; font-family: var(--f-mono); font-size: 13px; }
 .pick { display: grid; gap: 6px; }
+.chk { display: flex; gap: 10px; align-items: center; font-weight: 600; margin: 4px 0; }
+.chk input { width: 22px; height: 22px; flex: none; }
 .it a.btn { text-decoration: none; }
 .mapprev { display: block; width: 100%; height: auto; max-height: 120px; background: var(--card2); border-radius: var(--r-m); margin: 2px 0 6px; }
 .pick .btn { justify-content: flex-start; text-align: left; }
@@ -702,6 +704,7 @@ function sheetProject(p, isNew){
     </div>
     ${isNew ? '' : `<button class="item" data-a="pin"><span class="ic">📌</span> ${p.pinned ? 'Désépingler' : 'Épingler en tête'}</button>
     <button class="item" data-a="arch"><span class="ic">🗄</span> ${p.archived ? 'Sortir des archives' : 'Archiver'}</button>
+    <button class="item" data-a="pexp"><span class="ic">⬇</span> Exporter ce projet…</button>
     <button class="item" data-a="pdel"><span class="ic">🗑</span> Supprimer le projet<span class="sw">${p.items.length} élément(s)</span></button>`}
     <div class="btns"><button class="btn primary" data-a="ok">${isNew ? 'Créer' : 'Enregistrer'}</button></div>`, (a, b) => {
     const name = () => $('#pName').value.trim();
@@ -709,6 +712,7 @@ function sheetProject(p, isNew){
     if (a === 'col'){ p.color = b.dataset.v; $$('.colors button').forEach(x => x.classList.toggle('on', x === b)); }
     if (a === 'pin'){ p.pinned = !p.pinned; if (name()) p.name = name(); save(p); closeDlg(); render(); }
     if (a === 'arch'){ p.archived = !p.archived; if (name()) p.name = name(); save(p); closeDlg(); if (p.archived) go(null); render(); toast(p.archived ? 'Projet archivé.' : 'Projet sorti des archives.'); }
+    if (a === 'pexp'){ if (name()) p.name = name(); save(p); sheetExport([p]); }
     if (a === 'pdel'){
       if (!b.dataset.armed){ b.dataset.armed = 1; b.lastChild.textContent = ' Confirmer : supprimer définitivement'; return; }
       projects = projects.filter(x => x !== p); pb.remove(PK(p.id)); closeDlg(); go(null); render(); toast('Projet supprimé.');
@@ -718,33 +722,148 @@ function sheetProject(p, isNew){
   setTimeout(() => $('#pName') && $('#pName').focus(), 50);
 }
 function sheetMenu(){
-  openDlg(`<button class="item" data-a="exp"><span class="ic">⬇</span> Exporter (JSON)</button>
+  openDlg(`<button class="item" data-a="exp"><span class="ic">⬇</span> Exporter tout…</button>
     <button class="item" data-a="imp"><span class="ic">⬆</span> Importer…</button>
     <button class="item" data-a="sync"><span class="ic">☁</span> Synchronisation<span class="sw" id="syncSw">${pb.connected ? esc(pb.email) : 'non connecté'}</span></button>
     <button class="item" data-theme-toggle><span class="ic" data-theme-icon></span> Thème<span class="sw" data-theme-name></span></button>`, a => {
-    if (a === 'exp'){
-      const txt = JSON.stringify({ app: 'notebook', version: 1, projects }, null, 1);
-      const blob = new Blob([txt], { type: 'application/json' }), l = document.createElement('a');
-      l.href = URL.createObjectURL(blob); l.download = 'notebook.json'; document.body.append(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(l.href), 1000);
-      closeDlg(); toast('Exporté.');
-    }
+    if (a === 'exp') sheetExport(projects);
     if (a === 'imp') sheetImport();
     if (a === 'sync'){ closeDlg(); sync.open(); }
   });
   if (window.WebAppsTheme) WebAppsTheme.set(WebAppsTheme.get());
 }
+/* ---------- export / import ----------
+   JSON : {app:'notebook', version:1, projects:[…], refs?:{todo:{id:valeur}, map:{id:rec}, pbd:{id:rec}}}
+   refs = les listes TODO, cartes et circuits référencés, embarqués pour être recréés à l'import. */
+const REF = {
+  todo: { key: id => todoKey(id), field: 'lid', app: 'todo', pre: '' },
+  map:  { key: id => 'leaflet.map.' + id, field: 'mid', app: 'leaflet', pre: '' },
+  pbd:  { key: id => 'protoboard.circuit.' + id, field: 'cid', app: 'protoboard', pre: 'protoboard.' },
+};
+/* Écrit dans le stockage de l'autre app par son propre PBStore : date de modification à jour, envoi au serveur si connecté. */
+const refStores = {};
+function refSet(type, k, v){
+  const R = REF[type], st = refStores[type] || (refStores[type] = new PBStore({ app: R.app, prefix: R.pre, sharedAuth: true }));
+  st.set(k.slice(R.pre.length), v);
+}
+function collectRefs(list){
+  const refs = { todo: {}, map: {}, pbd: {} };
+  for (const p of list) for (const it of p.items){
+    const R = REF[it.type]; if (!R) continue;
+    const id = it[R.field], v = readLS(R.key(id)); if (v) refs[it.type][id] = v;
+  }
+  return refs;
+}
+function download(name, text, type){
+  const blob = new Blob([text], { type }), l = document.createElement('a');
+  l.href = URL.createObjectURL(blob); l.download = name; document.body.append(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(l.href), 1000);
+}
+const slug = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'projet';
+function sheetExport(list){
+  const one = list.length === 1, n = list.reduce((s, p) => s + p.items.filter(it => REF[it.type]).length, 0);
+  openDlg(`<h2>Exporter ${one ? `« ${esc(list[0].name)} »` : `${list.length} projet(s)`}</h2>
+    ${n ? `<label class="chk"><input type="checkbox" id="expRefs" checked> Embarquer les listes TODO, cartes et circuits liés <small class="muted">(${n})</small></label>
+    <p class="sm">Sinon, seul leur nom est exporté : ils ne seront retrouvés que là où ils existent déjà.</p>` : ''}
+    <div class="btns"><button class="btn primary" data-a="json">⬇ JSON</button><button class="btn" data-a="md">⬇ Markdown</button></div>
+    <p class="sm">JSON : se réimporte (menu ⋯ → Importer). Markdown : à lire, partager ou mettre dans un dépôt.</p>`, a => {
+    const refs = $('#expRefs') && $('#expRefs').checked;
+    const base = one ? 'notebook-' + slug(list[0].name) : 'notebook';
+    if (a === 'json'){
+      const d = { app: 'notebook', version: 1, projects: list }; if (refs) d.refs = collectRefs(list);
+      download(base + '.json', JSON.stringify(d, null, 1), 'application/json');
+    } else if (a === 'md') download(base + '.md', list.map(p => projectMD(p, refs)).join('\n\n---\n\n'), 'text/markdown');
+    else return;
+    closeDlg(); toast('Exporté.');
+  });
+}
+/* Markdown lisible d'un projet. Avec refs : l'arbre des listes TODO et les points des cartes. */
+function projectMD(p, refs){
+  const out = [`# ${p.emoji} ${p.name}`], tg = it => it.tags.length ? ' ' + it.tags.map(t => '#' + t.replace(/\s+/g, '-')).join(' ') : '';
+  const lk = (t, u) => `[${t.replace(/[[\]]/g, '\\$&')}](${safeUrl(u).replace(/[()\s]/g, encodeURIComponent)})`;
+  const nt = (it, ind = '  ') => it.note ? '\n' + it.note.split('\n').map(x => ind + '> ' + x).join('\n') : '';
+  // Les éléments d'une ligne (liens, dépôts, cartes…) sont regroupés en tête ; les listes et notes suivent, chacune sous son titre.
+  const bullets = [], blocks = [];
+  const bullet = x => bullets.push(x), block = x => blocks.push(x);
+  for (const it of p.items){
+    const t = itemTitle(it);
+    switch (it.type){
+      case 'link': bullet(`- 🔗 ${it.url ? lk(t, it.url) : t}${tg(it)}${nt(it)}`); break;
+      case 'doc': bullet(`- 📖 ${it.url ? lk(t, it.url) : t}${tg(it)}${nt(it)}`); break;
+      case 'gh': { const i = it.info;
+        bullet(`- 🐙 ${lk(t, `https://github.com/${it.owner}/${it.repo}`)}${i && i.desc ? ' — ' + i.desc : ''}${i ? ` (★ ${i.stars}${i.lang ? ', ' + i.lang : ''})` : ''}${tg(it)}${nt(it)}`); break; }
+      case 'pbd': { const c = pbdCircuit(it.cid);
+        bullet(`- 🧩 Circuit ProtoBoard : ${t}${c ? ` (${c.doc.parts.length} pièces, ${c.doc.wires.length} fils)` : ''}${tg(it)}${nt(it)}`); break; }
+      case 'map': { const r = mapRec(it.mid), st = r && mapStats(r);
+        let x = `- 🗺️ Carte : ${t}${st ? ` (${summary(it)})` : ''}${tg(it)}${nt(it)}`;
+        if (refs && r) for (const m of mapItems(r).filter(m => m.type === 'marker'))
+          x += `\n  - 📍 ${lk(m.title || `${m.pos[0].toFixed(5)}, ${m.pos[1].toFixed(5)}`, `https://www.openstreetmap.org/?mlat=${m.pos[0]}&mlon=${m.pos[1]}#map=16/${m.pos[0]}/${m.pos[1]}`)}`;
+        bullet(x); break; }
+      case 'note': {
+        let m = (it.md || '').trim().replace(/^#+\s*(.*)\n?/, (all, h) => h.trim() === t ? '' : all).trim();
+        m = m.replace(/^(#{1,4})(?=\s)/gm, '$1##');   // titres de la note sous le titre de l'élément
+        block(`## 📝 ${t}${tg(it)}\n\n${m}`); break; }
+      case 'check': block(`## ☑️ ${t}${tg(it)}\n\n${it.rows.map(r => `- [${r.done ? 'x' : ' '}] ${r.t}`).join('\n')}`); break;
+      case 'buy': {
+        const tot = it.rows.reduce((s, r) => s + num(r.qty || 1) * num(r.price), 0), left = it.rows.filter(r => !r.done).reduce((s, r) => s + num(r.qty || 1) * num(r.price), 0);
+        block(`## 🛒 ${t}${tg(it)}\n\n| | Article | Qté | Prix |\n|---|---|---|---|\n${it.rows.map(r => `| ${r.done ? '✓' : ''} | ${r.url ? lk(r.t, r.url) : r.t.replace(/\|/g, '\\|')} | ${r.qty || 1} | ${num(r.price) ? euro(num(r.qty || 1) * num(r.price)) : ''} |`).join('\n')}\n\nReste à acheter : **${euro(left)}** · Total : **${euro(tot)}**`); break; }
+      case 'todo': {
+        const d = readLS(todoKey(it.lid)), l = todoList(it.lid);
+        if (!refs || !d){ bullet(`- ✅ Liste TODO : ${t}${l && l.total ? ` (${l.done} / ${l.total})` : ''}${tg(it)}${nt(it)}`); break; }
+        const tree = (ns, ind) => ns.map(n => `${ind}- [${n.done ? 'x' : ' '}] ${n.title || ''}${Array.isArray(n.children) && n.children.length ? '\n' + tree(n.children, ind + '  ') : ''}`).join('\n');
+        block(`## ✅ ${t}${l && l.total ? ` (${l.done} / ${l.total})` : ''}${tg(it)}\n\n${tree(d.nodes || [], '')}`); break; }
+    }
+  }
+  if (bullets.length) out.push('', '## 🔗 Liens et références', '', ...bullets);
+  for (const x of blocks) out.push('', x);
+  return out.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
+}
 function sheetImport(){
-  openDlg(`<h2>Importer</h2><p>Un export du Notebook. Les projets déjà présents (même identifiant) sont remplacés, les autres ajoutés.</p>
+  openDlg(`<h2>Importer</h2><p>Un export du Notebook (un projet ou tous), en JSON.</p>
     <textarea id="impText" placeholder="Colle ici…"></textarea>
     <div class="btns"><input type="file" id="impFile" accept=".json,application/json"><button class="btn primary" data-a="go">Importer</button></div>`, a => {
     if (a !== 'go') return;
     let d; try { d = JSON.parse($('#impText').value); } catch { toast('JSON illisible.', true); return; }
     const list = (d && Array.isArray(d.projects) ? d.projects : []).map(norm).filter(Boolean);
     if (!list.length){ toast('Aucun projet trouvé.', true); return; }
-    list.forEach(p => { projects = projects.filter(x => x.id !== p.id); projects.push(p); save(p); });
-    closeDlg(); render(); toast(`${list.length} projet(s) importé(s).`);
+    const refs = d.refs && typeof d.refs === 'object' ? d.refs : {};
+    const clash = list.filter(p => getP(p.id));
+    if (!clash.length) return doImport(list, refs, 'replace');
+    openDlg(`<h2>Déjà présent${clash.length > 1 ? 's' : ''}</h2>
+      <p>${clash.map(p => `« ${esc(p.name)} »`).join(', ')} ${clash.length > 1 ? 'existent' : 'existe'} déjà dans ce Notebook.</p>
+      <button class="item" data-a="replace"><span class="ic">⟳</span> Remplacer<span class="sw">l'import écrase</span></button>
+      <button class="item" data-a="copy"><span class="ic">⎘</span> Importer en copie<span class="sw">garde les deux</span></button>`, m => { if (m === 'replace' || m === 'copy') doImport(list, refs, m); });
   });
   $('#impFile').onchange = e => { const f = e.target.files[0]; if (f) f.text().then(t => $('#impText').value = t); };
+}
+/* Recrée les éléments embarqués dans leur app (même stockage) puis enregistre les projets.
+   replace : même identifiants, ce qui existe est écrasé.
+   copy : nouveaux identifiants pour les projets en conflit ; un élément embarqué déjà présent mais différent est copié lui aussi. */
+function doImport(list, refs, mode){
+  let nref = 0;
+  const writeRef = (type, id, v) => {
+    const R = REF[type], k = R.key(id), cur = localStorage.getItem(k), txt = JSON.stringify(v);
+    if (cur === txt) return id;
+    if (cur !== null && mode === 'copy'){
+      const nid = uid(), c = JSON.parse(txt);
+      if (type === 'todo'){ c.name = (c.name || (id === 'main' ? 'Ma liste' : 'Liste')) + ' (copie)'; c.c = Date.now(); }
+      else { c.id = nid; c.name = (c.name || '') + ' (copie)'; c.t = Date.now(); }
+      refSet(type, R.key(nid), c); nref++; return nid;
+    }
+    refSet(type, k, v); nref++; return id;
+  };
+  const remap = { todo: {}, map: {}, pbd: {} };
+  for (const type of Object.keys(REF)) for (const [id, v] of Object.entries(refs[type] || {})){
+    if (!/^[\w-]+$/.test(id) || !v || typeof v !== 'object') continue;
+    try { remap[type][id] = writeRef(type, id, v); } catch { toast('Stockage plein : éléments liés non importés.', true); }
+  }
+  let n = 0;
+  for (let p of list){
+    if (mode === 'copy' && getP(p.id)){ p = norm(JSON.parse(JSON.stringify(p))); p.id = uid(); p.name += ' (copie)'; p.items.forEach(it => it.id = uid()); p.pos = projects.length; }
+    for (const it of p.items){ const R = REF[it.type]; if (R && remap[it.type][it[R.field]]) it[R.field] = remap[it.type][it[R.field]]; }
+    projects = projects.filter(x => x.id !== p.id); projects.push(p); save(p); n++;
+  }
+  closeDlg(); render();
+  toast(`${n} projet(s) importé(s)${nref ? `, ${nref} élément(s) lié(s) recréé(s)` : ''}.`);
 }
 $('#btnMenu').onclick = sheetMenu;
 

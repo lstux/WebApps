@@ -1834,7 +1834,7 @@ function openFromHash(){
 openFromHash();
 window.addEventListener('hashchange', openFromHash);
 const sync = PBSync.init(store, {   // synchronise tout de suite, puis au retour en ligne / sur l'onglet
-  adopt: ['doc.v1', 'components.v1'],
+  adopt: ['doc.v1', 'components.v1', ...readCircuits().map(r => 'circuit.' + r.id)],   // circuits arrivés par un import du Notebook
   summary: 'Le plan en cours, les circuits enregistrés et « Mes composants » sont synchronisés sur le serveur, les données sont stockées sans chiffrement.',
   note: 'Au premier envoi, si le serveur a déjà un plan ou des composants, c\'est sa version qui est reprise (↶ pour revenir).',
   onChange: syncChanged,
