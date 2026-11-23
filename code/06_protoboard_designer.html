@@ -543,6 +543,13 @@ function wireSVG(w, dim, isSel){
     s += `<circle cx="${pt[0]*U}" cy="${pt[1]*U}" r="${end ? lw*.95 : lw*.6}" fill="${esc(w.c)}" stroke="#0008" stroke-width="${end?1:.6}"/>`; });
   return s + pl(`stroke="#0000" stroke-width="${U*.8}"`) + '</g>';
 }
+/* Petit cadenas au coin haut-droit d'une pièce verrouillée */
+function lockSVG(b){
+  const x = b.x1*U - U*.15, y = b.y0*U + U*.15, s = U*.34;
+  return `<g pointer-events="none" transform="translate(${x},${y})" opacity=".9"><circle r="${s*1.05}" fill="var(--card)" stroke="var(--line)" stroke-width="1"/>`
+    + `<path d="M${-s*.32},${-s*.05} v${-s*.22} a${s*.32},${s*.32} 0 0 1 ${s*.64},0 v${s*.22}" fill="none" stroke="var(--mut)" stroke-width="${s*.14}"/>`
+    + `<rect x="${-s*.48}" y="${-s*.08}" width="${s*.96}" height="${s*.62}" rx="${s*.1}" fill="var(--mut)"/></g>`;
+}
 /* Le dessin du plan. forExport : sans sélection, sans surbrillance, sans fil en cours (image PNG). */
 function sceneHTML(forExport){
   const net = forExport ? null : currentNet(), B = doc.board, sel_ = forExport ? null : sel, cur_ = forExport ? null : cur;
@@ -553,6 +560,7 @@ function sceneHTML(forExport){
   }
   doc.parts.forEach(p => { const g = geo(p);
     h += partSVG(p, g, sel_ && sel_.t === 'part' && sel_.id === p.id) + '<g pointer-events="none">' + labelsSVG(p, g) + '</g>'; });
+  if (!forExport) doc.parts.forEach(p => { if (p.lk) h += lockSVG(bboxW(p, geo(p))); });
   doc.wires.forEach(w => h += wireSVG(w, net && !net.has(K(...w.pts[0])), sel_ && sel_.t === 'wire' && sel_.id === w.id));
   if (cur_){
     const pts = cur_.pts.slice();
@@ -683,7 +691,7 @@ svg.addEventListener('pointerdown', e => {
   }
   if (!gest.vertex && e.target.closest){
     const pg = e.target.closest('[data-part]');
-    if (pg && !e.target.closest('[data-wire]')){ const p = getPart(pg.dataset.part); if (p){ gest.part = p; gest.p0 = {x:p.x, y:p.y}; gest.att = attached(p); } }
+    if (pg && !e.target.closest('[data-wire]')){ const p = getPart(pg.dataset.part); if (p && !p.lk){ gest.part = p; gest.p0 = {x:p.x, y:p.y}; gest.att = attached(p); } }
   }
 });
 svg.addEventListener('pointermove', e => {
@@ -795,6 +803,7 @@ function setMode(m){
 function centerW(p){ const b = geo(p).body; return tf(p, (b.x0+b.x1)/2, (b.y0+b.y1)/2); }
 function transformPart(id, fn){
   const p = getPart(id); if (!p) return;
+  if (p.lk){ toast('Pièce verrouillée.'); return; }
   const refs = attached(p), c0 = centerW(p);
   fn(p);
   const c1 = centerW(p); p.x += Math.round(c0[0]-c1[0]); p.y += Math.round(c0[1]-c1[1]);
@@ -819,8 +828,9 @@ function updateCtx(){
     h += `<div class="info">${cur ? `${cur.pts.length} point(s) — touche les coudes, puis une broche ou un fil pour terminer (ou retouche le dernier point).` : 'Touche un point de départ : une broche ou un trou.'}</div>`;
   } else if (sel && sel.t === 'part'){
     const p = getPart(sel.id);
-    if (p) h += `<div class="info"><b>${esc(p.label)}</b> — ${esc(partName(p))}</div>
-      <div class="rowb"><button class="btn" data-a="rot" title="Pivoter (R)">⟳</button><button class="btn" data-a="flip" title="Retourner (F)">⇋</button><button class="btn" data-a="edit">✎ Modifier</button><button class="btn" data-a="dup" title="Dupliquer">⧉</button><button class="btn" data-a="delpart" title="Supprimer">🗑</button></div>`;
+    if (p){ const lk = p.lk ? 'disabled' : '';
+      h += `<div class="info"><b>${esc(p.label)}</b> — ${esc(partName(p))}${p.lk ? ' · verrouillée' : ''}</div>
+      <div class="rowb"><button class="btn ${p.lk ? 'on' : ''}" data-a="lock" title="${p.lk ? 'Déverrouiller' : 'Verrouiller : ni déplacement, ni rotation, ni suppression'} (L)">${p.lk ? '🔒' : '🔓'}</button><button class="btn" data-a="rot" title="Pivoter (R)" ${lk}>⟳</button><button class="btn" data-a="flip" title="Retourner (F)" ${lk}>⇋</button><button class="btn" data-a="edit">✎ Modifier</button><button class="btn" data-a="dup" title="Dupliquer">⧉</button><button class="btn" data-a="delpart" title="Supprimer" ${lk}>🗑</button></div>`; }
   } else if (sel && sel.t === 'wire'){
     const w = getWire(sel.id);
     if (w){
@@ -865,9 +875,10 @@ $('#ctx').addEventListener('click', e => {
     case 'rot': transformPart(id, p => p.r = (p.r + 1) % 4); break;
     case 'flip': transformPart(id, p => p.f = !p.f); break;
     case 'edit': sheetEdit(id); break;
+    case 'lock': { const p = getPart(id); if (p){ if (p.lk) delete p.lk; else p.lk = true; commit(); } break; }
     case 'dup': { const p = getPart(id), bb = bboxW(p, geo(p)), q = JSON.parse(JSON.stringify(p));
-      q.id = uid(); q.x += Math.ceil(bb.x1 - bb.x0) + 1; doc.parts.push(q); sel = {t:'part', id:q.id}; commit(); break; }
-    case 'delpart': doc.parts = doc.parts.filter(p => p.id !== id); sel = null; commit(); break;
+      q.id = uid(); delete q.lk; q.x += Math.ceil(bb.x1 - bb.x0) + 1; doc.parts.push(q); sel = {t:'part', id:q.id}; commit(); break; }
+    case 'delpart': if (getPart(id) && getPart(id).lk){ toast('Pièce verrouillée.'); break; } doc.parts = doc.parts.filter(p => p.id !== id); sel = null; commit(); break;
     case 'delwire': doc.wires = doc.wires.filter(w => w.id !== id); sel = null; commit(); break;
   }
 });
@@ -1189,7 +1200,7 @@ function sheetHelp(){
     <p><b>⇄ Dessous</b> : vue de la plaque retournée comme une feuille (miroir gauche-droite) : les modules deviennent des empreintes pâles, il ne reste que les pastilles à souder. Le plan ne change pas, on peut y éditer aussi. L'export PNG suit la vue affichée.</p>
     <p><b>Broche</b> : touche-la pour voir son rôle, ses mises en garde et tout ce qui y est relié. Deux fils ne sont reliés que s'ils partagent un point (une soudure) : se croiser ne suffit pas. Une barrette posée sur les broches d'un module est connectée.</p>
     <p><b>Composants</b> : un fichier par composant dans <code>code/protoboard/components/</code>. Pour les tiens sans toucher au dépôt : module générique → ✎ → « Enregistrer comme composant », ou menu → Composants → Importer.</p>
-    <p><b>Clavier</b> : W fil, H demi-pas, D dessous/dessus, R pivoter, F retourner, Suppr effacer, Échap annuler, Ctrl+Z / Ctrl+Maj+Z.</p>
+    <p><b>Clavier</b> : W fil, H demi-pas, D dessous/dessus, R pivoter, F retourner, L verrouiller, Suppr effacer, Échap annuler, Ctrl+Z / Ctrl+Maj+Z.</p>
     <p><b>Bibliothèque</b> (menu ☰) : Enregistrer range le circuit dans ce navigateur sous un nom (Ctrl+S ensuite pour le mettre à jour) ; Charger en rouvre un. Le • à côté du nom signale des modifications non enregistrées. Rien n'est enregistré tout seul dans la bibliothèque.</p>
     <p><b>Fils</b> : touche un fil pour le sélectionner, glisse ses points pour le modifier ; touche le fil pour ajouter un point, touche un point puis « Retirer le point » pour l'enlever.</p>
     <p>Le plan en cours est gardé tout seul dans ce navigateur ; Exporter / Importer pour le passer sur un autre appareil.</p></div>` + typeLegend());
@@ -1200,6 +1211,7 @@ function sheetMenu(){
     <button class="item" data-a="saveas"><span class="ic">📑</span> Enregistrer sous…</button>
     <button class="item" data-a="load"><span class="ic">📂</span> Charger<span class="sw">${nc} circuit${nc > 1 ? 's' : ''}</span></button>
     <button class="item" data-a="board"><span class="ic">▦</span> Plaque<span class="sw">${doc.board.w} × ${doc.board.h}</span></button>
+    <button class="item" data-a="lockall"><span class="ic">${doc.parts.length && doc.parts.every(p => p.lk) ? '🔓' : '🔒'}</span> ${doc.parts.length && doc.parts.every(p => p.lk) ? 'Tout déverrouiller' : 'Tout verrouiller'}<span class="sw">${doc.parts.filter(p => p.lk).length} / ${doc.parts.length} pièce${doc.parts.length > 1 ? 's' : ''}</span></button>
     <button class="item" data-a="labels"><span class="ic">🏷</span> Noms des broches<span class="sw">${showLabels ? 'affichés' : 'masqués'}</span></button>
     <button class="item" data-a="nets"><span class="ic">🔗</span> Liste des connexions</button>
     <button class="item" data-a="lib"><span class="ic">🧩</span> Composants</button>
@@ -1215,6 +1227,7 @@ function sheetMenu(){
     if (a === 'saveas') sheetSave();
     if (a === 'load') sheetLoad();
     if (a === 'board') sheetBoard();
+    if (a === 'lockall'){ const all = doc.parts.every(p => p.lk); doc.parts.forEach(p => { if (all) delete p.lk; else p.lk = true; }); closeDlg(); commit(); toast(all ? 'Pièces déverrouillées.' : 'Pièces verrouillées.'); }
     if (a === 'labels'){ showLabels = !showLabels; closeDlg(); render(); }
     if (a === 'nets') sheetNets();
     if (a === 'lib') sheetLib();
@@ -1677,7 +1690,9 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'h'){ half = !half; applyMirror(); updateCtx(); }
   else if (sel && sel.t === 'part' && e.key === 'r') transformPart(sel.id, p => p.r = (p.r + 1) % 4);
   else if (sel && sel.t === 'part' && e.key === 'f') transformPart(sel.id, p => p.f = !p.f);
+  else if (sel && sel.t === 'part' && e.key === 'l'){ const p = getPart(sel.id); if (p){ if (p.lk) delete p.lk; else p.lk = true; commit(); } }
   else if ((e.key === 'Delete' || e.key === 'Backspace') && sel){
+    if (sel.t === 'part' && getPart(sel.id) && getPart(sel.id).lk){ toast('Pièce verrouillée.'); return; }
     if (sel.t === 'part') doc.parts = doc.parts.filter(p => p.id !== sel.id);
     else if (sel.t === 'wire') doc.wires = doc.wires.filter(w => w.id !== sel.id);
     else return;
