@@ -1203,6 +1203,7 @@ function sheetMenu(){
     <button class="item" data-a="labels"><span class="ic">🏷</span> Noms des broches<span class="sw">${showLabels ? 'affichés' : 'masqués'}</span></button>
     <button class="item" data-a="nets"><span class="ic">🔗</span> Liste des connexions</button>
     <button class="item" data-a="lib"><span class="ic">🧩</span> Composants</button>
+    <button class="item" data-a="pcb"><span class="ic">⧉</span> Circuit imprimé<span class="sw">Gerber</span></button>
     <button class="item" data-a="png"><span class="ic">🖼</span> Image PNG<span class="sw">${bottom ? 'dessous' : 'dessus'}</span></button>
     <button class="item" data-a="sync"><span class="ic">☁</span> Synchronisation<span class="sw">${store.connected ? esc(store.email) : 'non connecté'}</span></button>
     <button class="item" data-a="export"><span class="ic">⬇</span> Exporter</button>
@@ -1217,6 +1218,7 @@ function sheetMenu(){
     if (a === 'labels'){ showLabels = !showLabels; closeDlg(); render(); }
     if (a === 'nets') sheetNets();
     if (a === 'lib') sheetLib();
+    if (a === 'pcb') sheetPcb();
     if (a === 'png'){ closeDlg(); exportPNG(); }
     if (a === 'sync'){ closeDlg(); sync.open(); }
     if (a === 'export') sheetExport();
@@ -1228,6 +1230,418 @@ function sheetMenu(){
     }
   });
   if (window.WebAppsTheme) WebAppsTheme.set(WebAppsTheme.get());   // dessine l'icône du thème dans la feuille
+}
+
+/* ---------- circuit imprimé simple face (export Gerber + Excellon pour la gravure à l'anglaise) ----------
+   Composants traversants côté dessus, cuivre dessous. Fils normaux = pistes de cuivre ; fils
+   « isolés » = straps (fils soudés côté composants), avec un trou à chaque bout. Les fichiers sont
+   en vue de dessus (convention Gerber) : le logiciel de FAO retourne la couche dessous. */
+const PITCH = 2.54;
+const KEY_PCB = 'protoboard.pcb.v1';   // réglages, propres à ce navigateur
+const PCB_DEF = {trace:0.8, pad:1.8, drill:1.0, clear:0.4};
+function pcbOpts(){ try { return Object.assign({}, PCB_DEF, JSON.parse(localStorage.getItem(KEY_PCB)) || {}); } catch(e){ return Object.assign({}, PCB_DEF); } }
+function savePcbOpts(o){ try { localStorage.setItem(KEY_PCB, JSON.stringify(o)); } catch(e){} }
+
+/* Distance point–segment et segment–segment (unités de la grille). */
+function dPtSeg(px, py, ax, ay, bx, by){
+  const dx = bx - ax, dy = by - ay, l = dx*dx + dy*dy;
+  const t = l ? Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy) / l)) : 0;
+  return Math.hypot(px - ax - t*dx, py - ay - t*dy);
+}
+function dSegSeg(a, b){
+  const [ax,ay,bx,by] = a, [cx,cy,dx,dy] = b;
+  const o = (px,py,qx,qy,rx,ry) => Math.sign((qx-px)*(ry-py) - (qy-py)*(rx-px));
+  if (o(ax,ay,bx,by,cx,cy) * o(ax,ay,bx,by,dx,dy) < 0 && o(cx,cy,dx,dy,ax,ay) * o(cx,cy,dx,dy,bx,by) < 0) return 0;
+  return Math.min(dPtSeg(ax,ay,cx,cy,dx,dy), dPtSeg(bx,by,cx,cy,dx,dy), dPtSeg(cx,cy,ax,ay,bx,by), dPtSeg(dx,dy,ax,ay,bx,by));
+}
+
+/* Modèle du circuit : pastilles (broches + trous des straps), pistes, straps, problèmes. */
+function pcbModel(o){
+  buildIndex();
+  const net = (x,y) => find(K(x,y));
+  const pads = new Map();   // "x,y" → {x, y, net, name}
+  pinMap.forEach((list, k) => { const e = list[0]; pads.set(k, {x:e.x, y:e.y, net:net(e.x, e.y), name:`${e.p.label} ${e.q.name}`}); });
+  const traces = [], straps = [], issues = [];
+  doc.wires.forEach(w => {
+    if (w.pts.length < 2) return;
+    const n = net(...w.pts[0]);
+    if (w.iso){
+      const a = w.pts[0], b = w.pts[w.pts.length - 1];
+      straps.push({w, a, b, net:n});
+      [a, b].forEach(([x,y]) => { const k = K(x,y); if (!pads.has(k)) pads.set(k, {x, y, net:n, name:'strap'}); });
+    } else {
+      for (let i = 1; i < w.pts.length; i++){
+        const [ax,ay] = w.pts[i-1], [bx,by] = w.pts[i];
+        if (ax !== bx || ay !== by) traces.push({s:[ax,ay,bx,by], net:n, w});
+      }
+    }
+  });
+  // Un fil ne peut s'accrocher qu'aux extrémités d'un strap (c'est là que sont les trous)
+  doc.wires.forEach(w => { if (!w.iso) return;
+    w.pts.slice(1, -1).forEach(([x,y]) => { const k = K(x,y);
+      if (doc.wires.some(v => v !== w && v.pts.some(p => K(...p) === k)) || pinMap.has(k))
+        issues.push({x, y, msg:'Connexion au milieu d’un strap : le strap n’a de trous qu’à ses extrémités.'}); }); });
+  const P = PITCH, tw = o.trace / P, pr = o.pad / 2 / P, cl = o.clear / P;
+  const padList = [...pads.values()];
+  traces.forEach(t => padList.forEach(p => {
+    if (p.net === t.net) return;
+    const d = dPtSeg(p.x, p.y, ...t.s);
+    if (d < tw/2 + pr + cl) issues.push({x:p.x, y:p.y, msg:d < pr ? `Une piste passe sur ${p.name} (court-circuit).` : `Piste trop près de ${p.name}.`});
+  }));
+  for (let i = 0; i < traces.length; i++) for (let j = i + 1; j < traces.length; j++){
+    const a = traces[i], b = traces[j]; if (a.net === b.net) continue;
+    const d = dSegSeg(a.s, b.s);
+    if (d < tw + cl){
+      const [x,y] = d === 0 ? [(a.s[0]+a.s[2]+b.s[0]+b.s[2])/4, (a.s[1]+a.s[3]+b.s[1]+b.s[3])/4] : [(a.s[0]+a.s[2])/2, (a.s[1]+a.s[3])/2];
+      issues.push({x, y, msg:d === 0 ? 'Deux pistes de réseaux différents se croisent (court-circuit) : passer l’une en strap (fil isolé).' : 'Deux pistes de réseaux différents trop proches.'});
+    }
+  }
+  for (let i = 0; i < padList.length; i++) for (let j = i + 1; j < padList.length; j++){
+    const a = padList[i], b = padList[j];
+    if (a.net !== b.net && Math.hypot(a.x - b.x, a.y - b.y) < 2*pr + cl) issues.push({x:a.x, y:a.y, msg:`Pastilles trop proches : ${a.name} / ${b.name} (réduire le diamètre des pastilles).`});
+  }
+  const B = doc.board, out = q => q.x < 0 || q.y < 0 || q.x > B.w - 1 || q.y > B.h - 1;
+  padList.forEach(p => { if (out(p)) issues.push({x:p.x, y:p.y, msg:`${p.name} est hors de la plaque.`}); });
+  traces.forEach(t => { const [ax,ay,bx,by] = t.s; if (out({x:ax,y:ay}) || out({x:bx,y:by})) issues.push({x:ax, y:ay, msg:'Une piste sort de la plaque.'}); });
+  return {pads:padList, traces, straps, issues};
+}
+
+/* Coordonnées en mm, vue de dessus, origine en bas à gauche du contour (demi-pas autour des trous). */
+const mmX = x => (x + .5) * PITCH;
+const mmY = y => (doc.board.h - .5 - y) * PITCH;
+const g6 = v => Math.round(v * 1e6);   // format Gerber 4.6 en mm
+
+function gerberCopper(M, o, name){
+  const L = ['G04 ProtoBoardDesigner - ' + name + '*', '%TF.GenerationSoftware,lstux,ProtoBoardDesigner,1*%', '%TF.FileFunction,Copper,L1,Bot*%', '%TF.FilePolarity,Positive*%',
+    '%FSLAX46Y46*%', '%MOMM*%', '%LPD*%', `%ADD10C,${o.trace.toFixed(3)}*%`, `%ADD11C,${o.pad.toFixed(3)}*%`, 'G01*', 'D10*'];
+  M.traces.forEach(t => { const [ax,ay,bx,by] = t.s; L.push(`X${g6(mmX(ax))}Y${g6(mmY(ay))}D02*`, `X${g6(mmX(bx))}Y${g6(mmY(by))}D01*`); });
+  L.push('D11*'); M.pads.forEach(p => L.push(`X${g6(mmX(p.x))}Y${g6(mmY(p.y))}D03*`));
+  L.push('M02*'); return L.join('\n') + '\n';
+}
+function gerberOutline(name){
+  const W = doc.board.w * PITCH, H = doc.board.h * PITCH;
+  return ['G04 ProtoBoardDesigner - ' + name + ' contour*', '%TF.GenerationSoftware,lstux,ProtoBoardDesigner,1*%', '%TF.FileFunction,Profile,NP*%',
+    '%FSLAX46Y46*%', '%MOMM*%', '%LPD*%', '%ADD10C,0.100*%', 'G01*', 'D10*',
+    'X0Y0D02*', `X${g6(W)}Y0D01*`, `X${g6(W)}Y${g6(H)}D01*`, `X0Y${g6(H)}D01*`, 'X0Y0D01*', 'M02*'].join('\n') + '\n';
+}
+function excellon(M, o){
+  const f = v => v.toFixed(3);
+  return ['M48', '; ProtoBoardDesigner', 'FMAT,2', 'METRIC,TZ', `T1C${f(o.drill)}`, '%', 'G90', 'G05', 'T1',
+    ...M.pads.map(p => `X${f(mmX(p.x))}Y${f(mmY(p.y))}`), 'T0', 'M30'].join('\n') + '\n';
+}
+function strapList(M){
+  const where = ([x,y]) => { const e = (pinMap.get(K(x,y)) || [])[0]; return e ? `${e.p.label} ${e.q.name}` : `trou ${String.fromCharCode(65 + Math.min(25, x))}${y + 1}`; };
+  return M.straps.map((s,i) => `${i+1}. ${where(s.a)}  ->  ${where(s.b)}  (${(s.w.pts.reduce((l,p,j) => j ? l + Math.hypot(p[0]-s.w.pts[j-1][0], p[1]-s.w.pts[j-1][1]) : 0, 0) * PITCH / 10).toFixed(1)} cm)`).join('\n');
+}
+
+/* ZIP sans compression (format « stored ») : assez pour quelques fichiers texte. */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b){ let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipFiles(files){   // [{name, text}] → Blob
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const d = new Date(), dt = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)), dd = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate());
+  files.forEach(f => {
+    const name = enc.encode(f.name), data = enc.encode(f.text), crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30));
+    [[0,0x04034b50,4],[4,20,2],[6,0x0800,2],[8,0,2],[10,dt,2],[12,dd,2],[14,crc,4],[18,data.length,4],[22,data.length,4],[26,name.length,2],[28,0,2]]
+      .forEach(([o,v,n]) => n === 4 ? h.setUint32(o, v, true) : h.setUint16(o, v, true));
+    const c = new DataView(new ArrayBuffer(46));
+    [[0,0x02014b50,4],[4,20,2],[6,20,2],[8,0x0800,2],[10,0,2],[12,dt,2],[14,dd,2],[16,crc,4],[20,data.length,4],[24,data.length,4],[28,name.length,2],[30,0,2],[32,0,2],[34,0,2],[36,0,2],[38,0,4],[42,off,4]]
+      .forEach(([o,v,n]) => n === 4 ? c.setUint32(o, v, true) : c.setUint16(o, v, true));
+    parts.push(h, name, data); central.push(c, name); off += 30 + name.length + data.length;
+  });
+  const size = central.reduce((s, b) => s + b.byteLength, 0), e = new DataView(new ArrayBuffer(22));
+  [[0,0x06054b50,4],[4,0,2],[6,0,2],[8,files.length,2],[10,files.length,2],[12,size,4],[16,off,4],[20,0,2]]
+    .forEach(([o,v,n]) => n === 4 ? e.setUint32(o, v, true) : e.setUint16(o, v, true));
+  return new Blob([...parts, ...central, e], {type:'application/zip'});
+}
+
+/* Aperçu SVG : côté cuivre vu de dessous (comme sur la plaque à graver) ou vue de dessus. */
+function pcbSvg(M, o, mirror){
+  const P = PITCH, W = doc.board.w * P, H = doc.board.h * P;
+  const X = x => mirror ? W - mmX(x) : mmX(x), Y = y => H - mmY(y);
+  let s = `<svg viewBox="-1 -1 ${W + 2} ${H + 2}" style="width:100%;max-height:52vh;background:#0e3b2e;border-radius:8px;display:block">`;
+  s += `<rect x="0" y="0" width="${W}" height="${H}" fill="#1f5c45" stroke="#9fd3b8" stroke-width=".15"/>`;
+  M.straps.forEach(t => s += `<polyline points="${t.w.pts.map(([x,y]) => X(x) + ',' + Y(y)).join(' ')}" fill="none" stroke="#7fb2ff" stroke-width=".35" stroke-dasharray=".8 .5" opacity=".8"/>`);
+  M.traces.forEach(t => { const [ax,ay,bx,by] = t.s; s += `<line x1="${X(ax)}" y1="${Y(ay)}" x2="${X(bx)}" y2="${Y(by)}" stroke="#d08a46" stroke-width="${o.trace}" stroke-linecap="round"/>`; });
+  M.pads.forEach(p => s += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${o.pad/2}" fill="#d08a46"/><circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${o.drill/2}" fill="#0e3b2e"/>`);
+  M.issues.forEach(i => s += `<circle cx="${X(i.x)}" cy="${Y(i.y)}" r="1.6" fill="none" stroke="#ff4d4d" stroke-width=".35"/>`);
+  return s + '</svg>';
+}
+
+function sheetPcb(mirror = true){
+  const o = pcbOpts(), M = pcbModel(o);
+  const uniq = [...new Map(M.issues.map(i => [i.msg, i])).values()];
+  const num = (id, label, v, step) => `<div><label class="lbl" for="${id}">${label}</label><input type="number" id="${id}" min="0.1" max="5" step="${step}" value="${v}" inputmode="decimal"></div>`;
+  openDlg(`<h2>Circuit imprimé (simple face)</h2>
+    <p>Fils normaux = pistes de cuivre, fils isolés = straps soudés côté composants. Export Gerber + perçage pour un logiciel de FAO (FlatCAM, pcb2gcode…), ou G-code GRBL directement.</p>
+    ${pcbSvg(M, o, mirror)}
+    <p style="margin-top:6px">${mirror ? 'Côté cuivre, vu de dessous (comme la plaque à graver).' : 'Vue de dessus (transparence).'} ${M.traces.length} segments de piste · ${M.pads.length} trous · ${M.straps.length} strap${M.straps.length > 1 ? 's' : ''}.</p>
+    <div class="form"><div class="three">${num('pTr', 'Piste (mm)', o.trace, .1)}${num('pPad', 'Pastille (mm)', o.pad, .1)}${num('pDr', 'Perçage (mm)', o.drill, .1)}</div>
+    <div class="three">${num('pCl', 'Isolement min. (mm)', o.clear, .05)}</div></div>
+    ${uniq.length ? `<div class="net"><div class="warn">${uniq.length} problème${uniq.length > 1 ? 's' : ''} (cerclé${uniq.length > 1 ? 's' : ''} en rouge) :</div>${uniq.slice(0, 12).map(i => `<div>• ${esc(i.msg)}</div>`).join('')}${uniq.length > 12 ? `<div>… et ${uniq.length - 12} autre(s)</div>` : ''}</div>` : '<div class="net">✓ Aucun problème détecté.</div>'}
+    <div class="btns"><button class="btn" data-a="flip">${mirror ? 'Vue de dessus' : 'Côté cuivre'}</button><button class="btn" data-a="apply">Appliquer</button><button class="btn" data-a="cnc">G-code CNC…</button><button class="btn primary" data-a="zip">Gerber (ZIP)</button></div>`, a => {
+    const read = () => { const v = id => Math.max(.1, Math.min(5, parseFloat($(id).value) || 0)); return {trace:v('#pTr'), pad:v('#pPad'), drill:Math.min(v('#pDr'), v('#pPad') - .2), clear:v('#pCl')}; };
+    if (a === 'flip'){ savePcbOpts(read()); sheetPcb(!mirror); }
+    if (a === 'apply'){ savePcbOpts(read()); sheetPcb(mirror); }
+    if (a === 'cnc'){ savePcbOpts(read()); sheetCnc(); }
+    if (a === 'zip'){
+      const opts = read(); savePcbOpts(opts);
+      const m = pcbModel(opts), name = slug(circuit ? circuit.name : 'protoboard');
+      const readme = [`${circuit ? circuit.name : 'Circuit'} : circuit imprimé simple face (ProtoBoardDesigner)`, '',
+        `${name}-B_Cu.gbl     cuivre dessous (vue de dessus, comme tout Gerber : à retourner dans la FAO)`,
+        `${name}-Edge_Cuts.gm1 contour de la carte (${(doc.board.w*PITCH).toFixed(2)} x ${(doc.board.h*PITCH).toFixed(2)} mm)`,
+        `${name}.drl          perçages (Excellon, mm), ${m.pads.length} trous de ${opts.drill} mm`, '',
+        `Pistes ${opts.trace} mm, pastilles ${opts.pad} mm, isolement visé ${opts.clear} mm.`,
+        m.issues.length ? `ATTENTION : ${m.issues.length} problème(s) signalé(s) à la vérification.` : 'Vérification : aucun problème détecté.', '',
+        'Straps (fils côté composants) :', strapList(m) || '(aucun)'].join('\n') + '\n';
+      const blob = zipFiles([{name:`${name}-B_Cu.gbl`, text:gerberCopper(m, opts, name)}, {name:`${name}-Edge_Cuts.gm1`, text:gerberOutline(name)},
+        {name:`${name}.drl`, text:excellon(m, opts)}, {name:`${name}-LISEZMOI.txt`, text:readme}]);
+      downloadBlob(blob, `${name}-pcb.zip`);
+      toast(m.issues.length ? `Exporté, avec ${m.issues.length} problème(s) signalé(s).` : 'Exporté.', m.issues.length > 0);
+    }
+  });
+}
+
+/* ---------- G-code direct (GRBL) : gravure à l'anglaise, perçage, découpe ----------
+   Tout se fait côté cuivre (plaque retournée) : X en miroir, origine (0,0) au coin bas-gauche du
+   contour vu de dessous, Z0 sur le cuivre. Trois fichiers, GRBL ne gérant pas le changement d'outil.
+   Passes de gravure : le cuivre est dessiné en image (RES px/mm), on calcule pour chaque pixel la
+   distance au cuivre le plus proche, puis les courbes de niveau de cette distance (carrés marchants)
+   donnent directement les trajets de la fraise, à la distance voulue des pistes. */
+const KEY_CNC = 'protoboard.cnc.v1';
+const CNC_DEF = {vAngle:30, vTip:0.1, depth:0.1, passes:2, overlap:40, feed:150, plunge:50, rpm:10000, spindle:1, safeZ:2,
+  thick:1.6, drillFeed:60, millDia:2, millStep:0.5, millFeed:120, tabs:1, tabW:3, tabH:0.6};
+function cncOpts(){ try { return Object.assign({}, CNC_DEF, JSON.parse(localStorage.getItem(KEY_CNC)) || {}); } catch(e){ return Object.assign({}, CNC_DEF); } }
+function saveCncOpts(o){ try { localStorage.setItem(KEY_CNC, JSON.stringify(o)); } catch(e){} }
+const vWidth = c => c.vTip + 2 * c.depth * Math.tan(c.vAngle / 2 * Math.PI / 180);   // largeur gravée à la profondeur choisie
+
+/* Distance euclidienne exacte (Felzenszwalb) : f = 0 sur le cuivre, Infinity ailleurs → distances² */
+function edt1(f, n, d, v, z){
+  let k = 0; v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+  for (let q = 1; q < n; q++){
+    let s;
+    for (;;){ const p = v[k]; s = ((f[q] + q*q) - (f[p] + p*p)) / (2*q - 2*p); if (s <= z[k]) k--; else break; }
+    k++; v[k] = q; z[k] = s; z[k+1] = Infinity;
+  }
+  k = 0;
+  for (let q = 0; q < n; q++){ while (z[k+1] < q) k++; const p = v[k]; d[q] = (q - p)*(q - p) + f[p]; }
+}
+function edt(mask, W, H){
+  const INF = 1e20, g = new Float64Array(W * H), n = Math.max(W, H);
+  const f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+  for (let x = 0; x < W; x++){ for (let y = 0; y < H; y++) f[y] = mask[y*W + x] ? 0 : INF; edt1(f, H, d, v, z); for (let y = 0; y < H; y++) g[y*W + x] = d[y]; }
+  for (let y = 0; y < H; y++){ for (let x = 0; x < W; x++) f[x] = g[y*W + x]; edt1(f, W, d, v, z); for (let x = 0; x < W; x++) g[y*W + x] = Math.sqrt(d[x]); }
+  return g;
+}
+/* Courbes de niveau fermées de g = t (carrés marchants), en pixels. */
+function contours(g, W, H, t){
+  const hid = (x,y) => y*W + x, vid = (x,y) => W*H + y*W + x;   // arêtes horizontales / verticales
+  const pt = new Map(), link = new Map();
+  const add = (a, b) => { (link.get(a) || link.set(a, []).get(a)).push(b); (link.get(b) || link.set(b, []).get(b)).push(a); };
+  const P = (id, x0, y0, x1, y1) => { if (!pt.has(id)){ const a = g[y0*W+x0], b = g[y1*W+x1], s = (t - a) / (b - a); pt.set(id, [x0 + s*(x1-x0), y0 + s*(y1-y0)]); } return id; };
+  for (let y = 0; y < H - 1; y++) for (let x = 0; x < W - 1; x++){
+    const a = g[y*W+x] <= t, b = g[y*W+x+1] <= t, c = g[(y+1)*W+x+1] <= t, d = g[(y+1)*W+x] <= t;
+    const k = (a?8:0) | (b?4:0) | (c?2:0) | (d?1:0); if (k === 0 || k === 15) continue;
+    const T = () => P(hid(x,y), x,y, x+1,y), R = () => P(vid(x+1,y), x+1,y, x+1,y+1), B = () => P(hid(x,y+1), x,y+1, x+1,y+1), L = () => P(vid(x,y), x,y, x,y+1);
+    const mid = (g[y*W+x] + g[y*W+x+1] + g[(y+1)*W+x+1] + g[(y+1)*W+x]) / 4 <= t;
+    switch (k){
+      case 1: case 14: add(L(), B()); break;  case 2: case 13: add(B(), R()); break;
+      case 3: case 12: add(L(), R()); break;  case 4: case 11: add(T(), R()); break;
+      case 6: case 9:  add(T(), B()); break;  case 7: case 8:  add(L(), T()); break;
+      case 5:  if (mid){ add(L(), T()); add(B(), R()); } else { add(L(), B()); add(T(), R()); } break;
+      case 10: if (mid){ add(T(), R()); add(L(), B()); } else { add(L(), T()); add(B(), R()); } break;
+    }
+  }
+  // Chaînage : les courbes ouvertes (qui touchent le bord de l'image) partent d'une extrémité et
+  // ne sont jamais refermées ; les autres sont refermées sur leur point de départ.
+  const seen = new Set(), out = [];
+  const walk = start => {
+    const poly = [pt.get(start)]; seen.add(start); let cur = start;
+    for (;;){
+      const nx = link.get(cur).find(n => !seen.has(n));
+      if (nx === undefined) break;
+      seen.add(nx); poly.push(pt.get(nx)); cur = nx;
+    }
+    const closed = link.get(start).length === 2 && link.get(cur).includes(start);
+    if (poly.length > 2) out.push(closed ? [...poly, poly[0]] : poly);
+  };
+  link.forEach((n, k) => { if (n.length === 1 && !seen.has(k)) walk(k); });
+  link.forEach((_, k) => { if (!seen.has(k)) walk(k); });
+  return out;
+}
+/* Simplification (Ramer–Douglas–Peucker), tolérance en mêmes unités que les points. */
+function simplify(pts, tol){
+  if (pts.length < 3) return pts;
+  const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+  const st = [[0, pts.length - 1]];
+  while (st.length){
+    const [a, b] = st.pop(); let m = -1, md = tol;
+    for (let i = a + 1; i < b; i++){ const d = dPtSeg(pts[i][0], pts[i][1], pts[a][0], pts[a][1], pts[b][0], pts[b][1]); if (d > md){ md = d; m = i; } }
+    if (m >= 0){ keep[m] = 1; st.push([a, m], [m, b]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+/* Ordre de parcours : le plus proche d'abord (moins de déplacements à vide). */
+function nearestOrder(items, start, pos){
+  const left = items.slice(), out = []; let cur = start;
+  while (left.length){
+    let bi = 0, bd = Infinity;
+    left.forEach((it, i) => { const p = pos(it), d = (p[0]-cur[0])**2 + (p[1]-cur[1])**2; if (d < bd){ bd = d; bi = i; } });
+    const it = left.splice(bi, 1)[0]; out.push(it); cur = pos(it);
+  }
+  return out;
+}
+
+/* Trajets en mm, coordonnées machine (vue de dessous). */
+function cncPaths(o, c){
+  const M = pcbModel(o), BW = doc.board.w * PITCH, BH = doc.board.h * PITCH;
+  const w = vWidth(c), step = w * (1 - c.overlap / 100), RES = 20;
+  const bx = x => BW - mmX(x), by = y => mmY(y);   // grille → mm, miroir
+  // Zone de calcul : la plaque et tout le cuivre (même hors plaque), plus la largeur des passes
+  const xs = [0, BW], ys = [0, BH];
+  M.pads.forEach(p => { xs.push(bx(p.x)); ys.push(by(p.y)); });
+  M.traces.forEach(t => { xs.push(bx(t.s[0]), bx(t.s[2])); ys.push(by(t.s[1]), by(t.s[3])); });
+  const margin = Math.max(o.pad / 2, o.trace / 2) + w / 2 + (c.passes - 1) * step + 2;
+  const X0 = Math.min(...xs) - margin, Y1 = Math.max(...ys) + margin;
+  const W = Math.ceil((Math.max(...xs) + margin - X0) * RES) + 2, H = Math.ceil((Y1 - (Math.min(...ys) - margin)) * RES) + 2;
+  // image du cuivre, en vue de dessous : pixel (px,py) ↔ X = X0 + px/RES, Y = Y1 - py/RES
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d'), mx = X => (X - X0) * RES, my = Y => (Y1 - Y) * RES;
+  ctx.fillStyle = ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; ctx.lineWidth = o.trace * RES;
+  M.traces.forEach(t => { const [ax,ay,bx2,by2] = t.s; ctx.beginPath(); ctx.moveTo(mx(bx(ax)), my(by(ay))); ctx.lineTo(mx(bx(bx2)), my(by(by2))); ctx.stroke(); });
+  M.pads.forEach(p => { ctx.beginPath(); ctx.arc(mx(bx(p.x)), my(by(p.y)), o.pad / 2 * RES, 0, 2*Math.PI); ctx.fill(); });
+  const img = ctx.getImageData(0, 0, W, H).data, mask = new Uint8Array(W * H);
+  for (let i = 0; i < W*H; i++) mask[i] = img[i*4 + 3] > 127;
+  const g = edt(mask, W, H), iso = [];
+  for (let k = 0; k < c.passes; k++){
+    // Marge de 1,2 pixel (0,06 mm) : la distance se mesure entre centres de pixels, le bord du cuivre
+    // est lissé dans l'image et la simplification coupe les arcs. Vérifié : la fraise ne touche pas le cuivre.
+    const d = (w / 2 + k * step) * RES + 1.2;
+    contours(g, W, H, d).forEach(poly => iso.push(simplify(poly, 0.25).map(([px,py]) => [X0 + (px + .5) / RES, Y1 - (py + .5) / RES])));
+  }
+  const holes = M.pads.map(p => [bx(p.x), by(p.y)]);
+  return {M, w, isoW: w + (c.passes - 1) * step, iso: nearestOrder(iso, [0,0], p => p[0]), holes: nearestOrder(holes, [0,0], p => p), BW, BH};
+}
+
+const f3 = v => (Math.abs(v) < 5e-4 ? 0 : v).toFixed(3);
+function gHead(c, title, tool, extra){
+  return [`(ProtoBoardDesigner - ${title})`, `(Outil : ${tool})`, '(Plaque retournee, cote cuivre dessus. Origine X0 Y0 = coin bas-gauche du contour, Z0 = surface du cuivre.)',
+    ...(extra || []), 'G21 G90 G17', 'G94', `G0 Z${f3(c.safeZ)}`, ...(c.spindle ? [`M3 S${Math.round(c.rpm)}`, 'G4 P3'] : ['(Broche : demarrer a la main)', 'M0'])];
+}
+const gTail = c => [`G0 Z${f3(c.safeZ)}`, ...(c.spindle ? ['M5'] : []), 'G0 X0 Y0', 'M30'];
+function gcodeIsolation(P, c){
+  const L = gHead(c, 'gravure des pistes', `fraise en V ${c.vAngle} deg, pointe ${c.vTip} mm`,
+    [`(Profondeur ${c.depth} mm -> largeur gravee ${P.w.toFixed(3)} mm, ${c.passes} passe(s))`, '(Conseil : nivellement automatique de la plaque dans le logiciel d envoi.)']);
+  P.iso.forEach(poly => {
+    L.push(`G0 X${f3(poly[0][0])} Y${f3(poly[0][1])}`, `G1 Z${f3(-c.depth)} F${c.plunge}`, `F${c.feed}`);
+    poly.slice(1).forEach(([x,y]) => L.push(`G1 X${f3(x)} Y${f3(y)}`));
+    L.push(`G0 Z${f3(c.safeZ)}`);
+  });
+  return [...L, ...gTail(c)].join('\n') + '\n';
+}
+function gcodeDrill(P, o, c){
+  const L = gHead(c, 'percage', `foret ${o.drill} mm`, [`(${P.holes.length} trous, profondeur ${f3(c.thick + 0.2)} mm)`]);
+  P.holes.forEach(([x,y]) => L.push(`G0 X${f3(x)} Y${f3(y)}`, `G1 Z${f3(-(c.thick + 0.2))} F${c.drillFeed}`, `G0 Z${f3(c.safeZ)}`));
+  return [...L, ...gTail(c)].join('\n') + '\n';
+}
+/* Contour : rectangle décalé du rayon de la fraise, passes successives, pattes au milieu des côtés. */
+function gcodeOutline(P, c){
+  const r = c.millDia / 2, x0 = -r, y0 = -r, x1 = P.BW + r, y1 = P.BH + r, total = c.thick + 0.1;
+  const L = gHead(c, 'decoupe du contour', `fraise ${c.millDia} mm`, [`(${P.BW.toFixed(2)} x ${P.BH.toFixed(2)} mm, ${c.tabs ? '4 pattes de maintien de ' + c.tabW + ' mm' : 'sans pattes'})`]);
+  const sides = [[[x0,y0],[x1,y0]], [[x1,y0],[x1,y1]], [[x1,y1],[x0,y1]], [[x0,y1],[x0,y0]]];
+  const tabZ = -(total - c.tabH), half = (c.tabW + c.millDia) / 2;
+  L.push(`G0 X${f3(x0)} Y${f3(y0)}`);
+  for (let z = -Math.min(c.millStep, total); ; z = Math.max(z - c.millStep, -total)){
+    L.push(`G1 Z${f3(z)} F${c.plunge}`, `F${c.millFeed}`);
+    sides.forEach(([a, b]) => {
+      const len = Math.hypot(b[0]-a[0], b[1]-a[1]), at = s => [a[0] + (b[0]-a[0]) * s / len, a[1] + (b[1]-a[1]) * s / len];
+      if (c.tabs && z < tabZ && len > 2 * half + 4){
+        const m = len / 2, p1 = at(m - half), p2 = at(m + half);
+        L.push(`G1 X${f3(p1[0])} Y${f3(p1[1])}`, `G1 Z${f3(tabZ)}`, `G1 X${f3(p2[0])} Y${f3(p2[1])}`, `G1 Z${f3(z)}`);
+      }
+      L.push(`G1 X${f3(b[0])} Y${f3(b[1])}`);
+    });
+    if (z <= -total + 1e-9) break;
+  }
+  return [...L, ...gTail(c)].join('\n') + '\n';
+}
+/* Durée estimée (mm parcourus / vitesse ; déplacements rapides comptés à 1000 mm/min). */
+function gcodeMinutes(txt){
+  let x = 0, y = 0, z = 0, f = 100, t = 0;
+  txt.split('\n').forEach(l => {
+    const m = l.match(/^G([01])\b/); if (!m) { const fm = l.match(/^F([\d.]+)/); if (fm) f = +fm[1]; return; }
+    const v = k => { const r = l.match(new RegExp(k + '(-?[\\d.]+)')); return r ? +r[1] : null; };
+    const nx = v('X') ?? x, ny = v('Y') ?? y, nz = v('Z') ?? z; if (v('F') !== null) f = v('F');
+    t += Math.hypot(nx - x, ny - y, nz - z) / (m[1] === '0' ? 1000 : f); x = nx; y = ny; z = nz;
+  });
+  return t;
+}
+
+function cncSvg(P, o){
+  const {BW, BH} = P, Yv = y => BH - y;
+  let s = `<svg viewBox="-3 -3 ${BW + 6} ${BH + 6}" style="width:100%;max-height:48vh;background:#0e3b2e;border-radius:8px;display:block">`;
+  s += `<rect x="0" y="0" width="${BW}" height="${BH}" fill="#1f5c45" stroke="#9fd3b8" stroke-width=".15"/>`;
+  P.M.traces.forEach(t => { const [ax,ay,bx,by] = t.s; s += `<line x1="${BW - mmX(ax)}" y1="${Yv(mmY(ay))}" x2="${BW - mmX(bx)}" y2="${Yv(mmY(by))}" stroke="#d08a46" stroke-width="${o.trace}" stroke-linecap="round" opacity=".55"/>`; });
+  P.M.pads.forEach(p => s += `<circle cx="${BW - mmX(p.x)}" cy="${Yv(mmY(p.y))}" r="${o.pad/2}" fill="#d08a46" opacity=".55"/>`);
+  P.iso.forEach(poly => s += `<polyline points="${poly.map(([x,y]) => x.toFixed(2) + ',' + Yv(y).toFixed(2)).join(' ')}" fill="none" stroke="#fff" stroke-width=".12"/>`);
+  P.holes.forEach(([x,y]) => s += `<circle cx="${x}" cy="${Yv(y)}" r="${o.drill/2}" fill="none" stroke="#7fb2ff" stroke-width=".15"/>`);
+  s += `<circle cx="0" cy="${BH}" r=".8" fill="#ff4d4d"/><text x="1.2" y="${BH - 1}" font-size="2.2" fill="#ff9d9d">X0 Y0</text>`;
+  return s + '</svg>';
+}
+function downloadBlob(blob, name){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function sheetCnc(){
+  const o = pcbOpts(), c = cncOpts(), P = cncPaths(o, c);
+  const files = {iso:gcodeIsolation(P, c), drill:gcodeDrill(P, o, c), cut:gcodeOutline(P, c)};
+  const mins = Object.fromEntries(Object.entries(files).map(([k, t]) => [k, gcodeMinutes(t)]));
+  const num = (id, label, v, step) => `<div><label class="lbl" for="${id}">${label}</label><input type="number" id="${id}" step="${step}" value="${v}" inputmode="decimal"></div>`;
+  // La fraise doit passer entre deux éléments espacés de l'isolement minimal, sinon elle entame le cuivre
+  const clear = P.w > o.clear ? ` <b class="warn">plus large que l'isolement minimal (${o.clear} mm) : la fraise entamera le cuivre entre éléments proches</b>` : '';
+  openDlg(`<h2>G-code CNC (GRBL)</h2>
+    <p>Côté cuivre, plaque retournée : origine au coin bas-gauche (point rouge), Z0 sur le cuivre. Blanc : passes de gravure, bleu : perçages.</p>
+    ${cncSvg(P, o)}
+    <p style="margin-top:6px">Trait de fraise : <b>${P.w.toFixed(2)} mm</b>${clear} · isolement gravé ≈ ${P.isoW.toFixed(2)} mm · ${P.iso.length} trajets · ${P.holes.length} trous.
+      Durée ≈ gravure ${Math.ceil(mins.iso)} min, perçage ${Math.ceil(mins.drill)} min, découpe ${Math.ceil(mins.cut)} min.</p>
+    ${P.M.issues.length ? `<p class="warn">${P.M.issues.length} problème(s) à la vérification du circuit imprimé : à corriger avant de graver.</p>` : ''}
+    <div class="form">
+      <div class="three">${num('cA', 'Fraise V (°)', c.vAngle, 5)}${num('cT', 'Pointe (mm)', c.vTip, .05)}${num('cD', 'Profondeur (mm)', c.depth, .01)}</div>
+      <div class="three">${num('cP', 'Passes', c.passes, 1)}${num('cO', 'Recouvrement (%)', c.overlap, 5)}${num('cF', 'Avance (mm/min)', c.feed, 10)}</div>
+      <div class="three">${num('cPl', 'Plongée (mm/min)', c.plunge, 10)}${num('cR', 'Broche (tr/min)', c.rpm, 500)}<div><label class="lbl" for="cS">Broche M3</label><select id="cS"><option value="1" ${c.spindle ? 'selected' : ''}>Pilotée</option><option value="0" ${c.spindle ? '' : 'selected'}>À la main</option></select></div></div>
+      <div class="three">${num('cZ', 'Z sécurité (mm)', c.safeZ, .5)}${num('cTh', 'Épaisseur (mm)', c.thick, .1)}${num('cDf', 'Perçage (mm/min)', c.drillFeed, 10)}</div>
+      <div class="three">${num('cM', 'Fraise contour (mm)', c.millDia, .5)}${num('cMs', 'Par passe (mm)', c.millStep, .1)}${num('cMf', 'Contour (mm/min)', c.millFeed, 10)}</div>
+      <div class="three"><div><label class="lbl" for="cTb">Pattes</label><select id="cTb"><option value="1" ${c.tabs ? 'selected' : ''}>Oui</option><option value="0" ${c.tabs ? '' : 'selected'}>Non</option></select></div>${num('cTw', 'Largeur patte (mm)', c.tabW, .5)}${num('cTh2', 'Hauteur patte (mm)', c.tabH, .1)}</div>
+    </div>
+    <p style="margin-top:8px">Foret : ${o.drill} mm (réglage du circuit imprimé). Ordre conseillé : gravure, perçage, découpe, sans bouger la plaque entre les trois.</p>
+    <div class="btns"><button class="btn" data-a="back">← Circuit imprimé</button><button class="btn" data-a="apply">Appliquer</button><button class="btn primary" data-a="nc">Exporter (ZIP)</button></div>`, a => {
+    const read = () => {
+      const n = (id, lo, hi, def) => { const v = parseFloat($(id).value); return isNaN(v) ? def : Math.max(lo, Math.min(hi, v)); };
+      return {vAngle:n('#cA', 5, 120, 30), vTip:n('#cT', 0, 2, .1), depth:n('#cD', .01, 1, .1), passes:Math.round(n('#cP', 1, 10, 2)), overlap:n('#cO', 0, 90, 40),
+        feed:n('#cF', 1, 5000, 150), plunge:n('#cPl', 1, 2000, 50), rpm:n('#cR', 0, 60000, 10000), spindle:+$('#cS').value, safeZ:n('#cZ', .5, 50, 2),
+        thick:n('#cTh', .2, 10, 1.6), drillFeed:n('#cDf', 1, 2000, 60), millDia:n('#cM', .1, 10, 2), millStep:n('#cMs', .05, 5, .5), millFeed:n('#cMf', 1, 5000, 120),
+        tabs:+$('#cTb').value, tabW:n('#cTw', .5, 20, 3), tabH:n('#cTh2', .1, 5, .6)};
+    };
+    if (a === 'back'){ saveCncOpts(read()); sheetPcb(); }
+    if (a === 'apply'){ saveCncOpts(read()); sheetCnc(); }
+    if (a === 'nc'){
+      const cc = read(); saveCncOpts(cc);
+      const PP = cncPaths(o, cc), name = slug(circuit ? circuit.name : 'protoboard');
+      const readme = [`${circuit ? circuit.name : 'Circuit'} : G-code GRBL (ProtoBoardDesigner)`, '',
+        'Plaque retournee : cote cuivre vers le haut. Origine X0 Y0 = coin bas-gauche de la carte vue de ce cote,',
+        'Z0 = surface du cuivre. Ne pas bouger la plaque entre les trois fichiers ; refaire seulement le Z0 apres chaque changement d outil.', '',
+        `1. ${name}-1-gravure.nc  fraise en V ${cc.vAngle} deg pointe ${cc.vTip} mm, profondeur ${cc.depth} mm (largeur ${PP.w.toFixed(2)} mm), ${cc.passes} passe(s)`,
+        `2. ${name}-2-percage.nc  foret ${o.drill} mm, ${PP.holes.length} trous`,
+        `3. ${name}-3-decoupe.nc  fraise ${cc.millDia} mm, ${cc.tabs ? '4 pattes' : 'sans pattes'}`, '',
+        'Conseil : nivellement automatique (autoleveling) dans le logiciel d envoi (UGS, Candle, bCNC) avant la gravure.',
+        PP.M.issues.length ? `ATTENTION : ${PP.M.issues.length} probleme(s) a la verification du circuit imprime.` : 'Verification du circuit imprime : aucun probleme.', '',
+        'Straps (fils cote composants) :', strapList(PP.M) || '(aucun)'].join('\n') + '\n';
+      downloadBlob(zipFiles([{name:`${name}-1-gravure.nc`, text:gcodeIsolation(PP, cc)}, {name:`${name}-2-percage.nc`, text:gcodeDrill(PP, o, cc)},
+        {name:`${name}-3-decoupe.nc`, text:gcodeOutline(PP, cc)}, {name:`${name}-LISEZMOI.txt`, text:readme}]), `${name}-gcode.zip`);
+      toast(PP.M.issues.length ? `G-code exporté, avec ${PP.M.issues.length} problème(s) signalé(s).` : 'G-code exporté.', PP.M.issues.length > 0);
+    }
+  });
 }
 
 
