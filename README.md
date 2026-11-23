@@ -58,6 +58,16 @@ Un plan de câblage sur plaque à pastilles (pas 2,54 mm), façon feuille à pet
 
 📄 **[Documentation](docs/PROTOBOARD.md)** · 📦 **[06_protoboard_designer.html](code/06_protoboard_designer.html)**
 
+### 📒 Notebook
+
+Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main.
+- Liens, dépôts GitHub (description, activité, PR et issues), notes Markdown, listes à cocher, listes d'achat avec totaux
+- Circuits ProtoBoard référencés, ouverts d'un toucher dans ProtoBoard
+- Étiquettes, recherche dans tous les projets, réordonner au doigt, épingler, archiver
+- Export / import JSON, synchronisation facultative
+
+📄 **[Documentation](docs/NOTEBOOK.md)** · 📦 **[07_notebook.html](code/07_notebook.html)**
+
 ## Prochains outils
 
 La liste des outils envisagés est dans [docs/suggested_apps_nextsteps.md](docs/suggested_apps_nextsteps.md).

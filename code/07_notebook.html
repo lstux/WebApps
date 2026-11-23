@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Notebook</title>
+<meta name="description" content="Carnet de projets : liens, dépôts GitHub, notes Markdown, listes à cocher, listes d'achat et circuits ProtoBoard, rangés par projet.">
+<link rel="stylesheet" href="common.css">
+<link rel="icon" type="image/svg+xml" href="icons/notebook.svg">
+<script src="common.js"></script>
+<script src="pbstore.js"></script>
+<script src="pbsync.js"></script>
+<style>
+/* Notebook — styles spécifiques. Composants du système : .topbar, .btn, .iconbtn, .card, .chips, .chip, .cb, .progress, .sheet, .toast */
+body { padding-bottom: calc(110px + env(safe-area-inset-bottom,0px)); }
+main { max-width: 760px; margin: 0 auto; padding: 12px 12px 0; }
+.brand, .subtitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 480px) { .topbar-in { gap: 8px; } .topbar-in .appicon { width: 30px; height: 30px; border-radius: 9px; } .brand { font-size: 20px; } .topbar-in .iconbtn { --icon-size: 36px; } }
+
+/* Recherche et étiquettes */
+.search { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.search input { flex: 1; min-width: 0; }
+.chips { margin: 0 0 12px; }
+.tagline { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--ac-soft); color: var(--ac); font-weight: 600; }
+button.tag { cursor: pointer; }
+
+/* Projets (accueil) */
+.projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.proj { position: relative; display: flex; gap: 12px; align-items: center; padding: 14px 14px 14px 18px; border-radius: var(--r-l); background: var(--card);
+  border: 1px solid var(--line); box-shadow: var(--shadow); cursor: pointer; overflow: hidden; text-align: left; width: 100%; }
+.proj::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--c, var(--ac)); }
+.proj .em { font-size: 28px; line-height: 1; flex: none; }
+.proj .nm { font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj .ct { color: var(--mut); font-size: 13px; }
+.proj .pin { position: absolute; right: 10px; top: 8px; font-size: 13px; }
+.proj.arch { opacity: .6; }
+.sect { margin: 18px 4px 8px; color: var(--mut); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+
+/* En-tête de projet */
+.phead { display: flex; align-items: center; gap: 10px; margin: 2px 0 12px; }
+.phead .em { font-size: 30px; line-height: 1; }
+.phead h2 { margin: 0; font-size: 22px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phead .bar { width: 6px; align-self: stretch; border-radius: 3px; background: var(--c, var(--ac)); }
+
+/* Éléments */
+.items { display: grid; gap: 10px; }
+.it { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--shadow); padding: 10px 12px 12px; position: relative; }
+.it.drag-src { opacity: .35; }
+.it.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { from { box-shadow: 0 0 0 4px var(--ac-soft); } to { box-shadow: var(--shadow); } }
+@media (prefers-reduced-motion: reduce) { .it.flash { animation: none; } }
+.ih { display: flex; align-items: center; gap: 8px; }
+.ih .ty { font-size: 20px; flex: none; width: 26px; text-align: center; }
+.ih .tt { flex: 1; min-width: 0; font-weight: 650; overflow-wrap: anywhere; }
+.ih .tt a { color: inherit; text-decoration: none; }
+.ih .tt a:hover { text-decoration: underline; }
+.ih .proj-of { color: var(--mut); font-size: 12px; font-weight: 600; }
+.ib { margin: 6px 0 0 34px; }
+.sm { color: var(--mut); font-size: 13px; overflow-wrap: anywhere; }
+.note { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 4px; font-size: 14px; }
+.mini { background: none; color: var(--mut); width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 15px; }
+.mini:hover { background: var(--hover); color: var(--fg); }
+.dh { width: 30px; height: 34px; flex: none; display: grid; place-items: center; color: var(--mut2); cursor: grab; border-radius: var(--r-m);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.dh::before { content: ""; width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.6px, transparent 1.8px) 0 0 / 6px 6px; }
+.drop-ind { position: fixed; z-index: 30; pointer-events: none; height: 3px; border-radius: 2px; background: var(--ac); box-shadow: 0 0 0 3px var(--ac-soft); }
+body.dragging { user-select: none; -webkit-user-select: none; }
+.gh-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; color: var(--mut); font-size: 13px; }
+.rows { display: grid; gap: 2px; margin-top: 4px; }
+.row { display: flex; align-items: center; gap: 8px; min-height: 38px; }
+.row .t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.row.done .t { color: var(--mut); text-decoration: line-through; }
+.row .q { color: var(--mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row .pr { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+.row a { text-decoration: none; }
+.cb { --cb-box: 34px; }
+.totals { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 14px; }
+.totals b { font-variant-numeric: tabular-nums; }
+.addrow { display: flex; gap: 6px; margin-top: 6px; }
+.addrow input { flex: 1; min-width: 0; }
+.addrow input.n { flex: 0 0 64px; }
+.more { margin-top: 4px; font-size: 13px; color: var(--ac); background: none; padding: 4px 0; font-weight: 600; }
+
+/* Markdown */
+.md { font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.md.clip { max-height: 13em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+.md h1, .md h2, .md h3 { margin: .8em 0 .3em; line-height: 1.25; } .md h1 { font-size: 1.3em; } .md h2 { font-size: 1.15em; } .md h3 { font-size: 1.05em; }
+.md p, .md ul, .md ol, .md pre, .md blockquote, .md table { margin: .5em 0; }
+.md ul, .md ol { padding-left: 1.4em; }
+.md code { font-family: var(--f-mono); font-size: .9em; background: var(--card2); padding: .1em .35em; border-radius: 6px; }
+.md pre { background: var(--card2); padding: 10px 12px; border-radius: var(--r-s); overflow: auto; }
+.md pre code { background: none; padding: 0; }
+.md blockquote { border-left: 3px solid var(--ac); padding: 2px 0 2px 10px; color: var(--mut); }
+.md img { max-width: 100%; border-radius: var(--r-s); }
+.md table { border-collapse: collapse; } .md td, .md th { border: 1px solid var(--line); padding: 4px 8px; }
+
+/* Édition */
+.edit { display: grid; gap: 8px; margin-top: 8px; }
+.edit textarea { min-height: 9em; font-family: var(--f-mono); font-size: 14px; }
+.edit .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.edit .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.edit .btns .danger { color: var(--err); }
+.edit label { font-size: 13px; color: var(--mut); font-weight: 600; margin-bottom: -4px; }
+.erows { display: grid; gap: 6px; }
+.erow { display: flex; gap: 6px; align-items: center; }
+.erow input { min-width: 0; flex: 1; }
+.erow input.n { flex: 0 0 62px; }
+.erow input.p { flex: 0 0 78px; }
+
+/* Bouton d'ajout flottant */
+.fab { position: fixed; right: max(16px, calc(50vw - 380px + 16px)); bottom: calc(18px + env(safe-area-inset-bottom,0px)); z-index: 9; height: 54px; padding: 0 22px; border-radius: 999px;
+  background: var(--grad); color: var(--on-ac); font-weight: 700; font-size: 16px; box-shadow: 0 8px 22px color-mix(in srgb, var(--ac) 40%, transparent); transition: transform .12s; }
+.fab:active { transform: scale(.95); }
+
+/* Feuilles */
+.types { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.types .btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 12px; }
+.types .btn b { font-size: 15px; } .types .btn small { color: var(--mut); font-weight: 500; }
+.emojis { display: flex; flex-wrap: wrap; gap: 4px; }
+.emojis button { width: 40px; height: 40px; border-radius: var(--r-s); background: var(--card2); font-size: 20px; }
+.emojis button.on { box-shadow: 0 0 0 2px var(--ac); }
+.colors { display: flex; flex-wrap: wrap; gap: 8px; }
+.colors button { width: 32px; height: 32px; border-radius: 50%; background: var(--c); border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line); }
+.colors button.on { box-shadow: 0 0 0 3px var(--ac); }
+.sheet textarea { height: 30vh; font-family: var(--f-mono); font-size: 13px; }
+.pick { display: grid; gap: 6px; }
+.pick .btn { justify-content: flex-start; text-align: left; }
+
+.empty { text-align: center; color: var(--mut); padding: 48px 20px; }
+.empty b { display: block; font-size: 44px; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="appicon" href="./" data-home aria-label="Accueil WebApps" title="Accueil WebApps"><img src="icons/notebook.svg" alt="" width="36" height="36"></a>
+    <div class="grow">
+      <h1 class="brand">Notebook</h1>
+      <div class="subtitle" id="sub"></div>
+    </div>
+    <button class="iconbtn themebtn" data-theme-toggle></button>
+    <button class="iconbtn" id="btnMenu" aria-label="Menu">⋯</button>
+  </div>
+</header>
+
+<main id="main"></main>
+<button class="fab" id="fab"></button>
+
+<dialog class="sheet" id="dlg"><div class="inner" id="dlgIn"></div></dialog>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script>
+'use strict';
+/* ---------- données ----------
+   Un projet = une clé « notebook.p.<id> » (synchronisée à part : deux appareils peuvent modifier deux
+   projets différents sans conflit). Un projet : {id, name, emoji, color, pinned, archived, pos, items:[…]}.
+   Éléments : link {url,title,note} · gh {url,owner,repo,note,info} · note {title,md} · check {title,rows:[{id,t,done}]}
+   · buy {title,rows:[{id,t,qty,price,url,done}]} · pbd {cid,name,note}. Tous : id, tags[]. */
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const PREFIX = 'notebook.', PK = id => 'p.' + id;
+const pb = new PBStore({ app: 'notebook', prefix: PREFIX, sharedAuth: true });
+
+const TYPES = {
+  link:  { ic: '🔗', name: 'Lien', help: 'une page web' },
+  gh:    { ic: '🐙', name: 'Dépôt GitHub', help: 'description, langage, activité' },
+  note:  { ic: '📝', name: 'Note', help: 'texte en Markdown' },
+  check: { ic: '☑️', name: 'Liste à cocher', help: 'outillage, étapes…' },
+  buy:   { ic: '🛒', name: 'Liste d\'achat', help: 'quantités, prix, liens' },
+  pbd:   { ic: '🧩', name: 'Circuit ProtoBoard', help: 'un circuit de la bibliothèque' },
+};
+const EMOJIS = ['📁','🤖','🛰️','🚗','🔌','💡','🌱','🎮','⌚','📟','🖥️','🧪','🔧','📡','🎛️','🏠','📚','✈️','🎵','⭐'];
+const COLORS = ['#7c5cff','#e0457b','#ff9f43','#f5c518','#1fbf8f','#0a7c9c','#3b82f6','#8b5e3c','#6b7280'];
+
+function loadAll(){
+  const out = [];
+  for (let i = 0; i < localStorage.length; i++){
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(PREFIX + 'p.')) continue;
+    const p = norm(pb.get(k.slice(PREFIX.length))); if (p) out.push(p);
+  }
+  return out;
+}
+function norm(p){
+  if (!p || typeof p !== 'object' || !p.id) return null;
+  return { id: String(p.id), name: String(p.name || 'Projet'), emoji: p.emoji || '📁', color: p.color || COLORS[0], pinned: !!p.pinned, archived: !!p.archived,
+    pos: +p.pos || 0, items: (Array.isArray(p.items) ? p.items : []).filter(it => it && TYPES[it.type]).map(it => ({ ...it, id: it.id || uid(), tags: Array.isArray(it.tags) ? it.tags : [] })) };
+}
+let projects = loadAll();
+const getP = id => projects.find(p => p.id === id);
+function save(p){ pb.set(PK(p.id), p); }
+function sorted(list){ return list.slice().sort((a, b) => (b.pinned - a.pinned) || (a.pos - b.pos) || a.name.localeCompare(b.name)); }
+
+/* ---------- état de l'affichage (adresse : #p/<id>, pour le bouton retour du téléphone) ---------- */
+const ui = { pid: null, editing: null, q: '', tag: null, archived: false, open: new Set() };
+function route(){
+  const m = location.hash.match(/^#p\/([\w-]+)/);
+  ui.pid = m && getP(m[1]) ? m[1] : null; ui.editing = null;
+  render(); scrollTo(0, 0);
+}
+function go(pid){ location.hash = pid ? '#p/' + pid : ''; }
+window.addEventListener('hashchange', route);
+
+/* ---------- utilitaires ---------- */
+function toast(t, err){
+  const e = $('#toast'); e.textContent = t; e.className = 'toast' + (err ? ' err' : ''); e.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => e.hidden = true, 2600);
+}
+const safeUrl = u => { u = String(u || '').trim(); if (!u) return ''; return /^(https?:|mailto:|tel:)/i.test(u) ? u : 'https://' + u.replace(/^\/+/, ''); };
+const host = u => { try { return new URL(safeUrl(u)).hostname.replace(/^www\./, ''); } catch { return u; } };
+const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
+const euro = n => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const ago = t => { if (!t) return ''; const d = (Date.now() - new Date(t)) / 864e5;
+  return d < 1 ? 'aujourd\'hui' : d < 2 ? 'hier' : d < 31 ? `il y a ${Math.floor(d)} j` : d < 365 ? `il y a ${Math.floor(d/30.4)} mois` : `il y a ${(d/365).toFixed(1).replace('.', ',')} an(s)`; };
+const parseTags = s => [...new Set(String(s || '').split(/[,;#]/).map(t => t.trim().toLowerCase()).filter(Boolean))];
+const ghParse = u => { const m = String(u || '').match(/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:[\/#?].*)?$/i); return m ? { owner: m[1], repo: m[2] } : null; };
+function md(text){
+  if (window.marked && window.DOMPurify){
+    const h = DOMPurify.sanitize(marked.parse(String(text || ''), { gfm: true, breaks: true }));
+    const d = document.createElement('div'); d.innerHTML = h;
+    d.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
+    return d.innerHTML;
+  }
+  return `<p style="white-space:pre-wrap">${esc(text)}</p>`;
+}
+function itemText(it){
+  return [it.title, it.url, it.note, it.md, it.name, it.owner, it.repo, it.info && it.info.desc, ...(it.rows || []).map(r => r.t), ...(it.tags || [])].filter(Boolean).join(' ').toLowerCase();
+}
+function itemTitle(it){
+  if (it.type === 'link') return it.title || host(it.url) || 'Lien';
+  if (it.type === 'gh') return it.owner ? `${it.owner}/${it.repo}` : 'Dépôt GitHub';
+  if (it.type === 'pbd') { const c = pbdCircuit(it.cid); return c ? c.name : (it.name || 'Circuit'); }
+  return it.title || TYPES[it.type].name;
+}
+
+/* ---------- circuits ProtoBoard (référencés : lus dans la bibliothèque de ProtoBoard, même navigateur) ---------- */
+const PBD_PREFIX = 'protoboard.circuit.';
+function pbdCircuits(){
+  const out = [];
+  for (let i = 0; i < localStorage.length; i++){
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(PBD_PREFIX)) continue;
+    try { const c = JSON.parse(localStorage.getItem(k)); if (c && c.id && c.name && c.doc) out.push(c); } catch {}
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+const pbdCircuit = id => { try { const c = JSON.parse(localStorage.getItem(PBD_PREFIX + id)); return c && c.doc ? c : null; } catch { return null; } };
+// En développement les pages gardent leur préfixe d'ordre (06_…) ; publiées (build.py), elles le perdent.
+const pbdPage = () => (/\/\d+_[^/]*$/.test(location.pathname) ? '06_' : '') + 'protoboard_designer.html';
+
+/* ---------- GitHub : infos publiques du dépôt (API sans compte : ~60 requêtes / heure) ---------- */
+async function ghFetch(it){
+  const base = `https://api.github.com/repos/${it.owner}/${it.repo}`;
+  const r = await fetch(base, { headers: { Accept: 'application/vnd.github+json' } });
+  if (r.status === 404) throw new Error('dépôt introuvable (ou privé)');
+  if (r.status === 403 || r.status === 429) throw new Error('limite de l\'API GitHub atteinte, réessaie plus tard');
+  if (!r.ok) throw new Error('GitHub : erreur ' + r.status);
+  const d = await r.json();
+  let prs = null;
+  try {   // nombre de PR ouvertes : une PR par page, le numéro de la dernière page = le total
+    const q = await fetch(base + '/pulls?state=open&per_page=1');
+    if (q.ok){ const link = q.headers.get('link') || '', m = link.match(/[?&]page=(\d+)>; rel="last"/); prs = m ? +m[1] : (await q.json()).length; }
+  } catch {}
+  return { desc: d.description || '', lang: d.language || '', stars: d.stargazers_count || 0, pushed: d.pushed_at, issues: Math.max(0, (d.open_issues_count || 0) - (prs || 0)),
+    prs, branch: d.default_branch, archived: !!d.archived, fork: !!d.fork, at: Date.now() };
+}
+async function ghRefresh(p, it, quiet){
+  try { it.info = await ghFetch(it); save(p); render(); if (!quiet) toast('Infos GitHub mises à jour.'); }
+  catch (e) { if (!quiet) toast(e.message || 'GitHub injoignable', true); }
+}
+
+/* ---------- rendu ---------- */
+function render(){
+  const p = ui.pid && getP(ui.pid);
+  const active = projects.filter(x => !x.archived);
+  $('#sub').textContent = p ? p.name : `${active.length} projet${active.length > 1 ? 's' : ''} · ${active.reduce((n, x) => n + x.items.length, 0)} élément(s)`;
+  $('#fab').textContent = p ? '+ Ajouter' : '+ Projet';
+  $('#main').innerHTML = p ? projectHTML(p) : homeHTML();
+}
+function allTags(list){
+  const n = new Map(); list.forEach(p => p.items.forEach(it => it.tags.forEach(t => n.set(t, (n.get(t) || 0) + 1))));
+  return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(e => e[0]);
+}
+function tagChips(tags){
+  if (!tags.length) return '';
+  return `<div class="chips">${tags.map(t => `<button class="chip ${ui.tag === t ? 'on' : ''}" data-a="tag" data-v="${esc(t)}">#${esc(t)}</button>`).join('')}</div>`;
+}
+function homeHTML(){
+  return `<div class="search"><input type="search" id="q" placeholder="Chercher dans tous les projets…" value="${esc(ui.q)}" autocomplete="off"></div><div id="hbody">${homeBody()}</div>`;
+}
+function homeBody(){
+  const q = ui.q.trim().toLowerCase(), pool = projects.filter(p => !p.archived);
+  let h = tagChips(allTags(pool));
+  if (q || ui.tag){   // résultats : éléments de tous les projets (non archivés)
+    const res = [];
+    pool.forEach(p => p.items.forEach(it => { if ((!ui.tag || it.tags.includes(ui.tag)) && (!q || itemText(it).includes(q))) res.push([p, it]); }));
+    const pr = q ? pool.filter(p => p.name.toLowerCase().includes(q)) : [];
+    if (pr.length) h += `<div class="sect">Projets</div><div class="projects">${pr.map(projCard).join('')}</div>`;
+    h += `<div class="sect">Éléments (${res.length})</div>`;
+    h += res.length ? `<div class="items">${res.map(([p, it]) => itemHTML(p, it, true)).join('')}</div>` : '<p class="muted" style="margin:4px">Aucun élément trouvé.</p>';
+    return h;
+  }
+  if (!projects.length) return h + `<div class="empty"><b class="bob">📒</b>Aucun projet pour l'instant.<br>« + Projet » pour commencer.</div>`;
+  h += `<div class="projects" id="plist">${sorted(pool).map(projCard).join('')}</div>`;
+  const arch = projects.filter(p => p.archived);
+  if (arch.length){
+    h += `<div class="sect"><button class="chip ${ui.archived ? 'on' : ''}" data-a="showarch">🗄 Archives (${arch.length})</button></div>`;
+    if (ui.archived) h += `<div class="projects">${sorted(arch).map(projCard).join('')}</div>`;
+  }
+  return h;
+}
+function projCard(p){
+  const n = p.items.length;
+  return `<button class="proj ${p.archived ? 'arch' : ''}" style="--c:${esc(p.color)}" data-a="open" data-id="${p.id}">
+    <span class="em">${esc(p.emoji)}</span><span style="min-width:0"><div class="nm">${esc(p.name)}</div><div class="ct">${n ? n + ' élément' + (n > 1 ? 's' : '') : 'vide'}</div></span>
+    ${p.pinned ? '<span class="pin" title="Épinglé">📌</span>' : ''}</button>`;
+}
+function projectHTML(p){
+  let h = `<div class="phead" style="--c:${esc(p.color)}"><button class="mini" data-a="home" aria-label="Retour aux projets">‹</button><span class="bar"></span><span class="em">${esc(p.emoji)}</span><h2>${esc(p.name)}</h2>
+    <button class="mini" data-a="pedit" aria-label="Modifier le projet" title="Nom, emoji, couleur, épingler, archiver">✎</button></div>`;
+  const tags = allTags([p]);
+  h += tagChips(tags);
+  const list = p.items.filter(it => !ui.tag || it.tags.includes(ui.tag));
+  if (!p.items.length) return h + `<div class="empty"><b class="bob">${esc(p.emoji)}</b>Projet vide.<br>« + Ajouter » : lien, dépôt GitHub, note, liste, achats, circuit…</div>`;
+  return h + `<div class="items" id="ilist">${list.map(it => itemHTML(p, it, false)).join('')}</div>`;
+}
+function itemHTML(p, it, withProject){
+  const t = TYPES[it.type], ed = ui.editing === it.id;
+  let head = `<div class="ih">${withProject ? '' : '<span class="dh" data-drag aria-label="Déplacer"></span>'}<span class="ty">${t.ic}</span><span class="tt">`;
+  if (it.type === 'link' && it.url) head += `<a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener">${esc(itemTitle(it))}</a>`;
+  else if (it.type === 'gh' && it.owner) head += `<a href="https://github.com/${esc(it.owner)}/${esc(it.repo)}" target="_blank" rel="noopener">${esc(itemTitle(it))}</a>`;
+  else head += esc(itemTitle(it));
+  if (withProject) head += ` <span class="proj-of">· ${esc(p.emoji)} ${esc(p.name)}</span>`;
+  head += `</span>`;
+  if (it.type === 'gh' && it.owner && !ed) head += `<button class="mini" data-a="ghref" title="Rafraîchir les infos GitHub">↻</button>`;
+  head += withProject ? `<button class="mini" data-a="goto" title="Ouvrir le projet">›</button>` : `<button class="mini" data-a="edit" aria-label="Modifier" title="Modifier">✎</button>`;
+  head += '</div>';
+  let body = ed ? editHTML(p, it) : viewHTML(p, it);
+  const tags = !ed && it.tags.length ? `<div class="tagline">${it.tags.map(x => `<button class="tag" data-a="tag" data-v="${esc(x)}">#${esc(x)}</button>`).join('')}</div>` : '';
+  return `<article class="it" data-pid="${p.id}" data-id="${it.id}">${head}<div class="ib">${body}${tags}</div></article>`;
+}
+function viewHTML(p, it){
+  const note = it.note ? `<div class="note">${esc(it.note)}</div>` : '';
+  switch (it.type){
+    case 'link': return `<div class="sm">${esc(host(it.url))}</div>${note}`;
+    case 'gh': {
+      const i = it.info;
+      if (!i) return `<div class="sm">Infos non chargées · ↻ pour les récupérer</div>${note}`;
+      const bits = [i.lang && `● ${esc(i.lang)}`, `★ ${i.stars}`, i.pushed && `dernier push ${ago(i.pushed)}`, i.prs != null && `${i.prs} PR`, `${i.issues} issue${i.issues > 1 ? 's' : ''}`, i.archived && 'archivé', i.fork && 'fork'].filter(Boolean);
+      return `${i.desc ? `<div>${esc(i.desc)}</div>` : ''}<div class="gh-meta">${bits.map(b => `<span>${b}</span>`).join('')}</div><div class="sm" style="font-size:12px;margin-top:2px">infos du ${new Date(i.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>${note}`;
+    }
+    case 'note': {
+      const long = (it.md || '').split('\n').length > 10 || (it.md || '').length > 600, open = ui.open.has(it.id);
+      return `<div class="md ${long && !open ? 'clip' : ''}">${md(it.md)}</div>${long ? `<button class="more" data-a="toggle">${open ? 'Réduire' : 'Afficher tout'}</button>` : ''}`;
+    }
+    case 'check': {
+      const done = it.rows.filter(r => r.done).length;
+      return `${it.rows.length ? `<div class="progress"><i style="--c:var(--ok);width:${it.rows.length ? done / it.rows.length * 100 : 0}%"></i></div><div class="sm">${done} / ${it.rows.length}</div>` : ''}
+        <div class="rows">${it.rows.map(r => `<div class="row ${r.done ? 'done' : ''}"><button class="cb ${r.done ? 'on' : ''}" data-a="tick" data-r="${r.id}" aria-label="Cocher"></button><span class="t">${esc(r.t)}</span></div>`).join('')}</div>
+        <form class="addrow" data-a="addrow"><input type="text" name="t" placeholder="Ajouter une ligne…" autocomplete="off"><button class="btn">+</button></form>`;
+    }
+    case 'buy': {
+      const tot = it.rows.reduce((s, r) => s + num(r.qty || 1) * num(r.price), 0), left = it.rows.filter(r => !r.done).reduce((s, r) => s + num(r.qty || 1) * num(r.price), 0);
+      return `<div class="rows">${it.rows.map(r => `<div class="row ${r.done ? 'done' : ''}"><button class="cb ${r.done ? 'on' : ''}" data-a="tick" data-r="${r.id}" aria-label="Acheté"></button>
+          <span class="q">${esc(r.qty || 1)} ×</span><span class="t">${r.url ? `<a href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener">${esc(r.t)} ↗</a>` : esc(r.t)}</span>${num(r.price) ? `<span class="pr">${euro(num(r.qty || 1) * num(r.price))}</span>` : ''}</div>`).join('')}</div>
+        <form class="addrow" data-a="addrow"><input type="text" name="t" placeholder="Article…" autocomplete="off"><input class="n" type="text" name="qty" placeholder="Qté" inputmode="decimal"><input class="n" type="text" name="price" placeholder="Prix" inputmode="decimal"><button class="btn">+</button></form>
+        ${it.rows.length ? `<div class="totals"><span>Reste à acheter <b>${euro(left)}</b></span><span>Total <b>${euro(tot)}</b></span></div>` : ''}`;
+    }
+    case 'pbd': {
+      const c = pbdCircuit(it.cid);
+      if (!c) return `<div class="sm">⚠ Circuit introuvable dans la bibliothèque de ProtoBoard de ce navigateur (supprimé, ou pas encore synchronisé).</div>${note}`;
+      const d = c.doc, when = c.t;
+      return `<div class="sm">${d.parts.length} pièce(s) · ${d.wires.length} fil(s)${d.board ? ` · plaque ${d.board.w} × ${d.board.h}` : ''}${when ? ' · modifié ' + ago(when) : ''}</div>${note}
+        <div style="margin-top:8px"><a class="btn" href="${pbdPage()}#open=${encodeURIComponent(c.id)}">🧩 Ouvrir dans ProtoBoard</a></div>`;
+    }
+  }
+  return '';
+}
+function editHTML(p, it){
+  const tags = `<label>Étiquettes (séparées par des virgules)</label><input type="text" name="tags" value="${esc(it.tags.join(', '))}" placeholder="esp32, à acheter…" autocomplete="off">`;
+  const btns = `<div class="btns"><button class="btn primary" data-a="esave">Enregistrer</button><button class="btn" type="button" data-a="ecancel">Annuler</button>
+    <button class="btn" type="button" data-a="emove">Déplacer…</button><button class="btn danger" type="button" data-a="edel">Supprimer</button></div>`;
+  let f = '';
+  const note = `<label>Note</label><textarea name="note" style="min-height:4em;font-family:var(--f-ui)" placeholder="Pourquoi ce lien, ce qu'il faut retenir…">${esc(it.note || '')}</textarea>`;
+  switch (it.type){
+    case 'link': f = `<label>Adresse</label><input type="url" name="url" value="${esc(it.url || '')}" placeholder="https://…" inputmode="url" autocomplete="off">
+      <label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="(par défaut : le nom du site)">${note}`; break;
+    case 'gh': f = `<label>Dépôt</label><input type="url" name="url" value="${esc(it.url || (it.owner ? `https://github.com/${it.owner}/${it.repo}` : ''))}" placeholder="https://github.com/propriétaire/dépôt" inputmode="url" autocomplete="off">${note}`; break;
+    case 'note': f = `<label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Titre de la note">
+      <label>Texte (Markdown)</label><textarea name="md" placeholder="# Titre&#10;- une liste&#10;**gras**, \`code\`, [lien](https://…)">${esc(it.md || '')}</textarea>`; break;
+    case 'check': f = `<label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Outillage, étapes…">
+      <label>Lignes</label><div class="erows">${it.rows.map(r => `<div class="erow" data-r="${r.id}"><input type="text" name="rt" value="${esc(r.t)}"><button class="mini" type="button" data-a="rdel" aria-label="Retirer">✕</button></div>`).join('')}</div>`; break;
+    case 'buy': f = `<label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Commande AliExpress…">
+      <label>Articles : nom, quantité, prix unitaire (€), lien</label><div class="erows">${it.rows.map(r => `<div class="erow" data-r="${r.id}" style="flex-wrap:wrap"><input type="text" name="rt" value="${esc(r.t)}" style="flex:1 1 60%">
+        <input class="n" type="text" name="rq" value="${esc(r.qty || 1)}" inputmode="decimal" aria-label="Quantité"><input class="p" type="text" name="rp" value="${esc(r.price || '')}" inputmode="decimal" placeholder="Prix" aria-label="Prix unitaire">
+        <input type="url" name="ru" value="${esc(r.url || '')}" placeholder="Lien (boutique)" inputmode="url" style="flex:1 1 60%"><button class="mini" type="button" data-a="rdel" aria-label="Retirer">✕</button></div>`).join('')}</div>`; break;
+    case 'pbd': {
+      const list = pbdCircuits();
+      f = `<label>Circuit</label><select name="cid">${list.map(c => `<option value="${esc(c.id)}" ${c.id === it.cid ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}${list.some(c => c.id === it.cid) ? '' : `<option value="${esc(it.cid)}" selected>${esc(it.name || 'introuvable')}</option>`}</select>${note}`;
+      break;
+    }
+  }
+  return `<form class="edit" data-a="eform" novalidate>${f}${tags}${btns}</form>`;
+}
+
+/* ---------- actions ---------- */
+function findItem(el){
+  const a = el.closest('.it'); if (!a) return {};
+  const p = getP(a.dataset.pid); return { p, it: p && p.items.find(x => x.id === a.dataset.id) };
+}
+function newProject(){
+  const p = { id: uid(), name: 'Nouveau projet', emoji: EMOJIS[0], color: COLORS[projects.length % COLORS.length], pinned: false, archived: false,
+    pos: Math.max(0, ...projects.map(x => x.pos)) + 1, items: [] };
+  projects.push(p); save(p); sheetProject(p, true);
+}
+function addItem(p, type, extra){
+  const it = { id: uid(), type, tags: ui.tag ? [ui.tag] : [], ...(type === 'check' || type === 'buy' ? { rows: [] } : {}), ...extra };
+  p.items.unshift(it); save(p);
+  ui.editing = type === 'pbd' ? null : it.id; render();
+  const el = document.querySelector(`.it[data-id="${it.id}"]`);
+  if (el){ el.scrollIntoView({ block: 'center' }); const i = el.querySelector('.edit input,.edit textarea'); if (i) i.focus(); }
+}
+function readForm(form, p, it){
+  const v = n => { const e = form.elements[n]; return e ? e.value.trim() : ''; };
+  it.tags = parseTags(v('tags'));
+  if ('note' in form.elements) it.note = v('note');
+  if (it.type === 'link'){ it.url = safeUrl(v('url')); it.title = v('title'); }
+  if (it.type === 'gh'){
+    const g = ghParse(v('url'));
+    if (!g){ toast('Adresse GitHub attendue : github.com/propriétaire/dépôt', true); return false; }
+    const changed = g.owner !== it.owner || g.repo !== it.repo;
+    Object.assign(it, g, { url: `https://github.com/${g.owner}/${g.repo}` });
+    if (changed){ delete it.info; setTimeout(() => ghRefresh(p, it, true), 0); }
+  }
+  if (it.type === 'note'){ it.title = v('title'); it.md = form.elements.md.value; }
+  if (it.type === 'check' || it.type === 'buy'){
+    it.title = v('title');
+    it.rows = [...form.querySelectorAll('.erow')].map(row => {
+      const r = it.rows.find(x => x.id === row.dataset.r) || { id: row.dataset.r };
+      const g = n => { const e = row.querySelector(`[name=${n}]`); return e ? e.value.trim() : ''; };
+      r.t = g('rt');
+      if (it.type === 'buy'){ r.qty = g('rq') || '1'; r.price = g('rp'); r.url = g('ru') ? safeUrl(g('ru')) : ''; }
+      return r;
+    }).filter(r => r.t);
+  }
+  if (it.type === 'pbd'){ it.cid = v('cid'); const c = pbdCircuit(it.cid); if (c) it.name = c.name; }
+  return true;
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-a]'); if (!b || b.closest('dialog')) return;
+  const a = b.dataset.a, { p, it } = findItem(b);
+  switch (a){
+    case 'open': go(b.dataset.id); break;
+    case 'home': go(null); break;
+    case 'goto': if (p){ go(p.id); setTimeout(() => { const el = document.querySelector(`.it[data-id="${it.id}"]`); if (el){ el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); } }, 50); } break;
+    case 'showarch': ui.archived = !ui.archived; render(); break;
+    case 'tag': ui.tag = ui.tag === b.dataset.v ? null : b.dataset.v; render(); break;
+    case 'pedit': sheetProject(getP(ui.pid)); break;
+    case 'edit': ui.editing = ui.editing === it.id ? null : it.id; render(); break;
+    case 'ecancel': ui.editing = null; render(); break;
+    case 'edel':
+      if (!b.dataset.armed){ b.dataset.armed = 1; b.textContent = 'Confirmer ?'; return; }
+      p.items = p.items.filter(x => x !== it); ui.editing = null; save(p); render(); toast('Élément supprimé.'); break;
+    case 'emove': sheetMove(p, it); break;
+    case 'rdel': b.closest('.erow').remove(); break;
+    case 'toggle': ui.open.has(it.id) ? ui.open.delete(it.id) : ui.open.add(it.id); render(); break;
+    case 'ghref': ghRefresh(p, it); break;
+    case 'tick': { const r = it.rows.find(x => x.id === b.dataset.r); if (r){ r.done = !r.done; save(p); render(); } break; }
+  }
+});
+document.addEventListener('submit', e => {
+  const f = e.target; e.preventDefault();
+  const { p, it } = findItem(f); if (!it) return;
+  if (f.dataset.a === 'addrow'){
+    const t = f.elements.t.value.trim(); if (!t){ f.elements.t.focus(); return; }
+    const r = { id: uid(), t, done: false };
+    if (it.type === 'buy'){ r.qty = (f.elements.qty.value.trim() || '1').replace(',', '.'); r.price = f.elements.price.value.trim().replace(',', '.'); }
+    it.rows.push(r); save(p); render();
+    const nf = document.querySelector(`.it[data-id="${it.id}"] .addrow input`); if (nf) nf.focus();
+  }
+  if (f.dataset.a === 'eform'){ if (readForm(f, p, it)){ ui.editing = null; save(p); render(); } }
+});
+document.addEventListener('input', e => { if (e.target.id === 'q'){ ui.q = e.target.value; $('#hbody').innerHTML = homeBody(); } });
+$('#fab').onclick = () => { const p = ui.pid && getP(ui.pid); if (p) sheetAdd(p); else newProject(); };
+
+/* ---------- feuilles ---------- */
+const dlg = $('#dlg'); let dlgFn = null;
+function openDlg(html, fn){ $('#dlgIn').innerHTML = '<div class="grab"></div>' + html; dlgFn = fn; if (!dlg.open) dlg.showModal(); }
+function closeDlg(){ if (dlg.open) dlg.close(); }
+dlg.addEventListener('click', e => {
+  if (e.target === dlg){ closeDlg(); return; }
+  const b = e.target.closest('[data-a]'); if (b && dlgFn) dlgFn(b.dataset.a, b);
+});
+function sheetAdd(p){
+  openDlg(`<h2>Ajouter à ${esc(p.emoji)} ${esc(p.name)}</h2><div class="types">${Object.entries(TYPES).map(([k, t]) =>
+    `<button class="btn" data-a="t" data-v="${k}"><b>${t.ic} ${t.name}</b><small>${t.help}</small></button>`).join('')}</div>`, (a, b) => {
+    if (a !== 't') return;
+    if (b.dataset.v === 'pbd') return sheetPbd(p);
+    closeDlg(); addItem(p, b.dataset.v);
+  });
+}
+function sheetPbd(p){
+  const list = pbdCircuits();
+  openDlg(`<h2>🧩 Circuit ProtoBoard</h2>${list.length ? `<p>Le Notebook garde un lien vers le circuit : il reste dans la bibliothèque de ProtoBoard, toujours à jour.</p>
+    <div class="pick">${list.map(c => `<button class="btn" data-a="c" data-id="${esc(c.id)}">🧩 ${esc(c.name)} <small class="muted">· ${c.doc.parts.length} pièce(s)</small></button>`).join('')}</div>`
+    : `<p>Aucun circuit enregistré dans ProtoBoard sur ce navigateur. Dans ProtoBoard : menu → Enregistrer, puis reviens ici.</p>`}
+    <div class="btns"><a class="btn" href="${pbdPage()}">Ouvrir ProtoBoard</a></div>`, (a, b) => {
+    if (a !== 'c') return;
+    const c = pbdCircuit(b.dataset.id); closeDlg(); addItem(p, 'pbd', { cid: b.dataset.id, name: c ? c.name : '' });
+  });
+}
+function sheetMove(p, it){
+  const others = sorted(projects.filter(x => x !== p && !x.archived));
+  openDlg(`<h2>Déplacer vers…</h2>${others.length ? `<div class="pick">${others.map(x => `<button class="btn" data-a="m" data-id="${x.id}">${esc(x.emoji)} ${esc(x.name)}</button>`).join('')}</div>` : '<p>Aucun autre projet.</p>'}`, (a, b) => {
+    if (a !== 'm') return;
+    const to = getP(b.dataset.id); if (!to) return;
+    p.items = p.items.filter(x => x !== it); to.items.unshift(it); ui.editing = null;
+    save(p); save(to); closeDlg(); render(); toast(`Déplacé vers ${to.name}.`);
+  });
+}
+function sheetProject(p, isNew){
+  if (!p) return;
+  openDlg(`<h2>${isNew ? 'Nouveau projet' : 'Projet'}</h2>
+    <div class="form" style="display:grid;gap:10px">
+      <input type="text" id="pName" value="${esc(isNew ? '' : p.name)}" placeholder="Nom du projet" autocomplete="off">
+      <div class="emojis">${EMOJIS.map(x => `<button data-a="em" data-v="${x}" class="${x === p.emoji ? 'on' : ''}">${x}</button>`).join('')}</div>
+      <div class="colors">${COLORS.map(c => `<button data-a="col" data-v="${c}" style="--c:${c}" class="${c === p.color ? 'on' : ''}" aria-label="Couleur ${c}"></button>`).join('')}</div>
+    </div>
+    ${isNew ? '' : `<button class="item" data-a="pin"><span class="ic">📌</span> ${p.pinned ? 'Désépingler' : 'Épingler en tête'}</button>
+    <button class="item" data-a="arch"><span class="ic">🗄</span> ${p.archived ? 'Sortir des archives' : 'Archiver'}</button>
+    <button class="item" data-a="pdel"><span class="ic">🗑</span> Supprimer le projet<span class="sw">${p.items.length} élément(s)</span></button>`}
+    <div class="btns"><button class="btn primary" data-a="ok">${isNew ? 'Créer' : 'Enregistrer'}</button></div>`, (a, b) => {
+    const name = () => $('#pName').value.trim();
+    if (a === 'em'){ p.emoji = b.dataset.v; $$('.emojis button').forEach(x => x.classList.toggle('on', x === b)); }
+    if (a === 'col'){ p.color = b.dataset.v; $$('.colors button').forEach(x => x.classList.toggle('on', x === b)); }
+    if (a === 'pin'){ p.pinned = !p.pinned; if (name()) p.name = name(); save(p); closeDlg(); render(); }
+    if (a === 'arch'){ p.archived = !p.archived; if (name()) p.name = name(); save(p); closeDlg(); if (p.archived) go(null); render(); toast(p.archived ? 'Projet archivé.' : 'Projet sorti des archives.'); }
+    if (a === 'pdel'){
+      if (!b.dataset.armed){ b.dataset.armed = 1; b.lastChild.textContent = ' Confirmer : supprimer définitivement'; return; }
+      projects = projects.filter(x => x !== p); pb.remove(PK(p.id)); closeDlg(); go(null); render(); toast('Projet supprimé.');
+    }
+    if (a === 'ok'){ p.name = name() || p.name; save(p); closeDlg(); if (isNew) go(p.id); else render(); }
+  });
+  setTimeout(() => $('#pName') && $('#pName').focus(), 50);
+}
+function sheetMenu(){
+  openDlg(`<button class="item" data-a="exp"><span class="ic">⬇</span> Exporter (JSON)</button>
+    <button class="item" data-a="imp"><span class="ic">⬆</span> Importer…</button>
+    <button class="item" data-a="sync"><span class="ic">☁</span> Synchronisation<span class="sw" id="syncSw">${pb.connected ? esc(pb.email) : 'non connecté'}</span></button>
+    <button class="item" data-theme-toggle><span class="ic" data-theme-icon></span> Thème<span class="sw" data-theme-name></span></button>`, a => {
+    if (a === 'exp'){
+      const txt = JSON.stringify({ app: 'notebook', version: 1, projects }, null, 1);
+      const blob = new Blob([txt], { type: 'application/json' }), l = document.createElement('a');
+      l.href = URL.createObjectURL(blob); l.download = 'notebook.json'; document.body.append(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(l.href), 1000);
+      closeDlg(); toast('Exporté.');
+    }
+    if (a === 'imp') sheetImport();
+    if (a === 'sync'){ closeDlg(); sync.open(); }
+  });
+  if (window.WebAppsTheme) WebAppsTheme.set(WebAppsTheme.get());
+}
+function sheetImport(){
+  openDlg(`<h2>Importer</h2><p>Un export du Notebook. Les projets déjà présents (même identifiant) sont remplacés, les autres ajoutés.</p>
+    <textarea id="impText" placeholder="Colle ici…"></textarea>
+    <div class="btns"><input type="file" id="impFile" accept=".json,application/json"><button class="btn primary" data-a="go">Importer</button></div>`, a => {
+    if (a !== 'go') return;
+    let d; try { d = JSON.parse($('#impText').value); } catch { toast('JSON illisible.', true); return; }
+    const list = (d && Array.isArray(d.projects) ? d.projects : []).map(norm).filter(Boolean);
+    if (!list.length){ toast('Aucun projet trouvé.', true); return; }
+    list.forEach(p => { projects = projects.filter(x => x.id !== p.id); projects.push(p); save(p); });
+    closeDlg(); render(); toast(`${list.length} projet(s) importé(s).`);
+  });
+  $('#impFile').onchange = e => { const f = e.target.files[0]; if (f) f.text().then(t => $('#impText').value = t); };
+}
+$('#btnMenu').onclick = sheetMenu;
+
+/* ---------- réordonner au doigt (poignée ⋮⋮ des éléments) ---------- */
+let drag = null;
+document.addEventListener('pointerdown', e => {
+  const h = e.target.closest('[data-drag]'); if (!h) return;
+  const card = h.closest('.it'), list = card.parentElement;
+  e.preventDefault(); h.setPointerCapture(e.pointerId);
+  const ind = document.createElement('div'); ind.className = 'drop-ind'; document.body.append(ind);
+  drag = { card, list, ind, h, to: null }; card.classList.add('drag-src'); document.body.classList.add('dragging');
+});
+document.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const cards = [...drag.list.children].filter(c => c.classList.contains('it'));
+  let to = cards.length, y = 0;
+  for (let i = 0; i < cards.length; i++){ const r = cards[i].getBoundingClientRect(); if (e.clientY < r.top + r.height / 2){ to = i; break; } }
+  const ref = cards[to] ? cards[to].getBoundingClientRect() : cards[cards.length - 1].getBoundingClientRect();
+  y = cards[to] ? ref.top - 6 : ref.bottom + 4;
+  const lr = drag.list.getBoundingClientRect();
+  Object.assign(drag.ind.style, { left: lr.left + 'px', width: lr.width + 'px', top: y + 'px' });
+  drag.to = to;
+  if (e.clientY < 70) scrollBy(0, -12); else if (e.clientY > innerHeight - 70) scrollBy(0, 12);
+});
+function endDrag(){
+  if (!drag) return;
+  const { card, ind, to } = drag; drag = null; ind.remove(); card.classList.remove('drag-src'); document.body.classList.remove('dragging');
+  if (to == null) return;
+  const p = getP(card.dataset.pid), visible = [...document.querySelectorAll('#ilist .it')].map(c => c.dataset.id);
+  const from = visible.indexOf(card.dataset.id); if (from < 0 || to === from || to === from + 1) return;
+  // Réordonne dans la liste complète (le filtre par étiquette peut masquer des éléments)
+  const it = p.items.find(x => x.id === card.dataset.id), vis = visible.filter(id => id !== it.id);
+  const beforeId = vis[to > from ? to - 1 : to], lastId = vis[vis.length - 1];
+  p.items = p.items.filter(x => x !== it);
+  const at = beforeId ? p.items.findIndex(x => x.id === beforeId) : lastId ? p.items.findIndex(x => x.id === lastId) + 1 : p.items.length;
+  p.items.splice(at, 0, it); save(p); render();
+}
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+
+/* ---------- synchronisation ---------- */
+const sync = PBSync.init(pb, {
+  adopt: projects.map(p => PK(p.id)),
+  summary: 'Les projets du Notebook sont synchronisés sur le serveur, les données sont stockées sans chiffrement. Les circuits ProtoBoard référencés le sont par ProtoBoard.',
+  note: 'Chaque projet est synchronisé à part : le plus récent l\'emporte, projet par projet.',
+  onChange(key, value){
+    if (!key.startsWith('p.')) return null;
+    const id = key.slice(2);
+    projects = projects.filter(x => x.id !== id);
+    const p = norm(value); if (p) projects.push(p);
+    if (ui.pid === id && !p) go(null);
+    if (ui.editing && !document.querySelector('.edit')) ui.editing = null;
+    render();
+    return 'Notebook mis à jour depuis un autre appareil.';
+  },
+  onStatus(t){ const e = document.getElementById('syncSw'); if (e) e.textContent = t; },
+});
+
+route();
+</script>
+</body>
+</html>
