@@ -10,6 +10,7 @@ L'équivalent de la feuille à petits carreaux : une plaque au pas de 2,54 mm su
 - **Pièces** : cartes et modules (un fichier par composant), barrettes Dupont mâles ou femelles (1 ou 2 rangées, nombre de broches au choix), module générique (nom, broches, rangées, écart, noms des broches).
 - **Placement** : glisser-déposer aligné sur les trous ; ⟳ pivoter, ⇋ retourner (module monté à l'envers), ⧉ dupliquer. Les fils accrochés aux broches suivent la pièce.
 - **Sélection multiple** : « ⬚ Sélection multiple » (ou « ⬚ Plusieurs » sur une pièce sélectionnée), puis toucher les pièces et les fils pour les ajouter ou les retirer, ou tracer un rectangle sur une zone vide (pièces entièrement dedans, fils dont tous les points sont dedans). Sur ordinateur : Maj+clic et Maj+glisser. Glisser un élément du groupe déplace tout : les fils sélectionnés et ceux qui relient deux pièces du groupe suivent en entier, les autres fils accrochés suivent par leur bout. Boutons : verrouiller/déverrouiller, dupliquer (copie à droite), supprimer (les pièces verrouillées restent), Tout, Terminer. Un groupe qui contient une pièce verrouillée ne se déplace pas.
+- **Breadboards** (Ajouter → Breadboards) : 830 (63 colonnes), 400 (30 colonnes) et 170 (mini, sans rails). Chaque demi-colonne de 5 trous est reliée, chaque rail + / − aussi sur toute sa longueur (rails continus) ; la rainure centrale fait 3 pas (un DIP s'y pose à cheval). Une broche ou un fil planté dans un trou est relié à toute sa colonne : les connexions, alertes et réseaux en tiennent compte, sans lister les trous eux-mêmes. Les breadboards se dessinent sous les autres pièces ; masquer la plaque à pastilles (menu → Plaque) pour un montage tout breadboard. Pour déplacer une breadboard avec ce qui est planté dessus : sélection multiple. Le circuit imprimé les signale (non gravables).
 - **Verrouillage** : 🔓 / 🔒 sur une pièce sélectionnée (ou L) la fige : plus de déplacement, de rotation, de retournement ni de suppression ; elle reste sélectionnable (broches, réseau, ✎ Modifier). Un cadenas s'affiche à son coin. Menu ☰ → Tout verrouiller / Tout déverrouiller. Les fils restent modifiables.
 - **Fils** : un point par coude, angles droits automatiques (désactivables), huit couleurs. Le fil se termine sur une broche ou sur un point d'un autre fil. Sur un fil sélectionné, un point se déplace au doigt, un toucher sur le fil y ajoute un point, et un point touché se retire avec « Retirer le point » (un fil garde au moins 2 points).
 - **Entre les pastilles** : le bouton « ½ Entre pastilles » accroche aussi les points au demi-pas (repères bleus), pour faire passer un fil entre deux pastilles ou le longer sans qu'il en cache un autre. Une broche proche attire toujours le point.
@@ -49,6 +50,7 @@ Ajouter → par catégorie. Les brochages viennent de la documentation courante 
 - **Capteurs** : BMP180/280, BME280, AHT20, SHT31, DHT, DS18B20, MPU6050, HC-SR04, PIR, ADS1115, DS3231, INA219.
 - **Écrans** : OLED SSD1306 (I2C, SPI), SH1106 1,3" (I2C, SPI), TFT ST7735 et ILI9341.
 - **Modules** : microSD, LoRa SX127x, NRF24L01, GPS NEO-6M, PCF8574, MCP23017, adaptateur de niveau, relais, ponts en H (L298N, TB6612, DRV8833).
+- **Breadboards** : 830, 400 et 170 trous (liaisons internes et rails continus).
 - **Cartes** : ESP32 (C3/S3 Super Mini, S3 DevKit, DevKit 30 et 38 broches), Wemos D1 mini, Arduino Nano, Pro Micro, Pico, Blue Pill, Black Pill.
 
 ### Ajouter un composant sans toucher au dépôt
@@ -86,7 +88,10 @@ ProtoBoard.component({
 | `pins` | `[{ x, y, name, type?, label? }]` : broches placées une à une, pour les formes irrégulières |
 | `notes` | texte affiché quand on touche la broche, par nom de broche |
 | `deco` | formes décoratives : `usb`, `can` (capot métallique), `antenna`, `chip`, `screen`, `coin` (pile bouton), `rect` (avec `fill`) ; `x`, `y`, `w`, `h` en pas |
-| `pinStyle` | `round` (défaut), `male`, `female` |
+| `pinStyle` | `round` (défaut), `male`, `female`, `hole` (trou de breadboard : pas de nom affiché par trou, ni de pastille dessous) |
+| `buses` | `[['A1', 'B1', …], …]` : groupes de broches reliées à l'intérieur du composant (colonnes et rails d'une breadboard) |
+| `under` | `true` : dessiné sous les autres pièces (support : breadboard) |
+| `marks` | `[{ x, y, t }]` : repères écrits sur le composant (lettres de rangées, numéros de colonnes) |
 
 Une broche s'écrit `'NOM'` ou `'NOM:type'`, avec `type` parmi `power`, `gnd`, `gpio`, `strap`, `uart`, `avoid`, `ctrl`. Sans type, `GND`/`VSS` donnent `gnd`, `VCC`/`VIN`/`VDD`/`5V`/`3V3` donnent `power`, le reste `gpio`. Le nom de la broche s'écrit vers l'intérieur du composant ; `labels: 'left'|'right'|'up'|'down'` sur une colonne ou une rangée (ou `label` sur une broche de `pins`) force un côté.
 

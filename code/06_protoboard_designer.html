@@ -156,6 +156,9 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 <script src="protoboard/components/esp32_c3_super_mini.js"></script>
 <script src="protoboard/components/esp32_s3_super_mini.js"></script>
 <script src="protoboard/components/esp32_s3_devkit_n16r8.js"></script>
+<script src="protoboard/components/breadboard_830.js"></script>
+<script src="protoboard/components/breadboard_400.js"></script>
+<script src="protoboard/components/breadboard_170.js"></script>
 <script src="protoboard/components/bme280.js"></script>
 <script src="protoboard/components/ads1115.js"></script>
 <script src="protoboard/components/ds3231.js"></script>
@@ -306,7 +309,10 @@ function compile(def){
     }
     return {name:p.name, type:pinType(p.name, p.type), x:p.x, y:p.y, d};
   });
-  return {pins:out, body, deco:def.deco || [], style:def.pinStyle || 'round', color:def.color || '#1b2a3a'};
+  // buses : groupes de broches reliées à l'intérieur du composant (colonnes et rails d'une breadboard)
+  const idx = new Map(out.map((p,i) => [p.name, i]));
+  const buses = (def.buses || []).map(b => b.map(n => idx.get(n)).filter(i => i !== undefined)).filter(b => b.length > 1);
+  return {pins:out, body, deco:def.deco || [], style:def.pinStyle || 'round', color:def.color || '#1b2a3a', buses, under:!!def.under, marks:def.marks || []};
 }
 function register(def, src){
   if (!def || typeof def !== 'object' || !def.id || !def.name) throw new Error('il faut au moins id et name');
@@ -324,7 +330,7 @@ ProtoBoard.component = d => { try { register(d, 'file'); } catch(e){} };   // fi
 function componentFile(def){
   const q = v => JSON.stringify(v).replace(/"([A-Za-z_]\w*)":/g, '$1: ').replace(/,"/g, ', "').replace(/,\{/g, ', {').replace(/,([A-Za-z_]\w*): /g, ', $1: ');
   const parts = [];
-  ['id','name','label','category','description','color','pinStyle','body','deco','columns','rows','pins','notes'].forEach(k => {
+  ['id','name','label','category','description','color','pinStyle','under','body','deco','marks','columns','rows','pins','buses','notes'].forEach(k => {
     const v = def[k]; if (v === undefined) return;
     if (Array.isArray(v) && (k === 'columns' || k === 'rows' || k === 'pins' || k === 'deco'))
       parts.push(`  ${k}: [\n${v.map(x => '    ' + q(x)).join(',\n')}\n  ]`);
@@ -392,7 +398,8 @@ function geo(p){
     Object.assign(g, {deco:[], style:'round', color:'#2e6b34'});
   } else if (LIB.has(p.type)){
     const c = LIB.get(p.type).geo;
-    g = {pins:c.pins.map(q => ({...q})), body:c.body, deco:c.deco, style:c.style, color:c.color};
+    g = {pins:c.pins.map(q => ({...q, hole:c.style === 'hole'})), body:c.body, deco:c.deco, style:c.style, color:c.color,
+      buses:c.buses, under:c.under, marks:c.marks, out:c.style === 'hole'};
   } else {
     return {pins:[], body:{x0:-.5, y0:-.5, x1:5.5, y1:2.5}, deco:[], style:'round', color:'#000', missing:true};
   }
@@ -438,6 +445,8 @@ function buildIndex(){
     if (!pinMap.has(k)) pinMap.set(k, []); pinMap.get(k).push({p, i, q, x, y});
   }));
   doc.wires.forEach(w => { w.pts.forEach(pt => vtxKeys.add(K(...pt))); for (let i = 1; i < w.pts.length; i++) union(K(...w.pts[0]), K(...w.pts[i])); });
+  doc.parts.forEach(p => { const g = geo(p);   // liaisons internes (breadboard : colonnes, rails)
+    (g.buses || []).forEach(b => { const k0 = K(...tf(p, g.pins[b[0]].x, g.pins[b[0]].y)); b.slice(1).forEach(i => union(k0, K(...tf(p, g.pins[i].x, g.pins[i].y)))); }); });
 }
 function netKeys(k){ const r = find(k), s = new Set([k]); parent.forEach((_, key) => { if (find(key) === r) s.add(key); }); return s; }
 function netPins(keys){ const out = []; keys.forEach(k => (pinMap.get(k) || []).forEach(e => out.push(e))); return out; }
@@ -486,6 +495,7 @@ function partSVG(p, g, isSel){
     return s + `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" fill="#e5484d22" stroke="#e5484d" stroke-dasharray="5 4" stroke-width="2"/></g>`;
   if (bottom){   // dessous : empreinte pâle du module, seules les pastilles de soudure comptent
     s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.out?2:5}" fill="${esc(g.color)}" fill-opacity=".14" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0006" stroke-width="1" stroke-dasharray="5 4"'}/>`;
+    if (g.style === 'hole') return s + '</g>';   // breadboard : rien à souder dessous
     g.pins.forEach(q => {
       const cx = q.x*U, cy = q.y*U;
       s += `<circle class="pb-copper" cx="${cx}" cy="${cy}" r="${U*.4}" stroke-width="1"/><circle cx="${cx}" cy="${cy}" r="${U*.4}" fill="none" stroke="${(TYPES[q.type] || TYPES.gpio).f}" stroke-width="2.4"/><circle class="pb-hole" cx="${cx}" cy="${cy}" r="${U*.12}"/>`;
@@ -496,7 +506,8 @@ function partSVG(p, g, isSel){
   g.deco.forEach(d => s += decoSVG(d));
   g.pins.forEach(q => {
     const cx = q.x*U, cy = q.y*U;
-    if (g.style === 'male') s += `<rect x="${cx-U*.28}" y="${cy-U*.28}" width="${U*.56}" height="${U*.56}" fill="#d4a72c" stroke="#8a6a12"/><rect x="${cx-U*.1}" y="${cy-U*.1}" width="${U*.2}" height="${U*.2}" fill="#f1d27a"/>`;
+    if (g.style === 'hole') s += `<rect x="${cx-U*.17}" y="${cy-U*.17}" width="${U*.34}" height="${U*.34}" rx="${U*.04}" fill="#3b3b3b"/>`;
+    else if (g.style === 'male') s += `<rect x="${cx-U*.28}" y="${cy-U*.28}" width="${U*.56}" height="${U*.56}" fill="#d4a72c" stroke="#8a6a12"/><rect x="${cx-U*.1}" y="${cy-U*.1}" width="${U*.2}" height="${U*.2}" fill="#f1d27a"/>`;
     else if (g.style === 'female') s += `<rect x="${cx-U*.3}" y="${cy-U*.3}" width="${U*.6}" height="${U*.6}" fill="#0b0b0b" stroke="#666"/>`;
     else s += `<circle cx="${cx}" cy="${cy}" r="${U*.34}" fill="${(TYPES[q.type] || TYPES.gpio).f}" stroke="#000a" stroke-width=".8"/><circle cx="${cx}" cy="${cy}" r="${U*.11}" fill="#ffffffaa"/>`;
   });
@@ -518,7 +529,8 @@ function txt(cls, X, Y, size, anchor, str, o){
 function labelsSVG(p, g){
   let s = '';
   const cls = g.out || bottom ? 'pb-out' : 'pb-in';
-  if (showLabels) g.pins.forEach(q => {
+  (g.marks || []).forEach(m => { const [wx, wy] = tf(p, m.x, m.y); s += txt('pb-out', wx*U, wy*U, m.t.length > 1 && !/^\d/.test(m.t) ? 6 : 7, 'middle', m.t, {weight:600}); });
+  if (showLabels && g.style !== 'hole') g.pins.forEach(q => {
     const [wx, wy] = tf(p, q.x, q.y), [dx, dy] = tv(p, q.d[0], q.d[1]);
     const X = wx*U + dx*U*.48, Y = wy*U + dy*U*.48;
     if (Math.abs(dx) > Math.abs(dy)) s += txt(cls, X, Y, 6.5, dx>0?'start':'end', q.name);
@@ -558,7 +570,7 @@ function sceneHTML(forExport){
     h += `<rect class="pb-board" x="${-U/2}" y="${-U/2}" width="${B.w*U}" height="${B.h*U}" rx="5" stroke-width="1.5"/>`;
     h += `<rect x="${-U/2}" y="${-U/2}" width="${B.w*U}" height="${B.h*U}" fill="url(#holes)" pointer-events="none"/>`;
   }
-  doc.parts.forEach(p => { const g = geo(p);
+  [...doc.parts.filter(p => geo(p).under), ...doc.parts.filter(p => !geo(p).under)].forEach(p => { const g = geo(p);
     h += partSVG(p, g, sel_ && ((sel_.t === 'part' && sel_.id === p.id) || (sel_.t === 'multi' && sel_.parts.includes(p.id)))) + '<g pointer-events="none">' + labelsSVG(p, g) + '</g>'; });
   if (!forExport) doc.parts.forEach(p => { if (p.lk) h += lockSVG(bboxW(p, geo(p))); });
   doc.wires.forEach(w => h += wireSVG(w, net && !net.has(K(...w.pts[0])), sel_ && ((sel_.t === 'wire' && sel_.id === w.id) || (sel_.t === 'multi' && sel_.wires.includes(w.id)))));
@@ -921,16 +933,17 @@ function updateCtx(){
       const pins = netPins(netKeys(K(...w.pts[0])));
       h += swatches(w.c) + `<div class="rowb"><button class="chip ${w.iso ? 'on' : ''}" data-a="iso" title="Fil gainé, par-dessus les soudures">Fil isolé</button><button class="chip ${half ? 'on' : ''}" data-a="half" title="Déplacer les points entre les pastilles">½ Entre pastilles</button><button class="btn" data-a="delwire">🗑 Supprimer</button></div>`;
       if (sel.vi != null && sel.vi < w.pts.length) h += `<div class="rowb"><button class="btn" data-a="delpt" ${w.pts.length <= 2 ? 'disabled' : ''}>⌫ Retirer le point</button></div>`;
-      h += `<div class="info">Réseau : ${pins.length ? pins.map(e => `<b>${pinTitle(e)}</b>`).join(' ↔ ') : 'aucune broche'} · glisse un point pour le déplacer, touche le fil pour en ajouter un</div>`;
+      const real = pins.filter(e => !e.q.hole);
+      h += `<div class="info">Réseau : ${real.length ? real.map(e => `<b>${pinTitle(e)}</b>`).join(' ↔ ') : 'aucune broche'} · glisse un point pour le déplacer, touche le fil pour en ajouter un</div>`;
       netWarnings(pins).forEach(t => h += `<div class="warn">${t}</div>`);
     }
   } else if (sel && sel.t === 'pin'){
     const here = pinMap.get(sel.key) || [], pins = netPins(netKeys(sel.key));
     here.forEach(e => {
-      const def = LIB.get(e.p.type), note = (def && def.def.notes && def.def.notes[e.q.name]) || POWER_NOTE[e.q.name] || '';
+      const def = LIB.get(e.p.type), note = e.q.hole ? 'trou de breadboard (relié à sa colonne ou à son rail)' : (def && def.def.notes && def.def.notes[e.q.name]) || POWER_NOTE[e.q.name] || '';
       h += `<div class="info"><b>${pinTitle(e)}</b> — ${(TYPES[e.q.type] || TYPES.gpio).t}${note ? ' — ' + esc(note) : ''}</div>`;
     });
-    const others = pins.filter(e => K(e.x,e.y) !== sel.key);
+    const others = pins.filter(e => K(e.x,e.y) !== sel.key && !e.q.hole);
     h += `<div class="info">${others.length ? 'Relié à : ' + others.map(e => `<b>${pinTitle(e)}</b>`).join(', ') : 'Aucune connexion'}</div>`;
     netWarnings(pins).forEach(t => h += `<div class="warn">${t}</div>`);
   } else h += `<div class="info">Touche une pièce, une broche ou un fil · glisse pour déplacer · pince pour zoomer</div><div class="rowb"><button class="btn" data-a="multi" title="Sélectionner plusieurs éléments (ou Maj+clic, Maj+glisser)">⬚ Sélection multiple</button></div>`;
@@ -1101,7 +1114,7 @@ function sheetLib(){
 function nets(){
   buildIndex();
   const groups = new Map();
-  pinMap.forEach((list, k) => { const r = find(k); if (!groups.has(r)) groups.set(r, []); list.forEach(e => groups.get(r).push(e)); });
+  pinMap.forEach((list, k) => { const r = find(k); if (!groups.has(r)) groups.set(r, []); list.forEach(e => { if (!e.q.hole) groups.get(r).push(e); }); });
   return [...groups.values()].filter(g => g.length >= 2);
 }
 function sheetNets(){
@@ -1363,8 +1376,9 @@ function pcbModel(o){
   buildIndex();
   const net = (x,y) => find(K(x,y));
   const pads = new Map();   // "x,y" → {x, y, net, name}
-  pinMap.forEach((list, k) => { const e = list[0]; pads.set(k, {x:e.x, y:e.y, net:net(e.x, e.y), name:`${e.p.label} ${e.q.name}`}); });
   const traces = [], straps = [], issues = [];
+  pinMap.forEach((list, k) => { const e = list.find(x => !x.q.hole); if (e) pads.set(k, {x:e.x, y:e.y, net:net(e.x, e.y), name:`${e.p.label} ${e.q.name}`}); });
+  doc.parts.filter(p => geo(p).style === 'hole').forEach(p => issues.push({x:p.x, y:p.y, msg:`${p.label} : une breadboard n’a pas sa place sur un circuit imprimé (ses liaisons internes ne sont pas gravées).`}));
   doc.wires.forEach(w => {
     if (w.pts.length < 2) return;
     const n = net(...w.pts[0]);
