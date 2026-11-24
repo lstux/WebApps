@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "led-rgb-5mm",
   "name": "LED RGB 5 mm",
   "label": "LED RGB",
-  "category": "Discrets",
+  "category": "Composants",
   "description": "4 pattes, cathode commune",
   "color": "#2b2b2b",
   "body": {

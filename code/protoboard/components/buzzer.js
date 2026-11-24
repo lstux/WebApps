@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "buzzer",
   "name": "Buzzer",
   "label": "Buzzer",
-  "category": "Discrets",
+  "category": "Composants",
   "description": "actif ou passif, 3 pas entre pattes",
   "color": "#1c1c1c",
   "body": {

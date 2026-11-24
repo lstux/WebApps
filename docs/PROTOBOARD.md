@@ -46,13 +46,15 @@ Le format `.js` (plutôt que JSON) permet d'ouvrir la page directement depuis le
 
 **Ajouter** :
 - Un champ de recherche en haut : nom, description, catégorie, noms des broches, étiquettes `tags`, et bus déduits des broches (`i2c`, `spi`, `uart`, `i2s`, `analogique`, `pwm`). Plusieurs mots se cumulent, par exemple « oled spi ».
-- En dessous, une catégorie à la fois en onglets : ⭐ Récents (les 12 derniers ajoutés), puis les catégories, Mes composants et ⚙ Générer (barrettes Dupont, pièces à 2 pattes, module générique).
-- Le dernier onglet ouvert est retenu.
+- En dessous, des groupes repliables, chacun avec son icône : ⭐ Récents (les 12 derniers ajoutés), puis les catégories, Mes composants, et deux groupes générateurs, Connecteurs (barrettes Dupont) et Générique (pièces à 2 pattes, module générique).
+- Chaque composant est une carte avec sa mini-empreinte (forme, couleur, broches colorées par type). La grille s'adapte à la largeur : 3 colonnes sur téléphone, jusqu'à 6 sur PC.
+- La recherche sert de filtre : elle masque les cartes et les groupes vides, déplie les groupes qui ont des résultats, et affiche le nombre de résultats par groupe. Effacée, elle rend l'état d'origine.
+- Les groupes ouverts ou fermés sont retenus. Par défaut, Récents et Cartes sont ouverts.
 
 Les brochages viennent de la documentation courante des modules et **sont à vérifier sur ta pièce** (ordre des broches, tensions, écart entre rangées) : les clones diffèrent, ⇋ retourne une pièce.
 
-- **Pièces à 2 pattes** (Ajouter → ⚙ Générer) : résistance, diode, condensateur céramique ou chimique, LED. L'écart entre les pattes est réglable (✎ Modifier → Écart), les broches se renomment comme les autres (diode : `A`/`K`, chimique : `+`/`-`).
-- **Discrets** : LED RGB, potentiomètre, transistors NPN/PNP, buzzer, bouton, interrupteur, KY-040, joystick. **Alimentation** : LM7805, AMS1117, TP4056, MT3608, LM2596, abaisseur Mini560 5 V.
+- **Pièces à 2 pattes** (Ajouter → Générique) : résistance, diode, condensateur céramique ou chimique, LED. L'écart entre les pattes est réglable (✎ Modifier → Écart), les broches se renomment comme les autres (diode : `A`/`K`, chimique : `+`/`-`).
+- **Commandes** : bouton, interrupteur, potentiomètre, KY-040, joystick. **Composants** : LED RGB, transistors NPN/PNP, buzzer. **Alimentation** : LM7805, AMS1117, TP4056, MT3608, LM2596, abaisseur Mini560 5 V.
 - **Puissance** : relais 1 et 2 voies, MOSFET, optocoupleur PC817.
 - **Capteurs** : micro I2S INMP441, BMP180/280, BME280, AHT20, SHT31, DHT, DS18B20, MPU6050, HC-SR04, PIR, ADS1115, INA219.
 - **Écrans** : OLED SSD1306 0,96" (I2C, SPI) et 0,91" 128×32 (I2C), OLED 0,96" I2C avec 4 boutons, matrice LED WS2812B 8×8, SH1106 1,3" (I2C, SPI), TFT ST7735 et ILI9341.
@@ -77,7 +79,7 @@ ProtoBoard.component({
   name: 'ESP32-C3 Super Mini',      // nom complet, dans « Ajouter »
   label: 'C3 Super Mini',           // nom court posé sur la plaque (facultatif : name)
   category: 'Cartes',               // onglet dans « Ajouter » : Cartes, Capteurs, Écrans, Moteurs, Radio & GPS,
-                                    // Interfaces, Modules, Puissance, Alimentation, Discrets, Breadboards (ou une nouvelle)
+                                    // Interfaces, Modules, Puissance, Alimentation, Commandes, Composants, Breadboards (ou une nouvelle)
   tags: ['wifi', 'ble', 'usb-c'],   // mots de plus pour la recherche (facultatif ; i2c/spi/uart… sont déduits des broches)
   description: '2×8 broches, écart 6 pas',
   color: '#1b2a3a',                 // couleur du circuit imprimé

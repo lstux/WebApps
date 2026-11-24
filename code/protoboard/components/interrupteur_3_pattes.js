@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "interrupteur-3-pattes",
   "name": "Interrupteur à glissière",
   "label": "SW",
-  "category": "Discrets",
+  "category": "Commandes",
   "description": "SPDT, 3 pattes : A COM B",
   "color": "#4a4a4a",
   "body": {

@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "encodeur-ky040",
   "name": "Encodeur rotatif KY-040",
   "label": "KY-040",
-  "category": "Discrets",
+  "category": "Commandes",
   "description": "CLK DT SW + GND, 5 broches",
   "color": "#1d3557",
   "body": {
