@@ -48,6 +48,7 @@ Le format `.js` (plutôt que JSON) permet d'ouvrir la page directement depuis le
 - Un champ de recherche en haut : nom, description, catégorie, noms des broches, étiquettes `tags`, et bus déduits des broches (`i2c`, `spi`, `uart`, `i2s`, `analogique`, `pwm`). Plusieurs mots se cumulent, par exemple « oled spi ».
 - En dessous, des groupes repliables, chacun avec son icône : ⭐ Récents (les 12 derniers ajoutés), puis les catégories, Mes composants, et deux groupes générateurs, Connecteurs (barrettes Dupont) et Générique (pièces à 2 pattes, module générique).
 - Chaque composant est une carte avec sa mini-empreinte (forme, couleur, broches colorées par type). La grille s'adapte à la largeur : 3 colonnes sur téléphone, jusqu'à 6 sur PC.
+- Une pièce ajoutée se pose au centre de la vue, ou à la place libre la plus proche si le centre est occupé (une case de marge avec les autres pièces).
 - La recherche sert de filtre : elle masque les cartes et les groupes vides, déplie les groupes qui ont des résultats, et affiche le nombre de résultats par groupe. Effacée, elle rend l'état d'origine.
 - Les groupes ouverts ou fermés sont retenus. Par défaut, Récents et Cartes sont ouverts.
 
