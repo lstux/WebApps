@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "nrf24l01",
   "name": "NRF24L01",
   "label": "NRF24",
-  "category": "Modules",
+  "category": "Radio & GPS",
   "description": "2×4 broches, antenne en haut",
   "color": "#1d3557",
   "body": {

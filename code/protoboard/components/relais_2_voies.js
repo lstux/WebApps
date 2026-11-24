@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "relais-2-voies",
   "name": "Relais 2 voies",
   "label": "Relais x2",
-  "category": "Modules",
+  "category": "Puissance",
   "description": "Commande VCC IN1 IN2 GND",
   "color": "#1d3557",
   "body": {

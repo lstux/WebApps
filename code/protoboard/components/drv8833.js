@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "drv8833",
   "name": "Pont en H DRV8833",
   "label": "DRV8833",
-  "category": "Modules",
+  "category": "Moteurs",
   "description": "2 moteurs, 2,7-10,8 V",
   "color": "#8a1c1c",
   "body": {

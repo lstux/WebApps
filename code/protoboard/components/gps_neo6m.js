@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "gps-neo6m",
   "name": "GPS NEO-6M",
   "label": "GPS",
-  "category": "Modules",
+  "category": "Radio & GPS",
   "description": "VCC RX TX GND",
   "color": "#1d3557",
   "body": {

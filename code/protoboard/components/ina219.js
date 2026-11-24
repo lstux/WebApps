@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "ina219",
   "name": "INA219 (courant/tension)",
   "label": "INA219",
-  "category": "Modules",
+  "category": "Capteurs",
   "description": "I2C : VCC GND SCL SDA VIN+ VIN−",
   "color": "#1d3557",
   "body": {

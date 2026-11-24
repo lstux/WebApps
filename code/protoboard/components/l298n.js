@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "l298n",
   "name": "Pont en H L298N",
   "label": "L298N",
-  "category": "Modules",
+  "category": "Moteurs",
   "description": "ENA IN1…IN4 ENB ; alim ; sorties",
   "color": "#8a1c1c",
   "body": {

@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "mosfet-n-to220",
   "name": "MOSFET N TO-220",
   "label": "MOSFET",
-  "category": "Discrets",
+  "category": "Puissance",
   "description": "IRLZ44N / IRLB8721 : G D S, face imprimée devant",
   "color": "#1c1c1c",
   "body": {

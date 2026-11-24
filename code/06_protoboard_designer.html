@@ -79,6 +79,20 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 .sheet .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; margin:0 4px; }
 .sheet .grid .btn { justify-content:flex-start; flex-direction:column; align-items:flex-start; gap:1px; white-space:normal; text-align:left; min-height:58px; }
 .sheet .grid small { font-weight:500; color:var(--mut); font-size:12px; }
+/* Sélecteur de composants : recherche, onglets, liste compacte */
+#pkHead { position:sticky; top:-8px; z-index:2; background:var(--card); padding-top:8px; margin-top:-8px; }
+#pkQ { margin:0 4px 8px; width:calc(100% - 8px); }
+.tabs { display:flex; gap:6px; overflow-x:auto; padding:0 4px 8px; margin:0 -4px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.tabs::-webkit-scrollbar { display:none; }
+.tabs button { flex:none; border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:999px; padding:7px 12px; font:inherit; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.tabs button.on { background:var(--ac); border-color:var(--ac); color:#fff; }
+.tabs button small { font-weight:500; opacity:.7; margin-left:3px; }
+.plist { display:grid; gap:2px; margin:0 4px; min-height:40vh; align-content:start; }
+.plist button { display:flex; flex-direction:column; align-items:flex-start; gap:1px; width:100%; text-align:left; border:0; background:none; color:var(--fg); font:inherit; padding:7px 8px; border-radius:var(--r-m); cursor:pointer; }
+.plist button:hover, .plist button:focus-visible { background:var(--hover); }
+.plist b { font-weight:650; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.plist small { color:var(--mut); font-size:12.5px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.plist .empty { color:var(--mut); padding:12px 8px; }
 .sheet h3 { margin:16px 8px 6px; font-size:14px; font-weight:750; }
 .sheet .form { margin:0 4px; }
 .sheet label.lbl { display:block; font-size:13px; font-weight:600; color:var(--mut); margin:8px 0 4px; }
@@ -163,6 +177,12 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 <script src="protoboard/components/ads1115.js"></script>
 <script src="protoboard/components/ds3231.js"></script>
 <script src="protoboard/components/oled_ssd1306_i2c.js"></script>
+<script src="protoboard/components/oled_ssd1306_128x32_i2c.js"></script>
+<script src="protoboard/components/micro_inmp441.js"></script>
+<script src="protoboard/components/microsd_spi_mini.js"></script>
+<script src="protoboard/components/mini560_5v.js"></script>
+<script src="protoboard/components/matrice_ws2812b_8x8.js"></script>
+<script src="protoboard/components/oled_i2c_4_boutons.js"></script>
 <script src="protoboard/components/bouton_poussoir_6mm.js"></script>
 <script src="protoboard/components/buzzer.js"></script>
 <script src="protoboard/components/encodeur_ky040.js"></script>
@@ -312,7 +332,7 @@ function compile(def){
   // buses : groupes de broches reliées à l'intérieur du composant (colonnes et rails d'une breadboard)
   const idx = new Map(out.map((p,i) => [p.name, i]));
   const buses = (def.buses || []).map(b => b.map(n => idx.get(n)).filter(i => i !== undefined)).filter(b => b.length > 1);
-  return {pins:out, body, deco:def.deco || [], style:def.pinStyle || 'round', color:def.color || '#1b2a3a', buses, under:!!def.under, marks:def.marks || []};
+  return {pins:out, body, deco:def.deco || [], style:def.pinStyle || 'round', color:def.color || '#1b2a3a', buses, under:!!def.under, marks:def.marks || [], round:!!def.round};
 }
 function register(def, src){
   if (!def || typeof def !== 'object' || !def.id || !def.name) throw new Error('il faut au moins id et name');
@@ -330,7 +350,7 @@ ProtoBoard.component = d => { try { register(d, 'file'); } catch(e){} };   // fi
 function componentFile(def){
   const q = v => JSON.stringify(v).replace(/"([A-Za-z_]\w*)":/g, '$1: ').replace(/,"/g, ', "').replace(/,\{/g, ', {').replace(/,([A-Za-z_]\w*): /g, ', $1: ');
   const parts = [];
-  ['id','name','label','category','description','color','pinStyle','under','body','deco','marks','columns','rows','pins','buses','notes'].forEach(k => {
+  ['id','name','label','category','tags','description','color','round','pinStyle','under','body','deco','marks','columns','rows','pins','buses','notes'].forEach(k => {
     const v = def[k]; if (v === undefined) return;
     if (Array.isArray(v) && (k === 'columns' || k === 'rows' || k === 'pins' || k === 'deco'))
       parts.push(`  ${k}: [\n${v.map(x => '    ' + q(x)).join(',\n')}\n  ]`);
@@ -399,7 +419,7 @@ function geo(p){
   } else if (LIB.has(p.type)){
     const c = LIB.get(p.type).geo;
     g = {pins:c.pins.map(q => ({...q, hole:c.style === 'hole'})), body:c.body, deco:c.deco, style:c.style, color:c.color,
-      buses:c.buses, under:c.under, marks:c.marks, out:c.style === 'hole'};
+      buses:c.buses, under:c.under, marks:c.marks, round:c.round, out:c.style === 'hole'};
   } else {
     return {pins:[], body:{x0:-.5, y0:-.5, x1:5.5, y1:2.5}, deco:[], style:'round', color:'#000', missing:true};
   }
@@ -494,7 +514,7 @@ function partSVG(p, g, isSel){
   if (g.missing)
     return s + `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" fill="#e5484d22" stroke="#e5484d" stroke-dasharray="5 4" stroke-width="2"/></g>`;
   if (bottom){   // dessous : empreinte pâle du module, seules les pastilles de soudure comptent
-    s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.out?2:5}" fill="${esc(g.color)}" fill-opacity=".14" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0006" stroke-width="1" stroke-dasharray="5 4"'}/>`;
+    s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.round ? Math.min(b.x1-b.x0, b.y1-b.y0)*U/2 : g.out?2:5}" fill="${esc(g.color)}" fill-opacity=".14" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0006" stroke-width="1" stroke-dasharray="5 4"'}/>`;
     if (g.style === 'hole') return s + '</g>';   // breadboard : rien à souder dessous
     g.pins.forEach(q => {
       const cx = q.x*U, cy = q.y*U;
@@ -502,7 +522,7 @@ function partSVG(p, g, isSel){
     });
     return s + '</g>';
   }
-  s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.out?2:5}" fill="${esc(g.color)}" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0007" stroke-width="1"'}/>`;
+  s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.round ? Math.min(b.x1-b.x0, b.y1-b.y0)*U/2 : g.out?2:5}" fill="${esc(g.color)}" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0007" stroke-width="1"'}/>`;
   g.deco.forEach(d => s += decoSVG(d));
   g.pins.forEach(q => {
     const cx = q.x*U, cy = q.y*U;
@@ -1000,17 +1020,43 @@ dlg.addEventListener('click', e => {
 });
 const typeLegend = () => '<div class="legend">' + Object.values(TYPES).map(t => `<span><i style="background:${t.f}"></i>${t.t}</span>`).join('') + '</div>';
 
-function sheetAdd(){
-  const cats = new Map();
-  [...LIB.entries()].sort((a,b) => (a[1].src === b[1].src ? 0 : a[1].src === 'file' ? -1 : 1)).forEach(([id, e]) => {
-    const c = e.src === 'local' ? 'Mes composants' : (e.def.category || 'Divers');
-    if (!cats.has(c)) cats.set(c, []); cats.get(c).push([id, e.def]);
-  });
-  let h = '<h2>Ajouter</h2>';
-  cats.forEach((list, c) => {
-    h += `<h3>${esc(c)}</h3><div class="grid">` + list.map(([id, d]) => `<button class="btn" data-a="add" data-id="${esc(id)}"><b>${esc(d.name)}</b><small>${esc(d.description || '')}</small></button>`).join('') + '</div>';
-  });
-  h += `<h3>Connecteurs Dupont</h3><div class="form"><div class="three">
+/* Sélecteur « Ajouter » : recherche (nom, description, étiquettes, bus déduits des broches), une catégorie à la fois
+   en onglets, ⭐ Récents en tête et ⚙ Générer (Dupont, 2 pattes, module générique) à part. */
+const CAT_ORDER = ['Cartes', 'Capteurs', 'Écrans', 'Moteurs', 'Radio & GPS', 'Interfaces', 'Modules', 'Puissance', 'Alimentation', 'Discrets', 'Breadboards'];
+const KEY_PICK = 'protoboard.pick', KEY_RECENT = 'protoboard.recent';
+const readJ = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch(e){ return d; } };
+const catOf = e => e.src === 'local' ? 'Mes composants' : (e.def.category || 'Divers');
+const fold = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+function searchText(e){
+  if (e.st) return e.st;
+  const names = e.geo.pins.map(p => p.name.toUpperCase()), has = re => names.some(n => re.test(n)), auto = [];
+  if (has(/^SDA/) && has(/^SC[LK]/) && !has(/^(CS|DC|A0|RS)$/)) auto.push('i2c');   // les TFT « SPI » nomment aussi SDA/SCL
+  if (has(/^(MOSI|SDI|DIN)$/) || has(/^(MISO|SDO)$/) || has(/^(SCK|CLK|SCLK)$/) && has(/^(CS|SS|NSS|CE)/)) auto.push('spi');
+  if (has(/^(TX|TXD)/) && has(/^(RX|RXD)/)) auto.push('uart serie');
+  if (has(/^(WS|LRC|LRCK)$/) && has(/^(SD|DOUT|DIN)$/)) auto.push('i2s');
+  if (has(/^(AO|A0|AOUT|OUT|VRX|VRY|SIG)$/)) auto.push('analogique');
+  if (has(/PWM/)) auto.push('pwm');
+  const d = e.def;
+  return e.st = fold([d.name, d.label, d.description, catOf(e), ...(d.tags || []), ...auto, ...names].join(' '));
+}
+function pickRow(id, e, withCat){
+  const n = e.geo.pins.length, d = e.def;
+  const sub = [withCat && catOf(e), d.description, e.def.pinStyle === 'hole' || /\d+\s*broche/i.test(d.description || '') ? '' : `${n} broche${n > 1 ? 's' : ''}`].filter(Boolean).join(' · ');
+  return `<button data-a="add" data-id="${esc(id)}"><b>${esc(d.name)}</b><small>${esc(sub)}</small></button>`;
+}
+function pickBody(){
+  const st = readJ(KEY_PICK, {}), q = fold($('#pkQ') ? $('#pkQ').value.trim() : '');
+  const all = [...LIB.entries()].sort((a, b) => a[1].def.name.localeCompare(b[1].def.name, 'fr'));
+  if (q){
+    const words = q.split(/\s+/), hits = all.filter(([, e]) => words.every(w => searchText(e).includes(w)));
+    return hits.length ? hits.map(([id, e]) => pickRow(id, e, true)).join('') : `<div class="empty">Rien pour « ${esc(q)} ». Essaie ⚙ Générer : barrette, pièce à 2 pattes ou module générique.</div>`;
+  }
+  const tab = st.tab || 'recent';
+  if (tab === 'recent'){
+    const rec = readJ(KEY_RECENT, []).filter(id => LIB.has(id));
+    return rec.length ? rec.map(id => pickRow(id, LIB.get(id), true)).join('') : '<div class="empty">Les composants que tu ajoutes apparaîtront ici.</div>';
+  }
+  if (tab === 'gen') return `<h3>Connecteurs Dupont</h3><div class="form"><div class="three">
       <div><label class="lbl" for="hn">Broches</label><input type="number" id="hn" min="1" max="40" value="4" inputmode="numeric"></div>
       <div><label class="lbl" for="hr">Rangées</label><select id="hr"><option value="1">1</option><option value="2">2</option></select></div><div></div></div></div>
     <div class="grid" style="margin-top:8px"><button class="btn" data-a="hdrM"><b>Barrette mâle</b><small>picots</small></button><button class="btn" data-a="hdrF"><b>Barrette femelle</b><small>douilles</small></button></div>
@@ -1025,8 +1071,33 @@ function sheetAdd(){
       <div><label class="lbl" for="gg">Écart (2 rangées)</label><input type="number" id="gg" min="1" max="30" value="5" inputmode="numeric"></div></div>
       <label class="lbl" for="gnames">Noms des broches (séparés par des virgules)</label><input type="text" id="gnames" placeholder="VCC, GND, SCL, SDA"></div>
     <div class="btns"><button class="btn primary" data-a="mod">Ajouter le module</button></div>` + typeLegend();
+  const list = all.filter(([, e]) => catOf(e) === tab);
+  return list.length ? list.map(([id, e]) => pickRow(id, e)).join('') : '<div class="empty">Aucun composant ici.</div>';
+}
+function pickTabs(){
+  const st = readJ(KEY_PICK, {}), counts = new Map();
+  LIB.forEach(e => { const c = catOf(e); counts.set(c, (counts.get(c) || 0) + 1); });
+  const cats = [...CAT_ORDER.filter(c => counts.has(c)), ...[...counts.keys()].filter(c => !CAT_ORDER.includes(c) && c !== 'Mes composants').sort(), ...(counts.has('Mes composants') ? ['Mes composants'] : [])];
+  const tabs = [['recent', '⭐ Récents'], ...cats.map(c => [c, c, counts.get(c)]), ['gen', '⚙ Générer']];
+  let tab = st.tab || 'recent'; if (!tabs.some(t => t[0] === tab)) tab = 'recent';
+  const q = $('#pkQ') && $('#pkQ').value.trim();
+  return tabs.map(([k, t, n]) => `<button class="${!q && k === tab ? 'on' : ''}" data-a="tab" data-v="${esc(k)}">${esc(t)}${n ? `<small>${n}</small>` : ''}</button>`).join('');
+}
+function pickRefresh(){ $('#pkTabs').innerHTML = pickTabs(); $('#pkList').innerHTML = pickBody(); }
+function sheetAdd(){
+  const old = $('#pkQ'); if (old) old.remove();   // la feuille précédente (fermée) est encore dans le DOM
+  const h = `<h2>Ajouter</h2><div id="pkHead"><input type="search" id="pkQ" placeholder="Chercher : esp32, i2c, moteur, relais…" autocomplete="off" enterkeyhint="search">
+    <div class="tabs" id="pkTabs">${pickTabs()}</div></div><div class="plist" id="pkList">${pickBody()}</div>`;
   openDlg(h, (a, b) => {
-    if (a === 'add') addPart(b.dataset.id);
+    if (a === 'tab'){
+      const st = readJ(KEY_PICK, {}); st.tab = b.dataset.v; try { localStorage.setItem(KEY_PICK, JSON.stringify(st)); } catch(e){}
+      $('#pkQ').value = ''; pickRefresh(); $('#pkList').scrollTop = 0; b.scrollIntoView({inline:'nearest', block:'nearest'}); return;
+    }
+    if (a === 'add'){
+      const rec = [b.dataset.id, ...readJ(KEY_RECENT, []).filter(x => x !== b.dataset.id)].slice(0, 12);
+      try { localStorage.setItem(KEY_RECENT, JSON.stringify(rec)); } catch(e){}
+      addPart(b.dataset.id);
+    }
     if (a === 'hdrM' || a === 'hdrF'){
       const n = clampInt($('#hn').value, 1, 40), rows = clampInt($('#hr').value, 1, 2);
       addPart(a, {n, rows, label:(a === 'hdrM' ? 'Mâle ' : 'Femelle ') + (rows === 2 ? '2×' : '1×') + n});
@@ -1041,6 +1112,8 @@ function sheetAdd(){
         label:$('#glabel').value.trim() || 'Module', names:names.some(Boolean) ? names : []});
     }
   });
+  $('#pkQ').addEventListener('input', pickRefresh);
+  const on = $('#pkTabs .on'); if (on) on.scrollIntoView({inline:'center', block:'nearest'});
 }
 function sheetEdit(id){
   const p = getPart(id); if (!p) return;
