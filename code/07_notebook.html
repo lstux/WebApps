@@ -759,15 +759,56 @@ function download(name, text, type){
   l.href = URL.createObjectURL(blob); l.download = name; document.body.append(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(l.href), 1000);
 }
 const slug = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'projet';
+/* Contenu des 📖 Documents pour l'export : comme la Liseuse, un lien GitHub « blob » est lu sur raw.githubusercontent.com. */
+function rawUrl(u){
+  try {
+    const x = new URL(safeUrl(u)), s = x.pathname.split('/').filter(Boolean);
+    if (x.hostname === 'github.com' && s[2] === 'blob' && s.length > 4) return `https://raw.githubusercontent.com/${s[0]}/${s[1]}/${s.slice(3).join('/')}`;
+    return x.href;
+  } catch { return ''; }
+}
+async function fetchDocs(list){
+  const docs = new Map(), failed = [];
+  const its = list.flatMap(p => p.items.filter(it => it.type === 'doc' && it.url));
+  await Promise.all(its.map(async it => {
+    const raw = rawUrl(it.url), ac = new AbortController(), tm = setTimeout(() => ac.abort(), 12000);
+    try {
+      const r = await fetch(raw, { signal: ac.signal }); if (!r.ok) throw 0;
+      docs.set(it.url, { text: await r.text(), raw });
+    } catch { failed.push(itemTitle(it)); }
+    clearTimeout(tm);
+  }));
+  return { docs, failed };
+}
+/* Recopie d'un document : titres décalés sous celui de l'élément, liens et images relatifs rendus absolus. */
+function docMD(text, src, raw){
+  const abs = (x, base) => { if (/^([a-z][\w+.-]*:|#|\/\/)/i.test(x)) return x; try { return new URL(x, base).href; } catch { return x; } };
+  return String(text).replace(/\r\n?/g, '\n').trim()
+    .replace(/^(#{1,4})(?=\s)/gm, '$1##')
+    .replace(/(!?)\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?((?:\s+"[^"]*")?)\s*\)/g, (all, img, t, u, ti) => `${img}[${t}](${abs(u, img ? raw : src)}${ti})`);
+}
 function sheetExport(list){
   const one = list.length === 1, n = list.reduce((s, p) => s + p.items.filter(it => REF[it.type]).length, 0);
+  const nd = list.reduce((s, p) => s + p.items.filter(it => it.type === 'doc' && it.url).length, 0);
   openDlg(`<h2>Exporter ${one ? `« ${esc(list[0].name)} »` : `${list.length} projet(s)`}</h2>
     ${n ? `<label class="chk"><input type="checkbox" id="expRefs" checked> Embarquer les listes TODO, cartes et circuits liés <small class="muted">(${n})</small></label>
     <p class="sm">Sinon, seul leur nom est exporté : ils ne seront retrouvés que là où ils existent déjà.</p>` : ''}
+    ${nd ? `<label class="chk"><input type="checkbox" id="expDocs"> Inclure le contenu des documents <small class="muted">(${nd})</small></label>
+    <p class="sm">Markdown et HTML : chaque document est téléchargé maintenant et recopié sous son titre. Le JSON garde le lien.</p>` : ''}
     <div class="btns"><button class="btn primary" data-a="json">⬇ JSON</button><button class="btn" data-a="md">⬇ Markdown</button><button class="btn" data-a="html">⬇ HTML</button></div>
-    <p class="sm">JSON : se réimporte (menu ⋯ → Importer). Markdown : à mettre dans un dépôt. HTML : une page à ouvrir partout, imprimer ou envoyer.</p>`, a => {
-    const refs = $('#expRefs') && $('#expRefs').checked;
+    <p class="sm">JSON : se réimporte (menu ⋯ → Importer). Markdown : à mettre dans un dépôt. HTML : une page à ouvrir partout, imprimer ou envoyer.</p>`, (a, b) => {
+    const refs = $('#expRefs') && $('#expRefs').checked, withDocs = $('#expDocs') && $('#expDocs').checked;
     const base = one ? 'notebook-' + slug(list[0].name) : 'notebook';
+    if ((a === 'md' || a === 'html') && withDocs){
+      b.disabled = true; b.textContent = '⏳ Documents…';
+      fetchDocs(list).then(({ docs, failed }) => {
+        if (a === 'md') download(base + '.md', list.map(p => projectMD(p, refs, docs)).join('\n\n---\n\n'), 'text/markdown');
+        else download(base + '.html', projectsHTML(list, refs, docs), 'text/html');
+        closeDlg();
+        toast(failed.length ? `Exporté. Non téléchargé${failed.length > 1 ? 's' : ''} (lien gardé) : ${failed.join(', ')}` : 'Exporté.', !!failed.length);
+      });
+      return;
+    }
     if (a === 'json'){
       const d = { app: 'notebook', version: 1, projects: list }; if (refs) d.refs = collectRefs(list);
       download(base + '.json', JSON.stringify(d, null, 1), 'application/json');
@@ -778,7 +819,7 @@ function sheetExport(list){
   });
 }
 /* Markdown lisible d'un projet. Avec refs : l'arbre des listes TODO et les points des cartes. */
-function projectMD(p, refs){
+function projectMD(p, refs, docs){
   const out = [`# ${p.emoji} ${p.name}`], tg = it => it.tags.length ? ' ' + it.tags.map(t => '#' + t.replace(/\s+/g, '-')).join(' ') : '';
   const lk = (t, u) => `[${t.replace(/[[\]]/g, '\\$&')}](${safeUrl(u).replace(/[()\s]/g, encodeURIComponent)})`;
   const nt = (it, ind = '  ') => it.note ? '\n' + it.note.split('\n').map(x => ind + '> ' + x).join('\n') : '';
@@ -789,7 +830,11 @@ function projectMD(p, refs){
     const t = itemTitle(it);
     switch (it.type){
       case 'link': bullet(`- 🔗 ${it.url ? lk(t, it.url) : t}${tg(it)}${nt(it)}`); break;
-      case 'doc': bullet(`- 📖 ${it.url ? lk(t, it.url) : t}${tg(it)}${nt(it)}`); break;
+      case 'doc': {
+        const d = docs && docs.get(it.url);
+        if (d) block(`## 📖 ${t}${tg(it)}\n\nSource : ${lk(host(it.url), it.url)}${it.note ? '\n\n' + it.note.split('\n').map(x => '> ' + x).join('\n') : ''}\n\n${docMD(d.text, safeUrl(it.url), d.raw)}`);
+        else bullet(`- 📖 ${it.url ? lk(t, it.url) : t}${tg(it)}${nt(it)}`);
+        break; }
       case 'gh': { const i = it.info;
         bullet(`- 🐙 ${lk(t, `https://github.com/${it.owner}/${it.repo}`)}${i && i.desc ? ' — ' + i.desc : ''}${i ? ` (★ ${i.stars}${i.lang ? ', ' + i.lang : ''})` : ''}${tg(it)}${nt(it)}`); break; }
       case 'pbd': { const c = pbdCircuit(it.cid);
@@ -819,9 +864,9 @@ function projectMD(p, refs){
   return out.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
 }
 /* Page HTML autonome : le Markdown de l'export, rendu (marked + DOMPurify), styles intégrés, clair/sombre selon le système. */
-function projectsHTML(list, refs){
+function projectsHTML(list, refs, docs){
   const title = list.length === 1 ? `${list[0].emoji} ${list[0].name}` : 'Notebook';
-  const body = list.map(p => `<section>${md(projectMD(p, refs))}</section>`).join('<hr>')
+  const body = list.map(p => `<section>${md(projectMD(p, refs, docs))}</section>`).join('<hr>')
     .replace(/<input[^>]*type="checkbox"[^>]*>\s*/g, t => /checked/.test(t) ? '<span class="cb on">✓</span>' : '<span class="cb"></span>');
   const when = new Date().toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
   return `<!DOCTYPE html>
@@ -845,7 +890,7 @@ blockquote { margin: 2px 0 4px; padding: 0 10px; border-left: 3px solid var(--li
 blockquote p { margin: 2px 0; }
 table { border-collapse: collapse; width: 100%; font-size: 15px; } th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
 td:nth-child(3), td:nth-child(4), th:nth-child(3), th:nth-child(4) { text-align: right; white-space: nowrap; }
-code { background: var(--bg); padding: 1px 5px; border-radius: 5px; } pre { background: var(--bg); padding: 10px; border-radius: 10px; overflow: auto; }
+code { background: var(--bg); padding: 1px 5px; border-radius: 5px; } img { max-width: 100%; height: auto; } pre { background: var(--bg); padding: 10px; border-radius: 10px; overflow: auto; }
 hr { border: 0; height: 18px; }
 footer { color: var(--mut); font-size: 13px; text-align: center; margin-top: 18px; }
 @media print { body { background: #fff; color: #000; } section { border: 0; padding: 0; } h2 { break-after: avoid; } }
