@@ -1244,6 +1244,7 @@ function openFromHash() {
   loadMap(rec); toast('Ouverte : ' + rec.name + ' — ↶ pour revenir à la carte précédente.');
 }
 const sync = PBSync.init(store, {
+  adopt: readMaps().map(r => MAP_PFX + r.id),   // cartes arrivées par un import du Notebook
   summary: 'Les cartes enregistrées (« Mes cartes ») sont synchronisées sur le serveur, les données sont stockées sans chiffrement. La carte en cours d\'édition reste sur cet appareil.',
   onChange(key, value) {
     if (!key.startsWith(MAP_PFX)) return null;
