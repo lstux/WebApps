@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Notebook</title>
-<meta name="description" content="Carnet de projets : liens, dépôts GitHub, notes Markdown, listes à cocher, listes d'achat et circuits ProtoBoard, rangés par projet.">
+<meta name="description" content="Carnet de projets : liens et groupes de liens, dépôts GitHub, notes Markdown, croquis à main levée, listes à cocher, listes d'achat et circuits ProtoBoard, rangés par projet.">
 <link rel="stylesheet" href="common.css">
 <link rel="icon" type="image/svg+xml" href="icons/notebook.svg">
 <script src="common.js"></script>
 <script src="pbstore.js"></script>
 <script src="pbsync.js"></script>
+<script src="mdedit.js"></script>
+<script src="sketch.js"></script>
 <style>
 /* Notebook — styles spécifiques. Composants du système : .topbar, .btn, .iconbtn, .card, .chips, .chip, .cb, .progress, .sheet, .toast */
 body { padding-bottom: calc(110px + env(safe-area-inset-bottom,0px)); }
@@ -118,12 +120,24 @@ body.dragging { user-select: none; -webkit-user-select: none; }
 .erow input.n { flex: 0 0 62px; }
 .erow input.p { flex: 0 0 78px; }
 
+/* Groupes de liens, croquis */
+.lrow { align-items: flex-start; padding: 4px 0; }
+.lrow a { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; color: var(--fg); }
+.lrow a b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lrow a:hover b { text-decoration: underline; color: var(--ac); }
+.lrow small { color: var(--mut); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lrow .fav { width: 22px; height: 22px; flex: none; border-radius: 6px; background: var(--card2); color: var(--mut); display: grid; place-items: center; font-size: 12px; font-weight: 700; margin-top: 2px; text-transform: uppercase; }
+.skprev { display: block; width: 100%; height: auto; max-height: 220px; background: var(--card2); color: var(--fg); border-radius: var(--r-m); margin: 4px 0 6px; cursor: pointer; }
+.skempty { display: grid; place-items: center; height: 90px; background: var(--card2); border-radius: var(--r-m); color: var(--mut); margin: 4px 0 6px; cursor: pointer; font-size: 14px; }
+.md input[type=checkbox] { width: 18px; height: 18px; vertical-align: -3px; margin: 0 6px 0 0; cursor: pointer; }
+.md li:has(> input[type=checkbox]) { list-style: none; margin-left: -1.2em; }
+
 /* Bouton d'ajout flottant */
 .fab { position: fixed; right: max(16px, calc(50vw - 380px + 16px)); bottom: calc(18px + env(safe-area-inset-bottom,0px)); z-index: 9; height: 54px; padding: 0 22px; border-radius: 999px;
   background: var(--grad); color: var(--on-ac); font-weight: 700; font-size: 16px; box-shadow: 0 8px 22px color-mix(in srgb, var(--ac) 40%, transparent); transition: transform .12s; }
 .fab:active { transform: scale(.95); }
 /* Pendant une saisie, le bouton cacherait le formulaire (et le clavier remonte tout) */
-body:has(.edit) .fab, body:has(main input:focus, main textarea:focus) .fab { display: none; }
+body:has(.edit) .fab, body:has(main input:not([type=checkbox]):focus, main textarea:focus) .fab { display: none; }
 
 /* Feuilles */
 .types { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -173,7 +187,7 @@ body:has(.edit) .fab, body:has(main input:focus, main textarea:focus) .fab { dis
 /* ---------- données ----------
    Un projet = une clé « notebook.p.<id> » (synchronisée à part : deux appareils peuvent modifier deux
    projets différents sans conflit). Un projet : {id, name, emoji, color, pinned, archived, pos, items:[…]}.
-   Éléments : link {url,title,note} · gh {url,owner,repo,note,info} · note {title,md} · check {title,rows:[{id,t,done}]}
+   Éléments : link {url,title,note} · links {title,note,rows:[{id,t,url,n}]} · sketch {title,sk:{v,bg,s:[…]}} (voir sketch.js) · gh {url,owner,repo,note,info} · note {title,md} · check {title,rows:[{id,t,done}]}
    · buy {title,rows:[{id,t,qty,price,url,done}]} · pbd {cid,name,note} · todo {lid,name,note} · map {mid,name,note}
    · doc {url,title,note}. Tous : id, tags[]. pbd, todo et map référencent un élément d'une autre app (même navigateur). */
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -184,8 +198,10 @@ const pb = new PBStore({ app: 'notebook', prefix: PREFIX, sharedAuth: true });
 
 const TYPES = {
   link:  { ic: '🔗', name: 'Lien', help: 'une page web' },
+  links: { ic: '🔖', name: 'Groupe de liens', help: 'plusieurs adresses ensemble' },
   gh:    { ic: '🐙', name: 'Dépôt GitHub', help: 'description, langage, activité' },
-  note:  { ic: '📝', name: 'Note', help: 'texte en Markdown' },
+  note:  { ic: '📝', name: 'Note', help: 'texte en Markdown, plein écran' },
+  sketch:{ ic: '✏️', name: 'Croquis', help: 'dessin à main levée, schéma' },
   check: { ic: '☑️', name: 'Liste à cocher', help: 'outillage, étapes…' },
   buy:   { ic: '🛒', name: 'Liste d\'achat', help: 'quantités, prix, liens' },
   pbd:   { ic: '🧩', name: 'Circuit ProtoBoard', help: 'un circuit de la bibliothèque' },
@@ -248,7 +264,7 @@ function md(text){
   return `<p style="white-space:pre-wrap">${esc(text)}</p>`;
 }
 function itemText(it){
-  return [it.title, it.url, it.note, it.md, it.name, (it.type === 'todo' || it.type === 'map' || it.type === 'doc') && itemTitle(it), it.owner, it.repo, it.info && it.info.desc, ...(it.rows || []).map(r => r.t), ...(it.tags || [])].filter(Boolean).join(' ').toLowerCase();
+  return [it.title, it.url, it.note, it.md, it.name, (it.type === 'todo' || it.type === 'map' || it.type === 'doc') && itemTitle(it), it.owner, it.repo, it.info && it.info.desc, ...(it.rows || []).flatMap(r => [r.t, r.url, r.n]), ...(it.tags || [])].filter(Boolean).join(' ').toLowerCase();
 }
 function itemTitle(it){
   if (it.type === 'link') return it.title || host(it.url) || 'Lien';
@@ -417,7 +433,9 @@ function summary(it){
   switch (it.type){
     case 'link': case 'doc': return [it.url && host(it.url), it.note && it.note.split('\n')[0]].filter(Boolean).join(' · ');
     case 'gh': { const i = it.info; if (!i) return 'infos non chargées'; return [i.lang, `★ ${i.stars}`, i.prs != null && `${i.prs} PR`, pl(i.issues, 'issue'), i.pushed && `push ${ago(i.pushed)}`].filter(Boolean).join(' · '); }
-    case 'note': return (it.md || '').split('\n').map(x => x.replace(/^[#>*\-\s]+/, '').trim()).find(x => x && x !== it.title) || '';
+    case 'note': return (it.md || '').split('\n').map(x => x.replace(/^[#>*\-\s]+(\[[ xX]\]\s*)?/, '').trim()).find(x => x && x !== it.title) || '';
+    case 'links': return it.rows.length ? `${pl(it.rows.length, 'lien')} · ${[...new Set(it.rows.map(r => host(r.url)))].slice(0, 3).join(', ')}` : 'vide';
+    case 'sketch': { const n = WebAppsSketch.count(it.sk); return n ? pl(n, 'trait') : 'vide'; }
     case 'check': { const d = it.rows.filter(r => r.done).length; return it.rows.length ? `${d} / ${it.rows.length}` : 'vide'; }
     case 'buy': { const tot = it.rows.reduce((s, r) => s + num(r.qty || 1) * num(r.price), 0), left = it.rows.filter(r => !r.done).reduce((s, r) => s + num(r.qty || 1) * num(r.price), 0);
       return it.rows.length ? `reste ${euro(left)} · total ${euro(tot)}` : 'vide'; }
@@ -471,7 +489,15 @@ function viewHTML(p, it){
     }
     case 'note': {
       const long = (it.md || '').split('\n').length > 10 || (it.md || '').length > 600, open = ui.open.has(it.id);
-      return `<div class="md ${long && !open ? 'clip' : ''}">${md(it.md)}</div>${long ? `<button class="more" data-a="toggle">${open ? 'Réduire' : 'Afficher tout'}</button>` : ''}`;
+      const h = md(it.md).replace(/<input([^>]*?) disabled=""([^>]*)>/g, '<input$1 data-a="mdtick"$2>');
+      return `<div class="md ${long && !open ? 'clip' : ''}">${h}</div>${long ? `<button class="more" data-a="toggle">${open ? 'Réduire' : 'Afficher tout'}</button>` : ''}`;
+    }
+    case 'links':
+      return `<div class="rows">${it.rows.map(r => `<div class="row lrow"><span class="fav" aria-hidden="true">${esc((host(r.url) || '?')[0])}</span><a href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener"><b>${esc(r.t || host(r.url))}</b><small>${esc(host(r.url))}${r.n ? ' · ' + esc(r.n) : ''}</small></a></div>`).join('')}</div>
+        <form class="addrow" data-a="addrow"><input type="text" name="t" placeholder="Coller une adresse (ou : titre https://…)" autocomplete="off" inputmode="url"><button class="btn">+</button></form>${note}`;
+    case 'sketch': {
+      const sv = WebAppsSketch.svg(it.sk, { cls: 'skprev', pad: 14 });
+      return sv ? sv.replace('<svg ', '<svg data-a="opensk" ') : '<div class="skempty" data-a="opensk">Page blanche · toucher pour dessiner</div>';
     }
     case 'check': {
       const done = it.rows.filter(r => r.done).length;
@@ -516,10 +542,17 @@ function editHTML(p, it){
   const note = `<label>Note</label><textarea name="note" style="min-height:4em;font-family:var(--f-ui)" placeholder="Pourquoi ce lien, ce qu'il faut retenir…">${esc(it.note || '')}</textarea>`;
   switch (it.type){
     case 'link': f = `<label>Adresse</label><input type="url" name="url" value="${esc(it.url || '')}" placeholder="https://…" inputmode="url" autocomplete="off">
-      <label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="(par défaut : le nom du site)">${note}`; break;
+      <label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="(par défaut : le nom du site)">${note}
+      <div class="btns"><button class="btn" type="button" data-a="group">🔖 Mettre dans un groupe…</button></div>`; break;
+    case 'links': f = `<label>Titre du groupe</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Datasheets, tutos, boutiques…">
+      <label>Liens : titre, adresse, note</label><div class="erows">${it.rows.map(r => `<div class="erow" data-r="${r.id}" style="flex-wrap:wrap"><input type="text" name="rt" value="${esc(r.t || '')}" placeholder="Titre (par défaut : le site)" style="flex:1 1 40%">
+        <input type="url" name="ru" value="${esc(r.url || '')}" placeholder="https://…" inputmode="url" style="flex:1 1 50%"><input type="text" name="rn" value="${esc(r.n || '')}" placeholder="Note" style="flex:1 1 60%">
+        <button class="mini" type="button" data-a="rup" aria-label="Monter" title="Monter">↑</button><button class="mini" type="button" data-a="rout" aria-label="Sortir du groupe" title="Sortir du groupe (redevient un lien seul)">⇱</button><button class="mini" type="button" data-a="rdel" aria-label="Retirer">✕</button></div>`).join('')}</div>${note}`; break;
+    case 'sketch': f = `<label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Schéma, idée…">
+      <div class="btns"><button class="btn" type="button" data-a="opensk">✏️ Ouvrir le croquis</button></div>`; break;
     case 'gh': f = `<label>Dépôt</label><input type="url" name="url" value="${esc(it.url || (it.owner ? `https://github.com/${it.owner}/${it.repo}` : ''))}" placeholder="https://github.com/propriétaire/dépôt" inputmode="url" autocomplete="off">${note}`; break;
     case 'note': f = `<label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Titre de la note">
-      <label>Texte (Markdown)</label><textarea name="md" placeholder="# Titre&#10;- une liste&#10;**gras**, \`code\`, [lien](https://…)">${esc(it.md || '')}</textarea>`; break;
+      <div class="btns"><button class="btn" type="button" data-a="openmd">📝 Éditer le texte en plein écran</button></div>`; break;
     case 'check': f = `<label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Outillage, étapes…">
       <label>Lignes</label><div class="erows">${it.rows.map(r => `<div class="erow" data-r="${r.id}"><input type="text" name="rt" value="${esc(r.t)}"><button class="mini" type="button" data-a="rdel" aria-label="Retirer">✕</button></div>`).join('')}</div>`; break;
     case 'buy': f = `<label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Commande AliExpress…">
@@ -558,11 +591,40 @@ function newProject(){
   projects.push(p); save(p); sheetProject(p, true);
 }
 function addItem(p, type, extra){
-  const it = { id: uid(), type, tags: ui.tag ? [ui.tag] : [], ...(type === 'check' || type === 'buy' ? { rows: [] } : {}), ...extra };
+  const it = { id: uid(), type, tags: ui.tag ? [ui.tag] : [], ...(type === 'check' || type === 'buy' || type === 'links' ? { rows: [] } : {}), ...(type === 'sketch' ? { sk: { v: 1, bg: 'plain', s: [] } } : {}), ...extra };
   p.items.unshift(it); save(p);
+  if (type === 'note' || type === 'sketch'){ render(); return (type === 'note' ? openNote : openSketch)(p.id, it.id, true); }
   ui.editing = ['pbd', 'todo', 'map'].includes(type) ? null : it.id; render();
   const el = document.querySelector(`.it[data-id="${it.id}"]`);
   if (el){ el.scrollIntoView({ block: 'center' }); const i = el.querySelector('.edit input,.edit textarea'); if (i) i.focus(); }
+}
+/* Note et croquis s'ouvrent en plein écran (mdedit.js, sketch.js) ; enregistrement au fil de l'eau.
+   On retrouve l'élément par ses identifiants à chaque enregistrement : la synchro peut avoir remplacé le projet. */
+function liveItem(pid, iid){ const p = getP(pid), it = p && p.items.find(x => x.id === iid); return it ? { p, it } : null; }
+function afterFull(pid, iid, isNew, empty){
+  const c = liveItem(pid, iid);
+  if (c && isNew && empty){ c.p.items = c.p.items.filter(x => x !== c.it); save(c.p); }
+  else if (c) ui.exp.add(iid);
+  render();
+  const el = document.querySelector(`.it[data-id="${iid}"]`); if (el){ el.scrollIntoView({ block: 'nearest' }); el.classList.add('flash'); }
+}
+const propsMenu = (pid, iid, st) => [{ label: '⚙ Étiquettes, déplacer, supprimer…', fn(ed){
+  st.isNew = false; ed.close(); ui.editing = iid; render();
+  setTimeout(() => { const el = document.querySelector(`.it[data-id="${iid}"]`); if (el) el.scrollIntoView({ block: 'center' }); }, 60);
+} }];
+function openNote(pid, iid, isNew){
+  const c = liveItem(pid, iid); if (!c) return;
+  const st = { isNew: !!isNew };
+  WebAppsMD.open({ title: c.it.title || '', titlePlaceholder: 'Titre de la note', text: c.it.md || '', render: md, menu: propsMenu(pid, iid, st),
+    onSave(text, title){ const x = liveItem(pid, iid); if (!x) return; x.it.md = text; x.it.title = title; save(x.p); },
+    onClose(text, title){ afterFull(pid, iid, st.isNew, !text.trim() && !title); } });
+}
+function openSketch(pid, iid, isNew){
+  const c = liveItem(pid, iid); if (!c) return;
+  const st = { isNew: !!isNew };
+  WebAppsSketch.open({ title: c.it.title || '', titlePlaceholder: 'Titre du croquis', data: c.it.sk, menu: propsMenu(pid, iid, st),
+    onSave(data, title){ const x = liveItem(pid, iid); if (!x) return; x.it.sk = data; x.it.title = title; save(x.p); },
+    onClose(data, title){ afterFull(pid, iid, st.isNew, !WebAppsSketch.count(data) && !title); } });
 }
 function readForm(form, p, it){
   const v = n => { const e = form.elements[n]; return e ? e.value.trim() : ''; };
@@ -576,7 +638,14 @@ function readForm(form, p, it){
     Object.assign(it, g, { url: `https://github.com/${g.owner}/${g.repo}` });
     if (changed){ delete it.info; setTimeout(() => ghRefresh(p, it, true), 0); }
   }
-  if (it.type === 'note'){ it.title = v('title'); it.md = form.elements.md.value; }
+  if (it.type === 'note' || it.type === 'sketch') it.title = v('title');
+  if (it.type === 'links'){
+    it.title = v('title');
+    it.rows = [...form.querySelectorAll('.erow')].map(row => {
+      const g = n => { const e = row.querySelector(`[name=${n}]`); return e ? e.value.trim() : ''; };
+      return { id: row.dataset.r, t: g('rt'), url: g('ru') ? safeUrl(g('ru')) : '', n: g('rn') };
+    }).filter(r => r.url);
+  }
   if (it.type === 'check' || it.type === 'buy'){
     it.title = v('title');
     it.rows = [...form.querySelectorAll('.erow')].map(row => {
@@ -604,7 +673,21 @@ document.addEventListener('click', e => {
     case 'showarch': ui.archived = !ui.archived; render(); break;
     case 'tag': ui.tag = ui.tag === b.dataset.v ? null : b.dataset.v; render(); break;
     case 'pedit': sheetProject(getP(ui.pid)); break;
-    case 'edit': ui.editing = ui.editing === it.id ? null : it.id; render(); break;
+    case 'edit':
+      if (ui.editing !== it.id && it.type === 'note') return openNote(p.id, it.id);
+      if (ui.editing !== it.id && it.type === 'sketch') return openSketch(p.id, it.id);
+      ui.editing = ui.editing === it.id ? null : it.id; render(); break;
+    case 'openmd': { const f = b.closest('form'); if (f) readForm(f, p, it); ui.editing = null; save(p); openNote(p.id, it.id); break; }
+    case 'opensk': { const f = b.closest('form'); if (f) readForm(f, p, it); ui.editing = null; save(p); openSketch(p.id, it.id); break; }
+    case 'mdtick': e.preventDefault(); it.md = WebAppsMD.toggleTask(it.md || '', [...b.closest('.md').querySelectorAll('input[type=checkbox]')].indexOf(b)); save(p); render(); break;
+    case 'group': { const f = b.closest('form'); if (f && !readForm(f, p, it)) return; sheetGroup(p, it); break; }
+    case 'rup': { const r = b.closest('.erow'), pr = r.previousElementSibling; if (pr) r.parentNode.insertBefore(r, pr); break; }
+    case 'rout': {
+      const f = b.closest('form'), row = b.closest('.erow'), g = n => row.querySelector(`[name=${n}]`).value.trim();
+      if (!g('ru')){ row.remove(); break; }
+      const solo = { id: uid(), type: 'link', url: safeUrl(g('ru')), title: g('rt'), note: g('rn'), tags: [...it.tags] };
+      row.remove(); readForm(f, p, it); p.items.splice(p.items.indexOf(it) + 1, 0, solo); save(p); render(); toast('Sorti du groupe : c\'est de nouveau un lien seul.'); break;
+    }
     case 'ecancel': ui.editing = null; render(); break;
     case 'edel':
       if (!b.dataset.armed){ b.dataset.armed = 1; b.textContent = 'Confirmer ?'; return; }
@@ -620,6 +703,7 @@ document.addEventListener('click', e => {
     case 'toggle': ui.open.has(it.id) ? ui.open.delete(it.id) : ui.open.add(it.id); render(); break;
     case 'ghref': ghRefresh(p, it); break;
     case 'tick': { const r = it.rows.find(x => x.id === b.dataset.r); if (r){ r.done = !r.done; save(p); render(); } break; }
+    default: return;
   }
 });
 document.addEventListener('submit', e => {
@@ -627,12 +711,19 @@ document.addEventListener('submit', e => {
   const { p, it } = findItem(f); if (!it) return;
   if (f.dataset.a === 'addrow'){
     const t = f.elements.t.value.trim(); if (!t){ f.elements.t.focus(); return; }
+    if (it.type === 'links'){
+      const m = t.match(/^(.*?)\s*((?:https?:\/\/|www\.)\S+|[\w-]+(?:\.[\w-]+)+(?:\/\S*)?)$/);
+      if (!m){ toast('Une adresse est attendue (https://…), éventuellement précédée d\'un titre.', true); return; }
+      it.rows.push({ id: uid(), t: m[1].trim(), url: safeUrl(m[2]), n: '' }); save(p); render();
+      const nf = document.querySelector(`.it[data-id="${it.id}"] .addrow input`); if (nf) nf.focus();
+      return;
+    }
     const r = { id: uid(), t, done: false };
     if (it.type === 'buy'){ r.qty = (f.elements.qty.value.trim() || '1').replace(',', '.'); r.price = f.elements.price.value.trim().replace(',', '.'); }
     it.rows.push(r); save(p); render();
     const nf = document.querySelector(`.it[data-id="${it.id}"] .addrow input`); if (nf) nf.focus();
   }
-  if (f.dataset.a === 'eform'){ if (readForm(f, p, it)){ ui.editing = null; if (it.type === 'check' || it.type === 'buy') ui.exp.add(it.id); save(p); render(); } }
+  if (f.dataset.a === 'eform'){ if (readForm(f, p, it)){ ui.editing = null; if (it.type === 'check' || it.type === 'buy' || it.type === 'links') ui.exp.add(it.id); save(p); render(); } }
 });
 document.addEventListener('input', e => { if (e.target.id === 'q'){ ui.q = e.target.value; $('#hbody').innerHTML = homeBody(); } });
 $('#fab').onclick = () => { const p = ui.pid && getP(ui.pid); if (p) sheetAdd(p); else newProject(); };
@@ -692,6 +783,24 @@ function sheetMove(p, it){
     const to = getP(b.dataset.id); if (!to) return;
     p.items = p.items.filter(x => x !== it); to.items.unshift(it); ui.editing = null;
     save(p); save(to); closeDlg(); render(); toast(`Déplacé vers ${to.name}.`);
+  });
+}
+/* Un lien seul rejoint un groupe de liens du projet (ou en crée un à sa place). */
+function sheetGroup(p, it){
+  const groups = p.items.filter(x => x.type === 'links');
+  openDlg(`<h2>🔖 Mettre dans un groupe</h2><p>« ${esc(itemTitle(it))} » rejoint le groupe : un seul élément pour plusieurs adresses.</p>
+    <div class="pick">${groups.map(g => `<button class="btn" data-a="g" data-id="${g.id}">🔖 ${esc(itemTitle(g))} <small class="muted">· ${g.rows.length} lien(s)</small></button>`).join('')}
+    <button class="btn" data-a="new">＋ Nouveau groupe</button></div>
+    <div id="gNew" hidden style="margin-top:10px"><input type="text" id="gName" placeholder="Nom du groupe (datasheets, tutos…)" autocomplete="off"><div class="btns"><button class="btn primary" data-a="mk">Créer</button></div></div>`, (a, b) => {
+    const row = { id: uid(), t: it.title || '', url: it.url, n: it.note || '' };
+    if (a === 'new'){ $('#gNew').hidden = false; $('#gName').focus(); return; }
+    let g;
+    if (a === 'g') g = p.items.find(x => x.id === b.dataset.id);
+    if (a === 'mk'){ g = { id: uid(), type: 'links', title: $('#gName').value.trim() || 'Liens', note: '', rows: [], tags: [...it.tags] }; p.items.splice(p.items.indexOf(it), 0, g); }
+    if (!g) return;
+    if (it.url) g.rows.push(row);
+    p.items = p.items.filter(x => x !== it); ui.editing = null; ui.exp.add(g.id);
+    save(p); closeDlg(); render(); toast(`Ajouté au groupe « ${itemTitle(g)} ».`);
   });
 }
 function sheetProject(p, isNew){
@@ -830,6 +939,10 @@ function projectMD(p, refs, docs){
     const t = itemTitle(it);
     switch (it.type){
       case 'link': bullet(`- 🔗 ${it.url ? lk(t, it.url) : t}${tg(it)}${nt(it)}`); break;
+      case 'links': bullet(`- 🔖 **${t}**${tg(it)}${nt(it)}${it.rows.map(r => `\n  - ${lk(r.t || host(r.url), r.url)}${r.n ? ' — ' + r.n : ''}`).join('')}`); break;
+      case 'sketch': {
+        const sv = WebAppsSketch.svg(it.sk, { ink: '#1d1b2e', bg: '#ffffff', pad: 16 });
+        block(`## ✏️ ${t}${tg(it)}\n\n${sv ? `![${t.replace(/[[\]]/g, '')}](data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(sv)))})` : '*(croquis vide)*'}`); break; }
       case 'doc': {
         const d = docs && docs.get(it.url);
         if (d) block(`## 📖 ${t}${tg(it)}\n\nSource : ${lk(host(it.url), it.url)}${it.note ? '\n\n' + it.note.split('\n').map(x => '> ' + x).join('\n') : ''}\n\n${docMD(d.text, safeUrl(it.url), d.raw)}`);

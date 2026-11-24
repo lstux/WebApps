@@ -63,11 +63,12 @@ Un plan de câblage sur plaque à pastilles (pas 2,54 mm), façon feuille à pet
 ### 📒 Notebook
 
 Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main.
-- Liens, dépôts GitHub (description, activité, PR et issues), notes Markdown, listes à cocher, listes d'achat avec totaux
+- Liens et groupes de liens, dépôts GitHub (description, activité, PR et issues), listes à cocher, listes d'achat avec totaux
+- Notes Markdown dans un éditeur plein écran, croquis à main levée (stylet, surligneur, gomme, zoom à deux doigts)
 - Circuits ProtoBoard, listes TODO et cartes référencés (résumé, aperçu), ouverts d'un toucher dans leur app
 - Documents Markdown à lire dans la Liseuse
 - Étiquettes, recherche dans tous les projets, réordonner au doigt, épingler, archiver
-- Export / import JSON, synchronisation facultative
+- Export / import JSON, export Markdown et HTML, synchronisation facultative
 
 📄 **[Documentation](docs/NOTEBOOK.md)** · 📦 **[07_notebook.html](code/07_notebook.html)**
 
@@ -184,6 +185,8 @@ La structure du repo:
 ├── code/                          # Pages HTML
 │   ├── common.css                 # Style partagé par tous les outils
 │   ├── common.js                  # Thème clair / sombre / auto, partagé
+│   ├── mdedit.js                  # Éditeur Markdown plein écran, partagé (Notebook)
+│   ├── sketch.js                  # Croquis à main levée, partagé (Notebook)
 │   ├── icons/                     # Une icône SVG par outil (favicon, en-tête, index) + webapps.svg
 │   ├── protoboard/components/     # Composants de ProtoBoardDesigner, un fichier .js par composant
 │   └── NN_outil.html              # Une page par outil ; le préfixe NN_ fixe l'ordre (voir « Build »)

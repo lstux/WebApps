@@ -2,7 +2,7 @@
 
 📦 [code/07_notebook.html](../code/07_notebook.html)
 
-Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main. Liens, dépôts GitHub, notes, listes, achats, circuits ProtoBoard, listes TODO, cartes, documents à lire. Une page, sans serveur ; synchronisation facultative.
+Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main. Liens et groupes de liens, dépôts GitHub, notes, croquis à main levée, listes, achats, circuits ProtoBoard, listes TODO, cartes, documents à lire. Une page, sans serveur ; synchronisation facultative.
 
 ## Projets
 
@@ -18,8 +18,10 @@ Chaque élément tient sur une ligne : titre et résumé (avancement, prochaine 
 | Type | Contenu |
 |------|---------|
 | 🔗 Lien | adresse (`https://` ajouté si besoin), titre (le nom du site par défaut), note |
+| 🔖 Groupe de liens | un titre et plusieurs adresses (titre, adresse, note). Sous le groupe, coller une adresse l'ajoute, éventuellement précédée d'un titre (`Datasheet LD06 https://…`). ✎ : modifier, monter ↑, **sortir du groupe** ⇱ (redevient un 🔗 Lien seul), retirer. Depuis un 🔗 Lien : ✎ → « Mettre dans un groupe… » (un groupe du projet, ou un nouveau à sa place) |
 | 🐙 Dépôt GitHub | `github.com/propriétaire/dépôt` : description, langage, étoiles, date du dernier push, PR et issues ouvertes. ↻ rafraîchit (API publique de GitHub, sans compte : environ 60 requêtes par heure, dépôts publics seulement ; les infos sont gardées avec l'élément) |
-| 📝 Note | titre et texte Markdown (même rendu que la Liseuse : marked + DOMPurify). Les notes longues sont repliées |
+| 📝 Note | titre et texte Markdown (même rendu que la Liseuse : marked + DOMPurify). ✎ ouvre l'**éditeur plein écran** (voir plus bas). Les cases `- [ ]` se cochent directement dans la note dépliée. Les notes longues sont repliées |
+| ✏️ Croquis | page blanche à dessiner à main levée (voir plus bas). Aperçu dans la note dépliée : le toucher rouvre le croquis |
 | ☑️ Liste à cocher | lignes à cocher, avancement ; ajout direct sous la liste |
 | 🛒 Liste d'achat | article, quantité, prix unitaire (€), lien vers la boutique ; « Reste à acheter » (non cochés) et total |
 | 🧩 Circuit ProtoBoard | **référencé**, pas copié : le Notebook lit la bibliothèque de ProtoBoard (`protoboard.circuit.<id>`, même navigateur), affiche son résumé et « Ouvrir dans ProtoBoard » l'ouvre directement (`protoboard_designer.html#open=<id>`, même chemin que Charger : ↶ y rend le plan précédent) |
@@ -28,6 +30,29 @@ Chaque élément tient sur une ligne : titre et résumé (avancement, prochaine 
 | 📖 Document | adresse d'un fichier Markdown (GitHub compris), titre (le nom du fichier par défaut), note ; « Lire dans la Liseuse » l'ouvre (`markdown_reader.html#url=<adresse encodée>`) |
 
 Les éléments référencés sont lus dans le stockage du navigateur : ils doivent avoir été créés (ou synchronisés) dans la même origine. Le Notebook se met à jour quand tu reviens sur son onglet.
+
+## Éditeur de note plein écran
+
+✎ sur une note (ou une nouvelle note) ouvre l'éditeur sur toute la page : titre en haut, enregistrement au fil de la frappe (« enregistré »).
+
+- **Écrire / Aperçu.** Sur grand écran (900 px et plus), l'aperçu s'affiche à côté du texte. Une note existante s'ouvre en aperçu sur téléphone.
+- **Barre d'outils** : titre (H, répété : ##, ###), gras, italique, liste, liste numérotée, case à cocher, citation, code (bloc si plusieurs lignes), lien, séparateur, annuler, rétablir. Elle agit sur la sélection, ou sur les lignes sélectionnées.
+- **Entrée** prolonge une liste (puce, numéro suivant, case décochée) ; sur une puce vide, elle termine la liste. Tab / Maj+Tab : décaler.
+- Dans l'aperçu, les cases se cochent (le texte suit).
+- **‹**, Échap ou le bouton retour du téléphone ferment l'éditeur. ⋯ → « Étiquettes, déplacer, supprimer… » ouvre le formulaire habituel.
+- Une nouvelle note fermée sans titre ni texte est supprimée.
+- L'éditeur est dans `code/mdedit.js`, partagé : la Liseuse pourra s'en servir.
+
+## Croquis
+
+Une page à dessiner, en plein écran. Les traits sont gardés en vecteurs (`sketch.js`) : nets au zoom, légers, synchronisés avec le projet.
+
+- **Outils** (barre du bas) : stylo, surligneur (transparent), gomme (efface les traits touchés), main (déplacer). 7 couleurs, dont « encre » (noir en thème clair, blanc en sombre), et 3 tailles. Le dernier choix est retenu.
+- **Stylet** : l'épaisseur suit la pression. Dès qu'un stylet est utilisé, le doigt ne dessine plus et sert à déplacer (la paume ne laisse pas de traces).
+- **Deux doigts** : déplacer et zoomer. Sur PC : molette pour défiler, Ctrl + molette (ou pincer sur le pavé tactile) pour zoomer, barre d'espace ou bouton du milieu pour déplacer. Raccourcis : P stylo, S surligneur, E gomme, H main, Ctrl+Z / Ctrl+Y.
+- ↶ ↷ annuler, rétablir. ⋯ : ajuster la vue, fond uni, quadrillé ou à points, export **PNG** ou **SVG** (fond blanc, encre noire), tout effacer, étiquettes, déplacer, supprimer.
+- Un nouveau croquis fermé vide et sans titre est supprimé.
+- Pour plus tard : traits droits, rectangles, flèches, zones de texte.
 
 ## Étiquettes et recherche
 
@@ -40,7 +65,7 @@ Les éléments référencés sont lus dans le stockage du navigateur : ils doive
 - **Exporter** : ✎ du projet → « Exporter ce projet… », ou menu ⋯ → « Exporter tout… ».
   - **JSON** (`notebook-<projet>.json` : `{app: "notebook", version: 1, projects: […], refs}`), réimportable.
   - **HTML** (`.html`) : le même contenu que le Markdown, mis en page dans une seule page autonome (styles intégrés, clair ou sombre selon le système, imprimable, sans script).
-  - **Markdown** (`.md`), à lire ou à partager : liens et références en tête, puis listes (`- [x]`), achats (tableau et totaux) et notes, chacun sous son titre.
+  - **Markdown** (`.md`), à lire ou à partager : liens et références en tête (un groupe de liens devient une sous-liste), puis listes (`- [x]`), achats (tableau et totaux), notes et croquis, chacun sous son titre. Un croquis est recopié en image SVG intégrée (`data:`) : visible dans l'export HTML et la plupart des lecteurs, pas sur GitHub.
   - Option **« Embarquer les listes TODO, cartes et circuits liés »**, cochée par défaut. En JSON, ils sont copiés dans `refs` (`todo`, `map`, `pbd` par identifiant) et recréés à l'import. En Markdown, l'arbre de la liste TODO et les points de la carte (liens OpenStreetMap) sont ajoutés.
   - Option **« Inclure le contenu des documents »**, décochée par défaut, pour Markdown et HTML : chaque 📖 Document est téléchargé au moment de l'export (un lien GitHub `blob/…` est lu sur raw.githubusercontent.com). Son contenu est recopié sous son titre, avec ses titres décalés et ses liens et images relatifs rendus absolus. Un document qu'on n'arrive pas à télécharger garde son lien, et un message le signale. Le JSON ne garde que le lien.
 - **Importer** (menu ⋯) : un export d'un projet ou de tous. Si un projet existe déjà, on choisit :
