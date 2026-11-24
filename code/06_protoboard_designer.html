@@ -929,12 +929,26 @@ function transformPart(id, fn){
   const c1 = centerW(p); p.x += Math.round(c0[0]-c1[0]); p.y += Math.round(c0[1]-c1[1]);
   reattach(p, refs); commit();
 }
+/* Première place libre, en partant du centre de la vue : une case de marge autour des pièces existantes,
+   pour qu'une pièce ajoutée ne se pose jamais sur une autre. */
+function freeSpot(p, x0, y0){
+  const taken = doc.parts.map(q => bboxW(q, geo(q)));
+  const rel = bboxW(Object.assign({}, p, {x:0, y:0}), geo(p));
+  const clash = (x, y) => taken.some(t => rel.x0 + x < t.x1 + 1 && rel.x1 + x + 1 > t.x0 && rel.y0 + y < t.y1 + 1 && rel.y1 + y + 1 > t.y0);
+  if (!clash(x0, y0)) return [x0, y0];
+  const offs = [];
+  for (let dx = -40; dx <= 40; dx++) for (let dy = -40; dy <= 40; dy++) offs.push([dx, dy]);
+  offs.sort((a, b) => (a[0]*a[0] + a[1]*a[1]) - (b[0]*b[0] + b[1]*b[1]));
+  const hit = offs.find(([dx, dy]) => !clash(x0 + dx, y0 + dy));
+  return hit ? [x0 + hit[0], y0 + hit[1]] : [x0, y0];
+}
 function addPart(type, extra){
   const r = svg.getBoundingClientRect(), c = toWorld(r.left + r.width/2, r.top + r.height/2);
   const label = BUILTIN[type] ? BUILTIN[type].label : (LIB.get(type).def.label || LIB.get(type).def.name);
   const p = Object.assign({id:uid(), type, x:0, y:0, r:0, f:false, label, names:[]}, extra || {});
   const b = geo(p).body;
-  p.x = Math.round(c.x/U - (b.x0+b.x1)/2); p.y = Math.round(c.y/U - (b.y0+b.y1)/2);
+  const [x, y] = freeSpot(p, Math.round(c.x/U - (b.x0+b.x1)/2), Math.round(c.y/U - (b.y0+b.y1)/2));
+  p.x = x; p.y = y;
   doc.parts.push(p); closeDlg(); setMode('sel'); sel = {t:'part', id:p.id}; commit();
 }
 
