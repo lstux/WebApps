@@ -54,8 +54,8 @@ Les brochages viennent de la documentation courante des modules et **sont à vé
 - **Pièces à 2 pattes** (Ajouter → ⚙ Générer) : résistance, diode, condensateur céramique ou chimique, LED. L'écart entre les pattes est réglable (✎ Modifier → Écart), les broches se renomment comme les autres (diode : `A`/`K`, chimique : `+`/`-`).
 - **Discrets** : LED RGB, potentiomètre, transistors NPN/PNP, buzzer, bouton, interrupteur, KY-040, joystick. **Alimentation** : LM7805, AMS1117, TP4056, MT3608, LM2596.
 - **Puissance** : relais 1 et 2 voies, MOSFET, optocoupleur PC817.
-- **Capteurs** : BMP180/280, BME280, AHT20, SHT31, DHT, DS18B20, MPU6050, HC-SR04, PIR, ADS1115, INA219.
-- **Écrans** : OLED SSD1306 (I2C, SPI), SH1106 1,3" (I2C, SPI), TFT ST7735 et ILI9341.
+- **Capteurs** : micro I2S INMP441, BMP180/280, BME280, AHT20, SHT31, DHT, DS18B20, MPU6050, HC-SR04, PIR, ADS1115, INA219.
+- **Écrans** : OLED SSD1306 0,96" (I2C, SPI) et 0,91" 128×32 (I2C), SH1106 1,3" (I2C, SPI), TFT ST7735 et ILI9341.
 - **Moteurs** : ponts en H L298N, TB6612, DRV8833. **Radio & GPS** : LoRa SX127x, NRF24L01, GPS NEO-6M.
 - **Interfaces** : PCF8574, MCP23017, adaptateur de niveau. **Modules** : microSD, horloge DS3231.
 - **Breadboards** : 830, 400 et 170 trous (liaisons internes et rails continus).
@@ -98,6 +98,7 @@ ProtoBoard.component({
 | `pins` | `[{ x, y, name, type?, label? }]` : broches placées une à une, pour les formes irrégulières |
 | `notes` | texte affiché quand on touche la broche, par nom de broche |
 | `deco` | formes décoratives : `usb`, `can` (capot métallique), `antenna`, `chip`, `screen`, `coin` (pile bouton), `rect` (avec `fill`) ; `x`, `y`, `w`, `h` en pas |
+| `round` | `true` : corps rond (le cercle inscrit dans `body`), pour un module rond comme le micro INMP441 |
 | `pinStyle` | `round` (défaut), `male`, `female`, `hole` (trou de breadboard : pas de nom affiché par trou, ni de pastille dessous) |
 | `buses` | `[['A1', 'B1', …], …]` : groupes de broches reliées à l'intérieur du composant (colonnes et rails d'une breadboard) |
 | `under` | `true` : dessiné sous les autres pièces (support : breadboard) |

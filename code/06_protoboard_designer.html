@@ -177,6 +177,8 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 <script src="protoboard/components/ads1115.js"></script>
 <script src="protoboard/components/ds3231.js"></script>
 <script src="protoboard/components/oled_ssd1306_i2c.js"></script>
+<script src="protoboard/components/oled_ssd1306_128x32_i2c.js"></script>
+<script src="protoboard/components/micro_inmp441.js"></script>
 <script src="protoboard/components/bouton_poussoir_6mm.js"></script>
 <script src="protoboard/components/buzzer.js"></script>
 <script src="protoboard/components/encodeur_ky040.js"></script>
@@ -326,7 +328,7 @@ function compile(def){
   // buses : groupes de broches reliées à l'intérieur du composant (colonnes et rails d'une breadboard)
   const idx = new Map(out.map((p,i) => [p.name, i]));
   const buses = (def.buses || []).map(b => b.map(n => idx.get(n)).filter(i => i !== undefined)).filter(b => b.length > 1);
-  return {pins:out, body, deco:def.deco || [], style:def.pinStyle || 'round', color:def.color || '#1b2a3a', buses, under:!!def.under, marks:def.marks || []};
+  return {pins:out, body, deco:def.deco || [], style:def.pinStyle || 'round', color:def.color || '#1b2a3a', buses, under:!!def.under, marks:def.marks || [], round:!!def.round};
 }
 function register(def, src){
   if (!def || typeof def !== 'object' || !def.id || !def.name) throw new Error('il faut au moins id et name');
@@ -344,7 +346,7 @@ ProtoBoard.component = d => { try { register(d, 'file'); } catch(e){} };   // fi
 function componentFile(def){
   const q = v => JSON.stringify(v).replace(/"([A-Za-z_]\w*)":/g, '$1: ').replace(/,"/g, ', "').replace(/,\{/g, ', {').replace(/,([A-Za-z_]\w*): /g, ', $1: ');
   const parts = [];
-  ['id','name','label','category','tags','description','color','pinStyle','under','body','deco','marks','columns','rows','pins','buses','notes'].forEach(k => {
+  ['id','name','label','category','tags','description','color','round','pinStyle','under','body','deco','marks','columns','rows','pins','buses','notes'].forEach(k => {
     const v = def[k]; if (v === undefined) return;
     if (Array.isArray(v) && (k === 'columns' || k === 'rows' || k === 'pins' || k === 'deco'))
       parts.push(`  ${k}: [\n${v.map(x => '    ' + q(x)).join(',\n')}\n  ]`);
@@ -413,7 +415,7 @@ function geo(p){
   } else if (LIB.has(p.type)){
     const c = LIB.get(p.type).geo;
     g = {pins:c.pins.map(q => ({...q, hole:c.style === 'hole'})), body:c.body, deco:c.deco, style:c.style, color:c.color,
-      buses:c.buses, under:c.under, marks:c.marks, out:c.style === 'hole'};
+      buses:c.buses, under:c.under, marks:c.marks, round:c.round, out:c.style === 'hole'};
   } else {
     return {pins:[], body:{x0:-.5, y0:-.5, x1:5.5, y1:2.5}, deco:[], style:'round', color:'#000', missing:true};
   }
@@ -508,7 +510,7 @@ function partSVG(p, g, isSel){
   if (g.missing)
     return s + `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" fill="#e5484d22" stroke="#e5484d" stroke-dasharray="5 4" stroke-width="2"/></g>`;
   if (bottom){   // dessous : empreinte pâle du module, seules les pastilles de soudure comptent
-    s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.out?2:5}" fill="${esc(g.color)}" fill-opacity=".14" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0006" stroke-width="1" stroke-dasharray="5 4"'}/>`;
+    s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.round ? Math.min(b.x1-b.x0, b.y1-b.y0)*U/2 : g.out?2:5}" fill="${esc(g.color)}" fill-opacity=".14" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0006" stroke-width="1" stroke-dasharray="5 4"'}/>`;
     if (g.style === 'hole') return s + '</g>';   // breadboard : rien à souder dessous
     g.pins.forEach(q => {
       const cx = q.x*U, cy = q.y*U;
@@ -516,7 +518,7 @@ function partSVG(p, g, isSel){
     });
     return s + '</g>';
   }
-  s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.out?2:5}" fill="${esc(g.color)}" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0007" stroke-width="1"'}/>`;
+  s += `<rect x="${b.x0*U}" y="${b.y0*U}" width="${(b.x1-b.x0)*U}" height="${(b.y1-b.y0)*U}" rx="${g.round ? Math.min(b.x1-b.x0, b.y1-b.y0)*U/2 : g.out?2:5}" fill="${esc(g.color)}" ${isSel ? 'class="pb-sel" stroke-width="3"' : 'stroke="#0007" stroke-width="1"'}/>`;
   g.deco.forEach(d => s += decoSVG(d));
   g.pins.forEach(q => {
     const cx = q.x*U, cy = q.y*U;
