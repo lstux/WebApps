@@ -39,6 +39,7 @@ Les éléments référencés sont lus dans le stockage du navigateur : ils doive
 - Stockage local (`localStorage`) : une clé par projet, `notebook.p.<id>` = `{id, name, emoji, color, pinned, archived, pos, items: […]}`.
 - **Exporter** : ✎ du projet → « Exporter ce projet… », ou menu ⋯ → « Exporter tout… ».
   - **JSON** (`notebook-<projet>.json` : `{app: "notebook", version: 1, projects: […], refs}`), réimportable.
+  - **HTML** (`.html`) : le même contenu que le Markdown, mis en page dans une seule page autonome (styles intégrés, clair ou sombre selon le système, imprimable, sans script).
   - **Markdown** (`.md`), à lire ou à partager : liens et références en tête, puis listes (`- [x]`), achats (tableau et totaux) et notes, chacun sous son titre.
   - Option **« Embarquer les listes TODO, cartes et circuits liés »**, cochée par défaut. En JSON, ils sont copiés dans `refs` (`todo`, `map`, `pbd` par identifiant) et recréés à l'import. En Markdown, l'arbre de la liste TODO et les points de la carte (liens OpenStreetMap) sont ajoutés.
 - **Importer** (menu ⋯) : un export d'un projet ou de tous. Si un projet existe déjà, on choisit :
