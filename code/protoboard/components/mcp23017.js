@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "mcp23017",
   "name": "MCP23017 (DIP-28)",
   "label": "MCP23017",
-  "category": "Modules",
+  "category": "Interfaces",
   "description": "Extension 16 E/S I2C, 7,62 mm entre rangées",
   "color": "#1c1c1c",
   "body": {

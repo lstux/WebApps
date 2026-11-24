@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "tb6612",
   "name": "Pont en H TB6612FNG",
   "label": "TB6612",
-  "category": "Modules",
+  "category": "Moteurs",
   "description": "2 moteurs, VM 4,5-13,5 V",
   "color": "#8a1c1c",
   "body": {

@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "optocoupleur-pc817",
   "name": "Optocoupleur PC817",
   "label": "PC817",
-  "category": "Discrets",
+  "category": "Puissance",
   "description": "DIP-4 : A K / E C, 3 pas entre rangées",
   "color": "#1c1c1c",
   "body": {

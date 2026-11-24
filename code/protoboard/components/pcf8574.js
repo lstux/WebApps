@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "pcf8574",
   "name": "PCF8574 (module I2C)",
   "label": "PCF8574",
-  "category": "Modules",
+  "category": "Interfaces",
   "description": "Extension 8 E/S I2C",
   "color": "#2e6b34",
   "body": {

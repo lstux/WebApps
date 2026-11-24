@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "lora-sx127x",
   "name": "LoRa SX127x (breakout)",
   "label": "LoRa",
-  "category": "Modules",
+  "category": "Radio & GPS",
   "description": "8 broches : 3V3 GND MISO MOSI SCK NSS RST DIO0",
   "color": "#8a1c1c",
   "body": {

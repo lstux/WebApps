@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "level-shifter-4ch",
   "name": "Adaptateur de niveau 4 voies",
   "label": "Level shifter",
-  "category": "Modules",
+  "category": "Interfaces",
   "description": "BSS138, 3,3 V ↔ 5 V",
   "color": "#1d3557",
   "body": {

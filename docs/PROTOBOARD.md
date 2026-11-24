@@ -44,13 +44,20 @@ Le format `.js` (plutôt que JSON) permet d'ouvrir la page directement depuis le
 
 ### Composants fournis
 
-Ajouter → par catégorie. Les brochages viennent de la documentation courante des modules et **sont à vérifier sur ta pièce** (ordre des broches, tensions, écart entre rangées) : les clones diffèrent, ⇋ retourne une pièce.
+**Ajouter** :
+- Un champ de recherche en haut : nom, description, catégorie, noms des broches, étiquettes `tags`, et bus déduits des broches (`i2c`, `spi`, `uart`, `i2s`, `analogique`, `pwm`). Plusieurs mots se cumulent, par exemple « oled spi ».
+- En dessous, une catégorie à la fois en onglets : ⭐ Récents (les 12 derniers ajoutés), puis les catégories, Mes composants et ⚙ Générer (barrettes Dupont, pièces à 2 pattes, module générique).
+- Le dernier onglet ouvert est retenu.
 
-- **Pièces à 2 pattes** (Ajouter → « Pièces à 2 pattes ») : résistance, diode, condensateur céramique ou chimique, LED. L'écart entre les pattes est réglable (✎ Modifier → Écart), les broches se renomment comme les autres (diode : `A`/`K`, chimique : `+`/`-`).
-- **Discrets** : LED RGB, potentiomètre, transistors NPN/PNP, MOSFET, PC817, buzzer, bouton, interrupteur, KY-040, joystick. **Alimentation** : LM7805, AMS1117, TP4056, MT3608, LM2596.
-- **Capteurs** : BMP180/280, BME280, AHT20, SHT31, DHT, DS18B20, MPU6050, HC-SR04, PIR, ADS1115, DS3231, INA219.
+Les brochages viennent de la documentation courante des modules et **sont à vérifier sur ta pièce** (ordre des broches, tensions, écart entre rangées) : les clones diffèrent, ⇋ retourne une pièce.
+
+- **Pièces à 2 pattes** (Ajouter → ⚙ Générer) : résistance, diode, condensateur céramique ou chimique, LED. L'écart entre les pattes est réglable (✎ Modifier → Écart), les broches se renomment comme les autres (diode : `A`/`K`, chimique : `+`/`-`).
+- **Discrets** : LED RGB, potentiomètre, transistors NPN/PNP, buzzer, bouton, interrupteur, KY-040, joystick. **Alimentation** : LM7805, AMS1117, TP4056, MT3608, LM2596.
+- **Puissance** : relais 1 et 2 voies, MOSFET, optocoupleur PC817.
+- **Capteurs** : BMP180/280, BME280, AHT20, SHT31, DHT, DS18B20, MPU6050, HC-SR04, PIR, ADS1115, INA219.
 - **Écrans** : OLED SSD1306 (I2C, SPI), SH1106 1,3" (I2C, SPI), TFT ST7735 et ILI9341.
-- **Modules** : microSD, LoRa SX127x, NRF24L01, GPS NEO-6M, PCF8574, MCP23017, adaptateur de niveau, relais, ponts en H (L298N, TB6612, DRV8833).
+- **Moteurs** : ponts en H L298N, TB6612, DRV8833. **Radio & GPS** : LoRa SX127x, NRF24L01, GPS NEO-6M.
+- **Interfaces** : PCF8574, MCP23017, adaptateur de niveau. **Modules** : microSD, horloge DS3231.
 - **Breadboards** : 830, 400 et 170 trous (liaisons internes et rails continus).
 - **Cartes** : ESP32 (C3/S3 Super Mini, S3 DevKit, DevKit 30 et 38 broches), Wemos D1 mini, Arduino Nano, Pro Micro, Pico, Blue Pill, Black Pill.
 
@@ -69,7 +76,9 @@ ProtoBoard.component({
   id: 'esp32-c3-super-mini',        // identifiant unique (minuscules, chiffres, tirets)
   name: 'ESP32-C3 Super Mini',      // nom complet, dans « Ajouter »
   label: 'C3 Super Mini',           // nom court posé sur la plaque (facultatif : name)
-  category: 'Cartes',               // regroupement dans « Ajouter »
+  category: 'Cartes',               // onglet dans « Ajouter » : Cartes, Capteurs, Écrans, Moteurs, Radio & GPS,
+                                    // Interfaces, Modules, Puissance, Alimentation, Discrets, Breadboards (ou une nouvelle)
+  tags: ['wifi', 'ble', 'usb-c'],   // mots de plus pour la recherche (facultatif ; i2c/spi/uart… sont déduits des broches)
   description: '2×8 broches, écart 6 pas',
   color: '#1b2a3a',                 // couleur du circuit imprimé
   body: { x0: -0.6, y0: -1.3, x1: 6.6, y1: 7.6 },   // contour (facultatif : broches + 0,8)

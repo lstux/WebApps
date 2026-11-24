@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "relais-1-voie",
   "name": "Relais 1 voie",
   "label": "Relais",
-  "category": "Modules",
+  "category": "Puissance",
   "description": "Commande VCC GND IN ; contacts NC COM NO",
   "color": "#1d3557",
   "body": {
