@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "potentiometre",
   "name": "Potentiomètre",
   "label": "Pot",
-  "category": "Discrets",
+  "category": "Commandes",
   "description": "3 pattes, 1 pas d'écart",
   "color": "#1d3557",
   "body": {

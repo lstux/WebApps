@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "bouton-poussoir-6mm",
   "name": "Bouton poussoir 6 mm",
   "label": "BP",
-  "category": "Discrets",
+  "category": "Commandes",
   "description": "4 pattes, 2×2 pas (pattes forcées)",
   "color": "#1c1c1c",
   "body": {

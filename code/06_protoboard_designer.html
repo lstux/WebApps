@@ -79,20 +79,28 @@ body { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hi
 .sheet .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; margin:0 4px; }
 .sheet .grid .btn { justify-content:flex-start; flex-direction:column; align-items:flex-start; gap:1px; white-space:normal; text-align:left; min-height:58px; }
 .sheet .grid small { font-weight:500; color:var(--mut); font-size:12px; }
-/* Sélecteur de composants : recherche, onglets, liste compacte */
+/* Sélecteur de composants : filtre, groupes repliables, cartes à mini-empreinte */
 #pkHead { position:sticky; top:-8px; z-index:2; background:var(--card); padding-top:8px; margin-top:-8px; }
 #pkQ { margin:0 4px 8px; width:calc(100% - 8px); }
-.tabs { display:flex; gap:6px; overflow-x:auto; padding:0 4px 8px; margin:0 -4px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
-.tabs::-webkit-scrollbar { display:none; }
-.tabs button { flex:none; border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:999px; padding:7px 12px; font:inherit; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; }
-.tabs button.on { background:var(--ac); border-color:var(--ac); color:#fff; }
-.tabs button small { font-weight:500; opacity:.7; margin-left:3px; }
-.plist { display:grid; gap:2px; margin:0 4px; min-height:40vh; align-content:start; }
-.plist button { display:flex; flex-direction:column; align-items:flex-start; gap:1px; width:100%; text-align:left; border:0; background:none; color:var(--fg); font:inherit; padding:7px 8px; border-radius:var(--r-m); cursor:pointer; }
-.plist button:hover, .plist button:focus-visible { background:var(--hover); }
-.plist b { font-weight:650; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.plist small { color:var(--mut); font-size:12.5px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.plist .empty { color:var(--mut); padding:12px 8px; }
+dialog.sheet:has(#pkHead) { max-width:760px; }
+.plist { margin:0 4px; min-height:40vh; }
+.pgrp { margin:0 0 2px; }
+.pghd { display:flex; align-items:center; gap:10px; width:100%; border:0; background:none; color:var(--fg); font:inherit; padding:10px 6px; border-radius:var(--r-m); cursor:pointer; text-align:left; }
+.pghd:hover, .pghd:focus-visible { background:var(--hover); }
+.pghd b { flex:1; font-size:15px; font-weight:700; }
+.pghd small { color:var(--mut); font-size:13px; font-weight:600; }
+.pghd .chev { color:var(--mut); width:12px; text-align:center; }
+.gico { width:20px; height:20px; flex:none; color:var(--ac); }
+.pgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; padding:2px 0 10px; }
+.pcard { display:flex; flex-direction:column; gap:4px; min-width:0; padding:8px; border:1px solid var(--line); border-radius:var(--r-m); background:var(--card); color:var(--fg); font:inherit; text-align:left; cursor:pointer; }
+.pcard:hover, .pcard:focus-visible { background:var(--hover); }
+.pmini { width:100%; height:52px; display:block; }
+.pcard b { font-size:13px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pcard small { color:var(--mut); font-size:11.5px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.plist .empty { color:var(--mut); padding:6px 8px 12px; }
+.pgen { padding:0 4px 10px; }
+.pgen p { margin:4px 4px 8px; }
+.pgen h3:first-child { margin-top:4px; }
 .sheet h3 { margin:16px 8px 6px; font-size:14px; font-weight:750; }
 .sheet .form { margin:0 4px; }
 .sheet label.lbl { display:block; font-size:13px; font-weight:600; color:var(--mut); margin:8px 0 4px; }
@@ -1020,10 +1028,33 @@ dlg.addEventListener('click', e => {
 });
 const typeLegend = () => '<div class="legend">' + Object.values(TYPES).map(t => `<span><i style="background:${t.f}"></i>${t.t}</span>`).join('') + '</div>';
 
-/* Sélecteur « Ajouter » : recherche (nom, description, étiquettes, bus déduits des broches), une catégorie à la fois
-   en onglets, ⭐ Récents en tête et ⚙ Générer (Dupont, 2 pattes, module générique) à part. */
-const CAT_ORDER = ['Cartes', 'Capteurs', 'Écrans', 'Moteurs', 'Radio & GPS', 'Interfaces', 'Modules', 'Puissance', 'Alimentation', 'Discrets', 'Breadboards'];
+/* Sélecteur « Ajouter » : la recherche filtre (nom, description, étiquettes, bus déduits des broches) ;
+   les composants sont rangés dans des groupes repliables, en cartes avec mini-empreinte.
+   Groupes générateurs (Connecteurs, Générique) : forme à la place des cartes. */
+const CAT_ORDER = ['Cartes', 'Capteurs', 'Écrans', 'Moteurs', 'Radio & GPS', 'Interfaces', 'Modules', 'Puissance', 'Alimentation', 'Commandes', 'Composants', 'Breadboards'];
 const KEY_PICK = 'protoboard.pick', KEY_RECENT = 'protoboard.recent';
+const PK_OPEN_DEF = new Set(['recent', 'Cartes']);   // groupes ouverts par défaut (si rien n'a été mémorisé)
+const ICO = {
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  board:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="7.5" cy="8" r="1"/><circle cx="12" cy="8" r="1"/><circle cx="16.5" cy="8" r="1"/><circle cx="7.5" cy="16" r="1"/><circle cx="12" cy="16" r="1"/><circle cx="16.5" cy="16" r="1"/>',
+  gauge:'<path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-4"/>',
+  screen:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M9 20h6M12 16v4"/>',
+  motor:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 4v3.5M12 16.5V20M4 12h3.5M16.5 12H20"/>',
+  antenna:'<path d="M12 21V11"/><path d="M8 21h8"/><path d="M8.5 7.5a5 5 0 0 1 7 0M5.5 4.5a9 9 0 0 1 13 0"/><circle cx="12" cy="10" r="1"/>',
+  exchange:'<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+  chip:'<rect x="6" y="6" width="12" height="12" rx="1"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/>',
+  bolt:'<path d="M13 3L5 13h6l-1 8 8-10h-6z"/>',
+  battery:'<rect x="3" y="8" width="16" height="8" rx="1.5"/><path d="M21 11v2M7 10v4M11 10v4"/>',
+  switch:'<rect x="2" y="8" width="20" height="8" rx="4"/><circle cx="16" cy="12" r="2.5"/>',
+  resistor:'<path d="M2 12h4l2-4 4 8 4-8 2 4h4"/>',
+  connector:'<rect x="6" y="3" width="12" height="18" rx="1.5"/><path d="M10 7h4M10 12h4M10 17h4"/>',
+  grid:'<rect x="3" y="4" width="18" height="16" rx="1.5"/><circle cx="8" cy="8" r=".6"/><circle cx="12" cy="8" r=".6"/><circle cx="16" cy="8" r=".6"/><circle cx="8" cy="12" r=".6"/><circle cx="12" cy="12" r=".6"/><circle cx="16" cy="12" r=".6"/><circle cx="8" cy="16" r=".6"/><circle cx="12" cy="16" r=".6"/><circle cx="16" cy="16" r=".6"/>',
+  plus:'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/>',
+  dots:'<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>'
+};
+const ICON_OF = {'Cartes':'board', 'Capteurs':'gauge', 'Écrans':'screen', 'Moteurs':'motor', 'Radio & GPS':'antenna', 'Interfaces':'exchange', 'Modules':'chip', 'Puissance':'bolt', 'Alimentation':'battery', 'Commandes':'switch', 'Composants':'resistor', 'Breadboards':'grid', 'Mes composants':'folder'};
+const svgIco = k => `<svg class="gico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[k] || ICO.dots}</svg>`;
 const readJ = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch(e){ return d; } };
 const catOf = e => e.src === 'local' ? 'Mes composants' : (e.def.category || 'Divers');
 const fold = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -1039,28 +1070,64 @@ function searchText(e){
   const d = e.def;
   return e.st = fold([d.name, d.label, d.description, catOf(e), ...(d.tags || []), ...auto, ...names].join(' '));
 }
-function pickRow(id, e, withCat){
-  const n = e.geo.pins.length, d = e.def;
-  const sub = [withCat && catOf(e), d.description, e.def.pinStyle === 'hole' || /\d+\s*broche/i.test(d.description || '') ? '' : `${n} broche${n > 1 ? 's' : ''}`].filter(Boolean).join(' · ');
-  return `<button data-a="add" data-id="${esc(id)}"><b>${esc(d.name)}</b><small>${esc(sub)}</small></button>`;
+/* Mini-empreinte : corps (forme, couleur), décorations, broches colorées par type. */
+function miniSVG(e){
+  const g = e.geo, b = g.body, pts = g.pins;
+  const xs = [b.x0, b.x1, ...pts.map(p => p.x)], ys = [b.y0, b.y1, ...pts.map(p => p.y)];
+  const x0 = Math.min(...xs) - .6, y0 = Math.min(...ys) - .6, W = Math.max(...xs) - x0 + .6, H = Math.max(...ys) - y0 + .6;
+  const bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+  let s = `<svg class="pmini" viewBox="${x0} ${y0} ${W} ${H}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">`;
+  s += `<rect x="${b.x0}" y="${b.y0}" width="${bw}" height="${bh}" rx="${g.round ? Math.min(bw, bh) / 2 : .25}" fill="${esc(g.color)}" fill-opacity=".85"/>`;
+  (g.deco || []).forEach(d => { if (d.x !== undefined) s += `<rect x="${d.x}" y="${d.y}" width="${d.w || .5}" height="${d.h || .5}" rx=".12" fill="${esc(d.fill || '#0004')}"/>`; });
+  pts.forEach(p => { s += `<circle cx="${p.x}" cy="${p.y}" r=".32" fill="${(TYPES[p.type] || TYPES.gpio).f}" stroke="#0007" stroke-width=".08"/>`; });
+  return s + '</svg>';
 }
-function pickBody(){
-  const st = readJ(KEY_PICK, {}), q = fold($('#pkQ') ? $('#pkQ').value.trim() : '');
+function pickCard(id, e){
+  const d = e.def, n = e.geo.pins.length;
+  const sub = d.description || `${n} broche${n > 1 ? 's' : ''}`;
+  return `<button class="pcard" data-a="add" data-id="${esc(id)}">${miniSVG(e)}<b>${esc(d.name)}</b><small>${esc(sub)}</small></button>`;
+}
+/* Groupes : Récents, catégories (dans l'ordre), puis les deux générateurs. */
+function pickGroups(){
+  const counts = new Map();
+  LIB.forEach(e => { const c = catOf(e); counts.set(c, (counts.get(c) || 0) + 1); });
+  const cats = [...CAT_ORDER.filter(c => counts.has(c)), ...[...counts.keys()].filter(c => !CAT_ORDER.includes(c) && c !== 'Mes composants').sort(), ...(counts.has('Mes composants') ? ['Mes composants'] : [])];
+  return [
+    {id:'recent', name:'Récents', icon:'clock'},
+    ...cats.map(c => ({id:c, name:c, icon:ICON_OF[c] || 'dots', cat:true})),
+    {id:'Connecteurs', name:'Connecteurs', icon:'connector', gen:true, kw:'connecteur dupont barrette male femelle picot broche'},
+    {id:'Générique', name:'Générique', icon:'plus', gen:true, kw:'generique generer piece resistance condensateur diode module pattes'}
+  ];
+}
+let pkSearchClosed = new Set(), pkLastQ = '';   // groupes repliés pendant une recherche (oubliés à chaque nouvelle recherche)
+function pickData(){
+  const q = fold(($('#pkQ') ? $('#pkQ').value : '').trim()), words = q ? q.split(/\s+/) : null;
+  if (q !== pkLastQ){ pkSearchClosed = new Set(); pkLastQ = q; }
   const all = [...LIB.entries()].sort((a, b) => a[1].def.name.localeCompare(b[1].def.name, 'fr'));
-  if (q){
-    const words = q.split(/\s+/), hits = all.filter(([, e]) => words.every(w => searchText(e).includes(w)));
-    return hits.length ? hits.map(([id, e]) => pickRow(id, e, true)).join('') : `<div class="empty">Rien pour « ${esc(q)} ». Essaie ⚙ Générer : barrette, pièce à 2 pattes ou module générique.</div>`;
-  }
-  const tab = st.tab || 'recent';
-  if (tab === 'recent'){
-    const rec = readJ(KEY_RECENT, []).filter(id => LIB.has(id));
-    return rec.length ? rec.map(id => pickRow(id, LIB.get(id), true)).join('') : '<div class="empty">Les composants que tu ajoutes apparaîtront ici.</div>';
-  }
-  if (tab === 'gen') return `<h3>Connecteurs Dupont</h3><div class="form"><div class="three">
+  const rec = readJ(KEY_RECENT, []).filter(id => LIB.has(id)).map(id => [id, LIB.get(id)]);
+  const st = readJ(KEY_PICK, {}), open = st.open || {};
+  const groups = pickGroups().map(g => {
+    let items = g.id === 'recent' ? rec : (g.cat ? all.filter(([, e]) => catOf(e) === g.id) : []);
+    if (words){
+      items = items.filter(([, e]) => words.every(w => searchText(e).includes(w)));
+      g.show = items.length > 0 || (!!g.kw && words.every(w => fold(g.kw).includes(w)));
+      g.isOpen = g.show && !pkSearchClosed.has(g.id);
+    } else {
+      g.show = true;
+      g.isOpen = g.id in open ? !!open[g.id] : PK_OPEN_DEF.has(g.id);
+    }
+    g.items = items; return g;
+  });
+  return {groups, q};
+}
+function connectorsHTML(){
+  return `<div class="pgen"><p>Barrettes Dupont, générées à la demande. Les borniers à vis et les JST viendront ici.</p><div class="form"><div class="three">
       <div><label class="lbl" for="hn">Broches</label><input type="number" id="hn" min="1" max="40" value="4" inputmode="numeric"></div>
       <div><label class="lbl" for="hr">Rangées</label><select id="hr"><option value="1">1</option><option value="2">2</option></select></div><div></div></div></div>
-    <div class="grid" style="margin-top:8px"><button class="btn" data-a="hdrM"><b>Barrette mâle</b><small>picots</small></button><button class="btn" data-a="hdrF"><b>Barrette femelle</b><small>douilles</small></button></div>
-    <h3>Pièces à 2 pattes</h3><div class="form"><div class="three">
+    <div class="grid" style="margin-top:8px"><button class="btn" data-a="hdrM"><b>Barrette mâle</b><small>picots</small></button><button class="btn" data-a="hdrF"><b>Barrette femelle</b><small>douilles</small></button></div></div>`;
+}
+function genericHTML(){
+  return `<div class="pgen"><h3>Pièce à 2 pattes</h3><div class="form"><div class="three">
       <div><label class="lbl" for="ak">Type</label><select id="ak">${Object.entries(AXIAL).map(([k,a]) => `<option value="${k}">${a.name}</option>`).join('')}</select></div>
       <div><label class="lbl" for="asp">Écart (pas)</label><input type="number" id="asp" min="1" max="30" value="4" inputmode="numeric"></div><div></div></div></div>
     <div class="btns"><button class="btn primary" data-a="axial">Ajouter la pièce</button></div>
@@ -1070,28 +1137,38 @@ function pickBody(){
       <div><label class="lbl" for="gr">Rangées</label><select id="gr"><option value="1">1</option><option value="2">2</option></select></div>
       <div><label class="lbl" for="gg">Écart (2 rangées)</label><input type="number" id="gg" min="1" max="30" value="5" inputmode="numeric"></div></div>
       <label class="lbl" for="gnames">Noms des broches (séparés par des virgules)</label><input type="text" id="gnames" placeholder="VCC, GND, SCL, SDA"></div>
-    <div class="btns"><button class="btn primary" data-a="mod">Ajouter le module</button></div>` + typeLegend();
-  const list = all.filter(([, e]) => catOf(e) === tab);
-  return list.length ? list.map(([id, e]) => pickRow(id, e)).join('') : '<div class="empty">Aucun composant ici.</div>';
+    <div class="btns"><button class="btn primary" data-a="mod">Ajouter le module</button></div>${typeLegend()}</div>`;
 }
-function pickTabs(){
-  const st = readJ(KEY_PICK, {}), counts = new Map();
-  LIB.forEach(e => { const c = catOf(e); counts.set(c, (counts.get(c) || 0) + 1); });
-  const cats = [...CAT_ORDER.filter(c => counts.has(c)), ...[...counts.keys()].filter(c => !CAT_ORDER.includes(c) && c !== 'Mes composants').sort(), ...(counts.has('Mes composants') ? ['Mes composants'] : [])];
-  const tabs = [['recent', '⭐ Récents'], ...cats.map(c => [c, c, counts.get(c)]), ['gen', '⚙ Générer']];
-  let tab = st.tab || 'recent'; if (!tabs.some(t => t[0] === tab)) tab = 'recent';
-  const q = $('#pkQ') && $('#pkQ').value.trim();
-  return tabs.map(([k, t, n]) => `<button class="${!q && k === tab ? 'on' : ''}" data-a="tab" data-v="${esc(k)}">${esc(t)}${n ? `<small>${n}</small>` : ''}</button>`).join('');
+function pickBody(){
+  const {groups, q} = pickData();
+  const shown = groups.filter(g => g.show);
+  if (!shown.length) return `<div class="empty">Rien pour « ${esc(q)} ». Essaie Connecteurs ou Générique pour les barrettes, pièces à 2 pattes et modules génériques.</div>`;
+  return shown.map(g => {
+    let body = '';
+    if (g.isOpen){
+      if (g.gen) body = g.id === 'Connecteurs' ? connectorsHTML() : genericHTML();
+      else if (g.items.length) body = `<div class="pgrid">${g.items.map(([id, e]) => pickCard(id, e)).join('')}</div>`;
+      else body = `<div class="empty">${g.id === 'recent' ? 'Les composants que tu ajoutes apparaîtront ici.' : 'Aucun composant ici.'}</div>`;
+    }
+    const count = g.gen ? '' : `<small>${g.items.length}</small>`;
+    return `<section class="pgrp">
+      <button class="pghd" data-a="grp" data-g="${esc(g.id)}" aria-expanded="${g.isOpen}">${svgIco(g.icon)}<b>${esc(g.name)}</b>${count}<span class="chev" aria-hidden="true">${g.isOpen ? '▾' : '▸'}</span></button>${body}</section>`;
+  }).join('');
 }
-function pickRefresh(){ $('#pkTabs').innerHTML = pickTabs(); $('#pkList').innerHTML = pickBody(); }
+function pickRefresh(){ $('#pkList').innerHTML = pickBody(); }
 function sheetAdd(){
   const old = $('#pkQ'); if (old) old.remove();   // la feuille précédente (fermée) est encore dans le DOM
-  const h = `<h2>Ajouter</h2><div id="pkHead"><input type="search" id="pkQ" placeholder="Chercher : esp32, i2c, moteur, relais…" autocomplete="off" enterkeyhint="search">
-    <div class="tabs" id="pkTabs">${pickTabs()}</div></div><div class="plist" id="pkList">${pickBody()}</div>`;
+  const h = `<h2>Ajouter</h2><div id="pkHead"><input type="search" id="pkQ" placeholder="Filtrer : esp32, i2c, moteur, relais…" autocomplete="off" enterkeyhint="search"></div><div class="plist" id="pkList">${pickBody()}</div>`;
   openDlg(h, (a, b) => {
-    if (a === 'tab'){
-      const st = readJ(KEY_PICK, {}); st.tab = b.dataset.v; try { localStorage.setItem(KEY_PICK, JSON.stringify(st)); } catch(e){}
-      $('#pkQ').value = ''; pickRefresh(); $('#pkList').scrollTop = 0; b.scrollIntoView({inline:'nearest', block:'nearest'}); return;
+    if (a === 'grp'){
+      const id = b.dataset.g;
+      if (fold(($('#pkQ').value || '').trim())){ pkSearchClosed.has(id) ? pkSearchClosed.delete(id) : pkSearchClosed.add(id); }
+      else {
+        const st = readJ(KEY_PICK, {}); st.open = st.open || {};
+        const cur = id in st.open ? !!st.open[id] : PK_OPEN_DEF.has(id);
+        st.open[id] = !cur; try { localStorage.setItem(KEY_PICK, JSON.stringify(st)); } catch(e){}
+      }
+      pickRefresh(); return;
     }
     if (a === 'add'){
       const rec = [b.dataset.id, ...readJ(KEY_RECENT, []).filter(x => x !== b.dataset.id)].slice(0, 12);
@@ -1113,7 +1190,6 @@ function sheetAdd(){
     }
   });
   $('#pkQ').addEventListener('input', pickRefresh);
-  const on = $('#pkTabs .on'); if (on) on.scrollIntoView({inline:'center', block:'nearest'});
 }
 function sheetEdit(id){
   const p = getPart(id); if (!p) return;

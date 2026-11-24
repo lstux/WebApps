@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "joystick-analogique",
   "name": "Joystick analogique",
   "label": "Joystick",
-  "category": "Discrets",
+  "category": "Commandes",
   "description": "GND 5V VRx VRy SW, module KY-023",
   "color": "#1d3557",
   "body": {

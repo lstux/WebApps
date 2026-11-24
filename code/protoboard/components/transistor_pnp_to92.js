@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "transistor-pnp-to92",
   "name": "Transistor PNP TO-92",
   "label": "PNP",
-  "category": "Discrets",
+  "category": "Composants",
   "description": "2N2907 / BC557, vue de face",
   "color": "#1c1c1c",
   "body": {

@@ -3,7 +3,7 @@ ProtoBoard.component({
   "id": "transistor-npn-to92",
   "name": "Transistor NPN TO-92",
   "label": "NPN",
-  "category": "Discrets",
+  "category": "Composants",
   "description": "2N2222 / BC547, vue de face (méplat)",
   "color": "#1c1c1c",
   "body": {
