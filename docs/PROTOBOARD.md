@@ -52,12 +52,12 @@ Le format `.js` (plutôt que JSON) permet d'ouvrir la page directement depuis le
 Les brochages viennent de la documentation courante des modules et **sont à vérifier sur ta pièce** (ordre des broches, tensions, écart entre rangées) : les clones diffèrent, ⇋ retourne une pièce.
 
 - **Pièces à 2 pattes** (Ajouter → ⚙ Générer) : résistance, diode, condensateur céramique ou chimique, LED. L'écart entre les pattes est réglable (✎ Modifier → Écart), les broches se renomment comme les autres (diode : `A`/`K`, chimique : `+`/`-`).
-- **Discrets** : LED RGB, potentiomètre, transistors NPN/PNP, buzzer, bouton, interrupteur, KY-040, joystick. **Alimentation** : LM7805, AMS1117, TP4056, MT3608, LM2596.
+- **Discrets** : LED RGB, potentiomètre, transistors NPN/PNP, buzzer, bouton, interrupteur, KY-040, joystick. **Alimentation** : LM7805, AMS1117, TP4056, MT3608, LM2596, abaisseur Mini560 5 V.
 - **Puissance** : relais 1 et 2 voies, MOSFET, optocoupleur PC817.
 - **Capteurs** : micro I2S INMP441, BMP180/280, BME280, AHT20, SHT31, DHT, DS18B20, MPU6050, HC-SR04, PIR, ADS1115, INA219.
-- **Écrans** : OLED SSD1306 0,96" (I2C, SPI) et 0,91" 128×32 (I2C), SH1106 1,3" (I2C, SPI), TFT ST7735 et ILI9341.
+- **Écrans** : OLED SSD1306 0,96" (I2C, SPI) et 0,91" 128×32 (I2C), OLED 0,96" I2C avec 4 boutons, matrice LED WS2812B 8×8, SH1106 1,3" (I2C, SPI), TFT ST7735 et ILI9341.
 - **Moteurs** : ponts en H L298N, TB6612, DRV8833. **Radio & GPS** : LoRa SX127x, NRF24L01, GPS NEO-6M.
-- **Interfaces** : PCF8574, MCP23017, adaptateur de niveau. **Modules** : microSD, horloge DS3231.
+- **Interfaces** : PCF8574, MCP23017, adaptateur de niveau. **Modules** : microSD (5 V, et mini 3,3 V), horloge DS3231.
 - **Breadboards** : 830, 400 et 170 trous (liaisons internes et rails continus).
 - **Cartes** : ESP32 (C3/S3 Super Mini, S3 DevKit, DevKit 30 et 38 broches), Wemos D1 mini, Arduino Nano, Pro Micro, Pico, Blue Pill, Black Pill.
 
