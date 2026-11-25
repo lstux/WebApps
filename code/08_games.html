@@ -4,12 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Jeux</title>
-<meta name="description" content="Petits jeux hors ligne : démineur, snake, sudoku, solitaire. Meilleurs scores et parties en cours gardés.">
+<meta name="description" content="Petits jeux hors ligne : démineur, snake, sudoku, solitaire, et émulateurs avec tes propres ROMs. Meilleurs scores et parties en cours gardés.">
 <link rel="stylesheet" href="common.css">
 <link rel="icon" type="image/svg+xml" href="icons/games.svg">
 <script src="common.js"></script>
 <script src="pbstore.js"></script>
 <script src="pbsync.js"></script>
+<script src="emulator.js"></script>
 <style>
 /* Jeux — styles propres à l'app. Le reste vient de common.css : .topbar, .btn, .iconbtn, .card, .sheet, .item, .toast. */
 .topbar-in{max-width:760px}
@@ -32,6 +33,7 @@ main{max-width:760px;margin:0 auto;padding:14px 12px calc(28px + env(safe-area-i
 .gcard.soon{opacity:.55;cursor:default;box-shadow:none}
 .gcard.soon:hover{transform:none;border-color:var(--line)}
 .hint{color:var(--mut);font-size:13px;margin:14px 4px 0}
+.hint a{color:var(--ac)}
 
 /* ---- commun aux jeux ---- */
 .gbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
@@ -761,6 +763,7 @@ function bestLine(b, names){
   const parts = Object.entries(names).filter(([k]) => b[k] && b[k].best != null).map(([k, n]) => `${n} ${fmt(b[k].best)}`);
   return parts.length ? '🏆 ' + parts.join(' · ') : '';
 }
+const EMU = { name: 'Émulateurs', ic: '👾' };
 let cur = null;
 function home(){
   const B = best();
@@ -768,18 +771,19 @@ function home(){
     const live = loadSave(id), bl = g.best(B[id] || {});
     return `<a class="gcard" href="#${id}">${live ? '<span class="live">en cours</span>' : ''}<span class="ge">${g.ic}</span><b>${g.name}</b><small>${g.desc}</small>${bl ? `<span class="best">${esc(bl)}</span>` : ''}</a>`;
   }).join('')}
-    <div class="gcard soon" aria-disabled="true"><span class="ge">👾</span><b>Émulateurs</b><small>Bientôt : NES, Game Boy, Mega Drive… avec tes propres ROMs.</small></div></div>
+    <a class="gcard" href="#emu"><span class="ge">👾</span><b>Émulateurs</b><small>NES, Game Boy, Mega Drive… avec tes propres ROMs.</small></a></div>
     <p class="hint">Les parties en cours sont gardées sur cet appareil ; les records se synchronisent avec tes autres appareils (menu ⋯).</p>`;
 }
 function route(){
   if (cur){ try { cur.destroy(); } catch(e){} cur = null; }
   closeDlg();
-  const id = location.hash.slice(1), g = GAMES[id];
+  const [id, arg] = location.hash.slice(1).split('/'), emu = id === 'emu', g = emu ? EMU : GAMES[id];
   $('#back').hidden = !g;
-  $('#sub').textContent = g ? `${g.ic} ${g.name}` : 'Démineur, snake, sudoku, solitaire';
+  $('#sub').textContent = g ? `${g.ic} ${g.name}` : 'Démineur, snake, sudoku, solitaire…';
   document.title = g ? `${g.name} · Jeux` : 'Jeux';
   main.innerHTML = '';
-  if (g){ const r = document.createElement('div'); main.appendChild(r); cur = g.start(r); }
+  if (emu){ const r = document.createElement('div'); main.appendChild(r); cur = WebAppsEmu.start(r, { arg, toast, openDlg, closeDlg, esc }); }
+  else if (g){ const r = document.createElement('div'); main.appendChild(r); cur = g.start(r); }
   else home();
   scrollTo(0, 0);
 }

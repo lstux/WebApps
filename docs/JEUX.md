@@ -35,17 +35,30 @@ Une carte par jeu, avec les records. « en cours » signale une partie à repren
 - Toucher la pioche : tirer ; pioche vide : retourner le talon.
 - ↶ Annuler (sans limite pratique), 💡 Indice (fait clignoter une carte jouable), ⚡ **Terminer** quand toutes les cartes sont visibles et la pioche vide.
 
+## 👾 Émulateurs
+
+Carte « Émulateurs » de l'accueil (`#emu`). Code dans `code/emulator.js`.
+
+- **Ajouter** : bouton « ＋ Ajouter des ROMs » ou glisser-déposer, plusieurs fichiers à la fois. Le système est deviné par l'extension ; pour un `.zip` ou une extension inconnue, l'app demande.
+- **Systèmes** : NES, Super Nintendo, Game Boy, Game Boy Color, Game Boy Advance, Mega Drive, Master System, Game Gear, PC Engine, Atari 2600, Nintendo 64 (lourd sur téléphone). Pas de PlayStation (BIOS et poids).
+- **Jouer** : toucher une ROM ouvre le lecteur plein écran ; un premier toucher dans EmulatorJS lance le jeu (nécessaire pour le son). Menu d'EmulatorJS : commandes tactiles, sauvegardes d'état, manette, plein écran.
+- **Options** (⋯ sur une ROM) : renommer, changer de système, supprimer.
+- **Confidentialité** : les ROMs sont dans IndexedDB (`webapps-emu`), sur cet appareil seulement. Elles ne passent ni par PocketBase ni par le CDN : EmulatorJS les lit via une adresse `blob:` locale. Les sauvegardes d'état faites dans l'émulateur restent aussi sur l'appareil.
+- **Moteur** : EmulatorJS est téléchargé depuis `https://cdn.emulatorjs.org/stable/data/` au premier lancement d'un système, puis mis en cache par le navigateur. Il faut donc une connexion la première fois. Lien « Adresse du moteur » pour pointer vers un miroir perso (dossier `data/` d'EmulatorJS, par ex. celui du dépôt WebGames).
+- **Threads** : activés seulement si la page est servie en HTTPS isolé (`crossOriginIsolated`) ; sinon les cores sans threads suffisent pour les consoles 8/16 bits.
+
 ## Données
 
 | Clé (localStorage) | Contenu | Synchronisée |
 |---|---|---|
 | `games.best` | records et nombre de parties, par jeu et niveau | oui (menu ⋯ → Synchronisation) |
 | `games-save.<jeu>` | partie en cours | non : reste sur l'appareil |
-| `games-pref.*` | dernier niveau, mode Snake, pioche du Solitaire | non |
+| `games-pref.*` | dernier niveau, mode Snake, pioche du Solitaire, adresse du moteur | non |
+| IndexedDB `webapps-emu` | tes ROMs (fichiers) | non : jamais envoyées |
 
 Menu ⋯ → « Effacer les records » remet les records à zéro (sur tous les appareils synchronisés).
 
 ## Plus tard
 
-- **Émulateurs** (NES, Game Boy, Mega Drive…) avec **tes propres ROMs** : choisies sur l'appareil, gardées dans le navigateur, EmulatorJS chargé depuis son CDN. Les ROMs ne sont jamais envoyées nulle part.
+- Émulateurs : PlayStation (BIOS à fournir), réglages de touches, export/import de la bibliothèque.
 - D'autres jeux : 2048, mots mêlés…
