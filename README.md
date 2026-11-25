@@ -72,6 +72,15 @@ Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main.
 
 📄 **[Documentation](docs/NOTEBOOK.md)** · 📦 **[07_notebook.html](code/07_notebook.html)**
 
+### 🎮 Jeux
+
+Des petits jeux, hors ligne, au doigt comme au clavier :
+- Démineur (3 niveaux, appui long pour le drapeau), Snake (murs ou traversée), Sudoku (grilles générées, notes, indices), Solitaire Klondike (pioche par 1 ou par 3, toucher ou glisser)
+- Partie en cours gardée sur l'appareil, records synchronisés (facultatif)
+- Bientôt : émulateurs rétro avec tes propres ROMs
+
+📄 **[Documentation](docs/JEUX.md)** · 📦 **[08_games.html](code/08_games.html)**
+
 ## Prochains outils
 
 La liste des outils envisagés est dans [docs/suggested_apps_nextsteps.md](docs/suggested_apps_nextsteps.md).

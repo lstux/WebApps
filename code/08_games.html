@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Jeux</title>
+<meta name="description" content="Petits jeux hors ligne : démineur, snake, sudoku, solitaire. Meilleurs scores et parties en cours gardés.">
+<link rel="stylesheet" href="common.css">
+<link rel="icon" type="image/svg+xml" href="icons/games.svg">
+<script src="common.js"></script>
+<script src="pbstore.js"></script>
+<script src="pbsync.js"></script>
+<style>
+/* Jeux — styles propres à l'app. Le reste vient de common.css : .topbar, .btn, .iconbtn, .card, .sheet, .item, .toast. */
+.topbar-in{max-width:760px}
+@media (max-width:480px){.topbar-in{gap:8px}.topbar-in .appicon{width:30px;height:30px;border-radius:9px}.brand{font-size:20px}.topbar-in .iconbtn{--icon-size:36px}}
+main{max-width:760px;margin:0 auto;padding:14px 12px calc(28px + env(safe-area-inset-bottom,0px))}
+#back[hidden]{display:none}
+.muted{color:var(--mut)}
+
+/* ---- accueil ---- */
+.ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.gcard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px;border:1px solid var(--line);border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow);
+  color:var(--fg);text-decoration:none;font:inherit;text-align:left;cursor:pointer;transition:transform .2s var(--spring),border-color .15s;position:relative;overflow:hidden}
+.gcard:hover{transform:translateY(-2px);border-color:var(--ac)}
+.gcard:active{transform:scale(.97)}
+.gcard .ge{font-size:38px;line-height:1}
+.gcard b{font-size:17px;font-weight:750}
+.gcard small{color:var(--mut);font-size:13px;line-height:1.35}
+.gcard .best{font-size:12.5px;font-weight:650;color:var(--ac)}
+.gcard .live{position:absolute;top:12px;right:12px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--ac-soft);color:var(--ac)}
+.gcard.soon{opacity:.55;cursor:default;box-shadow:none}
+.gcard.soon:hover{transform:none;border-color:var(--line)}
+.hint{color:var(--mut);font-size:13px;margin:14px 4px 0}
+
+/* ---- commun aux jeux ---- */
+.gbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.gbar .sp{flex:1}
+.stat{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:var(--card2);font-weight:700;font-variant-numeric:tabular-nums;font-size:15px}
+.seg{display:inline-flex;background:var(--card2);border-radius:999px;padding:3px;gap:2px}
+.seg button{border:0;background:none;color:var(--mut);font:inherit;font-size:13.5px;font-weight:650;padding:6px 11px;border-radius:999px;cursor:pointer}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 3px #0002}
+.gbtn{padding:8px 13px}
+.over{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);border-radius:inherit;z-index:30;text-align:center;padding:16px}
+.over .box{background:var(--card);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--shadow);padding:18px 22px;max-width:320px}
+.over h3{margin:0 0 6px;font-size:20px}
+.over p{margin:0 0 12px;color:var(--mut)}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.shake{animation:shake .25s}
+
+/* ---- démineur ---- */
+.mwrap{position:relative;overflow:auto;border-radius:var(--r-m);max-width:100%;margin:0 auto;width:max-content;touch-action:manipulation}
+.mgrid{display:grid;gap:2px;padding:6px;background:var(--card2);border-radius:var(--r-m);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.mc{width:var(--cs);height:var(--cs);border:0;padding:0;border-radius:calc(var(--cs) * .18);background:color-mix(in srgb,var(--ac) 30%,var(--card));box-shadow:inset 0 -3px 0 color-mix(in srgb,var(--ac) 30%,transparent),inset 0 2px 0 #ffffff40;
+  font:800 calc(var(--cs) * .56)/1 system-ui,sans-serif;color:var(--fg);display:grid;place-items:center;cursor:pointer}
+.mc.o{background:var(--card);box-shadow:none;cursor:default}
+.mc.f::after{content:"🚩";font-size:calc(var(--cs) * .55)}
+.mc.b{background:var(--err)}
+.mc.b::after{content:"💣";font-size:calc(var(--cs) * .55)}
+.mc.m::after{content:"💣";font-size:calc(var(--cs) * .5)}
+.mc.x{background:color-mix(in srgb,var(--err) 25%,var(--card))}
+.mc.n1{color:#2f6fed}.mc.n2{color:#16a34a}.mc.n3{color:#e5484d}.mc.n4{color:#6d28d9}.mc.n5{color:#b45309}.mc.n6{color:#0e7490}.mc.n7{color:var(--fg)}.mc.n8{color:var(--mut)}
+:root[data-theme=dark] .mc.n1{color:#7aa7ff}:root[data-theme=dark] .mc.n2{color:#4ade80}:root[data-theme=dark] .mc.n3{color:#ff7b80}:root[data-theme=dark] .mc.n4{color:#c4a5ff}
+
+/* ---- snake ---- */
+.swrap{position:relative;margin:0 auto;border-radius:var(--r-m);overflow:hidden;touch-action:none;background:var(--card2)}
+.swrap canvas{display:block}
+.dpad{display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,56px);gap:6px;justify-content:center;margin:12px auto 0}
+.dpad button{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--fg);font-size:22px;cursor:pointer;touch-action:manipulation}
+.dpad button:active{background:var(--ac-soft)}
+.dpad [data-d=up]{grid-column:2}
+.dpad [data-d=left]{grid-column:1;grid-row:2}.dpad [data-d=down]{grid-column:2;grid-row:2}.dpad [data-d=right]{grid-column:3;grid-row:2}
+@media (hover:hover) and (pointer:fine){.dpad{display:none}}
+
+/* ---- sudoku ---- */
+.sgrid{display:grid;grid-template-columns:repeat(9,1fr);width:min(100%,480px);aspect-ratio:1;margin:0 auto;border:2px solid var(--fg);border-radius:10px;overflow:hidden;background:var(--card);user-select:none;-webkit-user-select:none;position:relative}
+.sc{border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--card);color:var(--ac);font:600 clamp(16px,5.4vw,26px)/1 system-ui,sans-serif;display:grid;place-items:center;padding:0;cursor:pointer;position:relative}
+.sc:nth-child(9n+3),.sc:nth-child(9n+6){border-right:2px solid var(--fg)}
+.sc:nth-child(n+19):nth-child(-n+27),.sc:nth-child(n+46):nth-child(-n+54){border-bottom:2px solid var(--fg)}
+.sc.g{color:var(--fg);font-weight:750}
+.sc.h{background:color-mix(in srgb,var(--ac) 7%,var(--card))}
+.sc.same{background:color-mix(in srgb,var(--ac) 20%,var(--card))}
+.sc.sel{background:color-mix(in srgb,var(--ac) 32%,var(--card))}
+.sc.bad{color:var(--err)}
+.sc .nt{position:absolute;inset:2px;display:grid;grid-template-columns:repeat(3,1fr);font-size:clamp(8px,2.2vw,11px);font-weight:600;color:var(--mut);line-height:1}
+.sc .nt i{font-style:normal;display:grid;place-items:center}
+.spad{display:grid;grid-template-columns:repeat(9,1fr);gap:5px;width:min(100%,480px);margin:12px auto 0}
+.spad button{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg);font:700 22px/1 system-ui,sans-serif;padding:10px 0 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;touch-action:manipulation}
+.spad button small{font-size:10px;color:var(--mut);font-weight:600}
+.spad button:disabled{opacity:.3;cursor:default}
+.spad button:active:not(:disabled){background:var(--ac-soft)}
+.sact{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;width:min(100%,480px);margin:10px auto 0}
+.sact .btn.on{border-color:var(--ac);background:var(--ac-soft);color:var(--ac)}
+
+/* ---- solitaire ---- */
+.kwrap{position:relative;width:100%;max-width:760px;margin:0 auto;user-select:none;-webkit-user-select:none;touch-action:none;
+  background:radial-gradient(circle at 50% 30%,#1f8a5b,#145c3d);border-radius:var(--r-m);overflow:hidden}
+:root[data-theme=dark] .kwrap{background:radial-gradient(circle at 50% 30%,#175c42,#0c3426)}
+.slot{position:absolute;border:2px dashed #ffffff40;border-radius:calc(var(--cw) * .1);display:grid;place-items:center;color:#ffffff55;font-size:calc(var(--cw) * .42)}
+.card-k{position:absolute;width:var(--cw);height:calc(var(--cw) * 1.4);border-radius:calc(var(--cw) * .1);background:#fff;color:#1d1b2e;box-shadow:0 1px 2px #0005;
+  transition:left .18s ease,top .18s ease;cursor:pointer;font-family:system-ui,sans-serif;overflow:hidden;will-change:left,top}
+.card-k.red{color:#d92d3a}
+.card-k .cr{position:absolute;left:7%;top:4%;font-weight:800;font-size:calc(var(--cw) * .3);line-height:1;text-align:center}
+.card-k .cr small{display:block;font-size:calc(var(--cw) * .26)}
+.card-k .cs{position:absolute;right:8%;bottom:4%;font-size:calc(var(--cw) * .55);line-height:1}
+.card-k.down{background:repeating-linear-gradient(45deg,#5b4bff 0 6px,#6f61ff 6px 12px);border:2px solid #fff}
+.card-k.down>*{display:none}
+.card-k.drag{transition:none;box-shadow:0 10px 22px #0007}
+.card-k.hint{box-shadow:0 0 0 3px #ffc247}
+.kbar .stat{background:var(--card2)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="appicon" href="./" data-home aria-label="Accueil WebApps" title="Accueil WebApps"><img src="icons/games.svg" alt="" width="36" height="36"></a>
+    <button class="iconbtn" id="back" aria-label="Retour aux jeux" title="Retour aux jeux" hidden>‹</button>
+    <div class="grow">
+      <h1 class="brand">Jeux</h1>
+      <div class="subtitle" id="sub"></div>
+    </div>
+    <button class="iconbtn themebtn" data-theme-toggle></button>
+    <button class="iconbtn" id="btnMenu" aria-label="Menu">⋯</button>
+  </div>
+</header>
+<main id="main"></main>
+<dialog class="sheet" id="dlg"><div class="inner" id="dlgIn"></div></dialog>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+'use strict';
+/* ---------- socle ----------
+   Une page, un jeu à la fois (#mines, #snake, #sudoku, #solitaire). Chaque jeu : start(racine) → { destroy() }.
+   Données : « games.best » (meilleurs scores et statistiques, synchronisés) ; partie en cours : « games-save.<jeu> »
+   (locale à l'appareil, non synchronisée). */
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rnd = n => Math.floor(Math.random() * n);
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--){ const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const fmt = s => { s = Math.floor(s); return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const pb = new PBStore({ app: 'games', prefix: 'games.', sharedAuth: true });
+const main = $('#main');
+
+const best = () => pb.get('best') || {};
+function setBest(fn){ const b = best(); fn(b); pb.set('best', b); }
+/* Temps : plus petit = meilleur. Renvoie true si c'est un record. */
+function recordTime(game, lv, t){
+  let rec = false;
+  setBest(b => { const g = b[game] || (b[game] = {}); const s = g[lv] || (g[lv] = { best: null, wins: 0 }); s.wins++; if (s.best == null || t < s.best){ s.best = t; rec = true; } });
+  return rec;
+}
+function played(game, lv){ setBest(b => { const g = b[game] || (b[game] = {}); const s = g[lv] || (g[lv] = { best: null, wins: 0 }); s.played = (s.played || 0) + 1; }); }
+const SAVE = id => 'games-save.' + id;
+const loadSave = id => { try { return JSON.parse(localStorage.getItem(SAVE(id))); } catch(e){ return null; } };
+const putSave = (id, v) => { try { v ? localStorage.setItem(SAVE(id), JSON.stringify(v)) : localStorage.removeItem(SAVE(id)); } catch(e){} };
+const pref = (k, d) => { try { const v = JSON.parse(localStorage.getItem('games-pref.' + k)); return v == null ? d : v; } catch(e){ return d; } };
+const setPref = (k, v) => { try { localStorage.setItem('games-pref.' + k, JSON.stringify(v)); } catch(e){} };
+
+let toastT = 0;
+function toast(t, err){ const e = $('#toast'); e.textContent = t; e.className = 'toast' + (err ? ' err' : ''); e.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => e.hidden = true, err ? 6000 : 3500); }
+const dlg = $('#dlg'); let dlgFn = null;
+function openDlg(html, fn){ $('#dlgIn').innerHTML = '<div class="grab"></div>' + html; dlgFn = fn; if (!dlg.open) dlg.showModal(); }
+function closeDlg(){ if (dlg.open) dlg.close(); }
+dlg.addEventListener('click', e => { if (e.target === dlg){ closeDlg(); return; } const b = e.target.closest('[data-a]'); if (b && dlgFn) dlgFn(b.dataset.a, b); });
+
+/* Chronomètre qui s'arrête quand l'onglet est caché. */
+function Clock(start = 0){
+  let acc = start, t0 = null;
+  return {
+    run(){ if (t0 == null) t0 = performance.now(); },
+    stop(){ if (t0 != null){ acc += (performance.now() - t0) / 1000; t0 = null; } },
+    get(){ return acc + (t0 == null ? 0 : (performance.now() - t0) / 1000); },
+    get running(){ return t0 != null; }
+  };
+}
+/* Fenêtre « fin de partie » posée sur le plateau. */
+function overlay(host, title, text, btn, fn){
+  const o = document.createElement('div'); o.className = 'over';
+  o.innerHTML = `<div class="box"><h3>${title}</h3><p>${text}</p><button class="btn primary">${btn}</button></div>`;
+  o.querySelector('button').onclick = () => { o.remove(); fn(); };
+  host.appendChild(o); return o;
+}
+
+/* ====================================================================== DÉMINEUR */
+function Mines(root){
+  const LV = { easy: { r: 9, c: 9, m: 10, n: 'Facile' }, mid: { r: 16, c: 16, m: 40, n: 'Moyen' }, hard: { r: 30, c: 16, m: 99, n: 'Difficile' } };
+  let S, clock, tick, flagMode = false;
+  root.innerHTML = `<div class="gbar"><div class="seg" id="mLv">${Object.entries(LV).map(([k, l]) => `<button data-lv="${k}">${l.n}</button>`).join('')}</div><span class="sp"></span>
+    <span class="stat" title="Mines restantes">💣 <span id="mLeft"></span></span><span class="stat" title="Temps">⏱ <span id="mTime">0:00</span></span></div>
+    <div class="gbar"><button class="btn gbtn" id="mMode" title="Appui long : drapeau">⛏ Creuser</button><span class="sp"></span><button class="btn gbtn" id="mNew">↻ Nouvelle partie</button></div>
+    <div class="mwrap" id="mWrap"><div class="mgrid" id="mGrid"></div></div>
+    <p class="hint">Toucher : creuser. Appui long ou clic droit : drapeau. Toucher un chiffre entouré de ses drapeaux : ouvre les cases voisines.</p>`;
+  const grid = root.querySelector('#mGrid'), wrap = root.querySelector('#mWrap');
+  const idx = (r, c) => r * S.C + c;
+  const nb = i => { const r = Math.floor(i / S.C), c = i % S.C, o = []; for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++){ if (!dr && !dc) continue; const rr = r + dr, cc = c + dc; if (rr >= 0 && rr < S.R && cc >= 0 && cc < S.C) o.push(idx(rr, cc)); } return o; };
+  function fresh(lv){
+    const L = LV[lv], wide = lv === 'hard' && innerWidth > innerHeight && innerWidth > 700;   // paysage : 16 × 30
+    return { lv, R: wide ? L.c : L.r, C: wide ? L.r : L.c, M: L.m, mines: null, open: [], flag: [], over: false, won: false, t: 0, boom: -1 };
+  }
+  function start(s){
+    S = s; clock = Clock(S.t);
+    S.open = S.open.length ? S.open : Array(S.R * S.C).fill(0); S.flag = S.flag.length ? S.flag : Array(S.R * S.C).fill(0);
+    root.querySelectorAll('#mLv button').forEach(b => b.classList.toggle('on', b.dataset.lv === S.lv));
+    root.querySelector('.over') && root.querySelector('.over').remove();
+    const avail = Math.min(main.clientWidth - 24, 740), cs = Math.max(19, Math.min(40, Math.floor((avail - 12 - (S.C - 1) * 2) / S.C)));
+    grid.style.setProperty('--cs', cs + 'px'); grid.style.gridTemplateColumns = `repeat(${S.C}, var(--cs))`;
+    grid.innerHTML = Array.from({ length: S.R * S.C }, (_, i) => `<button class="mc" data-i="${i}" aria-label="case"></button>`).join('');
+    paint(); setPref('mines.lv', S.lv);
+    if (S.mines && !S.over) { clock.run(); }
+  }
+  function place(first){
+    const ban = new Set([first, ...nb(first)]), cells = [];
+    for (let i = 0; i < S.R * S.C; i++) if (!ban.has(i)) cells.push(i);
+    shuffle(cells); S.mines = Array(S.R * S.C).fill(0); cells.slice(0, S.M).forEach(i => S.mines[i] = 1);
+    played('mines', S.lv); clock.run();
+  }
+  const count = i => nb(i).reduce((n, j) => n + S.mines[j], 0);
+  function reveal(i){
+    if (S.open[i] || S.flag[i]) return;
+    if (!S.mines) place(i);
+    if (S.mines[i]){ S.boom = i; return lose(); }
+    const st = [i];
+    while (st.length){ const k = st.pop(); if (S.open[k] || S.flag[k]) continue; S.open[k] = 1; if (!count(k)) nb(k).forEach(j => { if (!S.open[j] && !S.mines[j]) st.push(j); }); }
+    checkWin();
+  }
+  function chord(i){
+    const n = nb(i), f = n.filter(j => S.flag[j]).length;
+    if (f !== count(i)) { grid.children[i].classList.remove('shake'); void grid.offsetWidth; grid.children[i].classList.add('shake'); return; }
+    for (const j of n){ if (!S.flag[j] && !S.open[j]){ if (S.mines[j]){ S.boom = j; return lose(); } reveal(j); if (S.over) return; } }
+  }
+  function lose(){ S.over = true; clock.stop(); S.t = clock.get(); paint(); putSave('mines', null);
+    setTimeout(() => overlay(wrap, '💥 Perdu', `Temps : ${fmt(S.t)}`, 'Rejouer', () => start(fresh(S.lv))), 650); }
+  function checkWin(){
+    if (S.open.filter(Boolean).length !== S.R * S.C - S.M) return;
+    S.over = S.won = true; clock.stop(); S.t = clock.get();
+    for (let i = 0; i < S.mines.length; i++) if (S.mines[i]) S.flag[i] = 1;
+    const rec = recordTime('mines', S.lv, Math.round(S.t * 10) / 10); putSave('mines', null); paint();
+    const b = best().mines[S.lv];
+    setTimeout(() => overlay(wrap, rec ? '🏆 Nouveau record !' : '🎉 Gagné !', `${LV[S.lv].n} en ${fmt(S.t)}${rec ? '' : ` · record ${fmt(b.best)}`}`, 'Rejouer', () => start(fresh(S.lv))), 250);
+  }
+  function paint(){
+    const els = grid.children;
+    for (let i = 0; i < els.length; i++){
+      const e = els[i], o = S.open[i], m = S.mines && S.mines[i];
+      let cls = 'mc', txt = '';
+      if (o){ cls += ' o'; const n = count(i); if (n){ txt = n; cls += ' n' + n; } }
+      else if (S.over && !S.won && m) cls += i === S.boom ? ' b' : (S.flag[i] ? ' f' : ' o m');
+      else if (S.flag[i]) cls += S.over && !S.won && !m ? ' f x' : ' f';
+      if (e.className !== cls) e.className = cls;
+      if (e.textContent !== String(txt)) e.textContent = txt;
+    }
+    root.querySelector('#mLeft').textContent = S.M - S.flag.filter(Boolean).length;
+    if (!S.over && S.mines) putSave('mines', Object.assign({}, S, { t: clock.get() }));
+  }
+  function toggleFlag(i){ if (S.open[i] || S.over) return; S.flag[i] = S.flag[i] ? 0 : 1; if (navigator.vibrate) navigator.vibrate(15); paint(); }
+  function act(i, flag){
+    if (S.over) return;
+    if (S.open[i]) chord(i); else if (flag) toggleFlag(i); else reveal(i);
+    paint();
+  }
+  let lp = null;
+  grid.addEventListener('pointerdown', e => {
+    const b = e.target.closest('.mc'); if (!b || e.button > 0) return;
+    lp = { i: +b.dataset.i, done: false, x: e.clientX, y: e.clientY, t: setTimeout(() => { lp.done = true; if (!S.open[lp.i]) toggleFlag(lp.i); }, 380) };
+  });
+  grid.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 10){ clearTimeout(lp.t); lp = null; } });
+  const endLp = () => { if (lp) clearTimeout(lp.t); };
+  grid.addEventListener('pointerup', endLp); grid.addEventListener('pointercancel', () => { endLp(); lp = null; });
+  grid.addEventListener('click', e => {
+    const b = e.target.closest('.mc'); if (!b) return;
+    if (lp && lp.done){ lp = null; return; } lp = null;
+    act(+b.dataset.i, flagMode);
+  });
+  grid.addEventListener('contextmenu', e => { e.preventDefault(); const b = e.target.closest('.mc'); if (b){ clearTimeout(lp && lp.t); lp = null; act(+b.dataset.i, true); } });
+  root.querySelector('#mLv').onclick = e => { const b = e.target.closest('button'); if (b) start(fresh(b.dataset.lv)); };
+  root.querySelector('#mNew').onclick = () => start(fresh(S.lv));
+  const mb = root.querySelector('#mMode');
+  mb.onclick = () => { flagMode = !flagMode; mb.textContent = flagMode ? '🚩 Drapeau' : '⛏ Creuser'; mb.classList.toggle('primary', flagMode); };
+  tick = setInterval(() => { root.querySelector('#mTime').textContent = fmt(clock.get()); }, 250);
+  const vis = () => { if (!S.mines || S.over) return; if (document.hidden){ clock.stop(); paint(); } else clock.run(); };
+  document.addEventListener('visibilitychange', vis);
+  const sv = loadSave('mines');
+  start(sv && LV[sv.lv] && sv.mines ? sv : fresh(pref('mines.lv', 'easy')));
+  return { destroy(){ clearInterval(tick); clock.stop(); if (S.mines && !S.over){ S.t = clock.get(); putSave('mines', S); } document.removeEventListener('visibilitychange', vis); } };
+}
+
+/* ====================================================================== SNAKE */
+function Snake(root){
+  const N = 18;
+  let wallsOn = pref('snake.walls', true);
+  root.innerHTML = `<div class="gbar"><span class="stat">🍎 <span id="sScore">0</span></span><span class="stat" title="Record">🏆 <span id="sBest">0</span></span><span class="sp"></span>
+    <div class="seg" id="sWalls"><button data-w="1">Murs</button><button data-w="0">Traversée</button></div></div>
+    <div class="swrap" id="sWrap"><canvas id="sCv"></canvas></div>
+    <div class="dpad" id="sPad"><button data-d="up" aria-label="Haut">▲</button><button data-d="left" aria-label="Gauche">◀</button><button data-d="down" aria-label="Bas">▼</button><button data-d="right" aria-label="Droite">▶</button></div>
+    <p class="hint">Flèches ou ZQSD, Espace pour la pause. Sur téléphone : glisser sur le plateau, ou les flèches.</p>`;
+  const cv = root.querySelector('#sCv'), wrap = root.querySelector('#sWrap'), g = cv.getContext('2d');
+  const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  let S, raf = 0, last = 0, acc = 0, cell = 20, col = {};
+  const bestKey = () => wallsOn ? 'walls' : 'wrap';
+  const bestScore = () => ((best().snake || {})[bestKey()] || {}).best || 0;
+  function size(){
+    const w = Math.min(main.clientWidth - 24, 520, innerHeight - 290 > 240 ? innerHeight - 290 : 520);
+    cell = Math.max(12, Math.floor(w / N)); const px = cell * N, dpr = devicePixelRatio || 1;
+    cv.width = px * dpr; cv.height = px * dpr; cv.style.width = cv.style.height = px + 'px'; wrap.style.width = px + 'px';
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cs = getComputedStyle(document.documentElement);
+    col = { bg: cs.getPropertyValue('--card').trim(), bg2: cs.getPropertyValue('--card2').trim(), ac: cs.getPropertyValue('--ac').trim(), ac2: cs.getPropertyValue('--ac2').trim(), food: '#ff5f7e' };
+    draw();
+  }
+  function reset(){
+    S = { snake: [[8, 9], [7, 9], [6, 9]], dir: 'right', q: [], food: null, score: 0, speed: 150, alive: true, running: false };
+    food(); paintScore(); draw();
+  }
+  function food(){ let f; do f = [rnd(N), rnd(N)]; while (S.snake.some(p => p[0] === f[0] && p[1] === f[1])); S.food = f; }
+  function paintScore(){ root.querySelector('#sScore').textContent = S.score; root.querySelector('#sBest').textContent = bestScore(); }
+  function turn(d){
+    const lastD = S.q.length ? S.q[S.q.length - 1] : S.dir, a = DIRS[lastD], b = DIRS[d];
+    if (a[0] + b[0] === 0 && a[1] + b[1] === 0) return;   // demi-tour interdit
+    if (d === lastD || S.q.length >= 2) return;
+    S.q.push(d); if (!S.running && S.alive) go();
+  }
+  function step(){
+    if (S.q.length) S.dir = S.q.shift();
+    const d = DIRS[S.dir], h = S.snake[0];
+    let x = h[0] + d[0], y = h[1] + d[1];
+    if (!wallsOn){ x = (x + N) % N; y = (y + N) % N; }
+    const eat = S.food[0] === x && S.food[1] === y;
+    const body = eat ? S.snake : S.snake.slice(0, -1);
+    if (x < 0 || y < 0 || x >= N || y >= N || body.some(p => p[0] === x && p[1] === y)) return die();
+    S.snake.unshift([x, y]); if (!eat) S.snake.pop();
+    else { S.score++; S.speed = Math.max(65, S.speed - 4); food(); paintScore(); if (navigator.vibrate) navigator.vibrate(10); }
+  }
+  function die(){
+    S.alive = false; S.running = false; cancelAnimationFrame(raf); draw();
+    let rec = false;
+    setBest(b => { const s = (b.snake || (b.snake = {})); const k = s[bestKey()] || (s[bestKey()] = { best: 0, played: 0 }); k.played++; if (S.score > k.best){ k.best = S.score; rec = S.score > 0; } });
+    paintScore();
+    overlay(wrap, rec ? '🏆 Nouveau record !' : '💥 Perdu', `Score : ${S.score}`, 'Rejouer', () => { reset(); });
+  }
+  function loop(t){
+    if (!S.running) return;
+    acc += t - last; last = t;
+    while (acc >= S.speed && S.alive){ acc -= S.speed; step(); }
+    draw(); if (S.running) raf = requestAnimationFrame(loop);
+  }
+  function go(){ if (!S.alive) return; const o = wrap.querySelector('.over'); if (o) o.remove(); S.running = true; last = performance.now(); acc = 0; raf = requestAnimationFrame(loop); }
+  function pause(){ if (!S.running) return; S.running = false; cancelAnimationFrame(raf); overlay(wrap, '⏸ Pause', `Score : ${S.score}`, 'Reprendre', go); }
+  function draw(){
+    if (!S) return;
+    const px = cell * N;
+    g.fillStyle = col.bg2; g.fillRect(0, 0, px, px);
+    g.fillStyle = col.bg; for (let y = 0; y < N; y++) for (let x = (y % 2); x < N; x += 2) g.fillRect(x * cell, y * cell, cell, cell);
+    if (wallsOn){ g.strokeStyle = col.ac; g.lineWidth = 3; g.strokeRect(1.5, 1.5, px - 3, px - 3); }
+    const f = S.food; g.fillStyle = col.food; g.beginPath(); g.arc(f[0] * cell + cell / 2, f[1] * cell + cell / 2, cell * .38, 0, 7); g.fill();
+    const n = S.snake.length;
+    S.snake.forEach((p, i) => {
+      g.fillStyle = i === 0 ? col.ac : (i % 2 ? col.ac2 : col.ac); g.globalAlpha = i === 0 ? 1 : .55 + .45 * (1 - i / n);
+      const m = i === 0 ? 1 : 2; g.beginPath(); (g.roundRect || g.rect).call(g, p[0] * cell + m, p[1] * cell + m, cell - 2 * m, cell - 2 * m, cell * .3); g.fill();
+    });
+    g.globalAlpha = 1;
+    if (S.alive && !S.running && !wrap.querySelector('.over')){
+      g.fillStyle = col.bg; g.globalAlpha = .85; g.fillRect(0, px / 2 - 26, px, 52); g.globalAlpha = 1;
+      g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--fg'); g.font = '700 16px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('Une direction pour démarrer', px / 2, px / 2);
+    }
+  }
+  const KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', z: 'up', w: 'up', s: 'down', q: 'left', a: 'left', d: 'right' };
+  function onKey(e){
+    if (dlg.open) return;
+    const d = KEYS[e.key] || KEYS[e.key.toLowerCase && e.key.toLowerCase()];
+    if (d){ e.preventDefault(); if (!S.alive) return; if (!S.running && wrap.querySelector('.over')) go(); turn(d); }
+    else if (e.key === ' '){ e.preventDefault(); S.running ? pause() : (S.alive && go()); }
+  }
+  document.addEventListener('keydown', onKey);
+  let sw = null;
+  wrap.addEventListener('pointerdown', e => { if (e.target.closest('.over')) return; sw = [e.clientX, e.clientY]; });
+  wrap.addEventListener('pointermove', e => {
+    if (!sw) return; const dx = e.clientX - sw[0], dy = e.clientY - sw[1];
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 18) return;
+    turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')); sw = [e.clientX, e.clientY];
+  });
+  wrap.addEventListener('pointerup', () => sw = null); wrap.addEventListener('pointercancel', () => sw = null);
+  root.querySelector('#sPad').addEventListener('pointerdown', e => { const b = e.target.closest('[data-d]'); if (b){ e.preventDefault(); if (S.alive) turn(b.dataset.d); } });
+  const segW = root.querySelector('#sWalls');
+  const paintW = () => segW.querySelectorAll('button').forEach(b => b.classList.toggle('on', (b.dataset.w === '1') === wallsOn));
+  segW.onclick = e => { const b = e.target.closest('button'); if (!b) return; wallsOn = b.dataset.w === '1'; setPref('snake.walls', wallsOn); paintW(); cancelAnimationFrame(raf); const o = wrap.querySelector('.over'); if (o) o.remove(); reset(); };
+  const vis = () => { if (document.hidden) pause(); };
+  document.addEventListener('visibilitychange', vis);
+  addEventListener('resize', size);
+  paintW(); reset(); size();
+  return { destroy(){ cancelAnimationFrame(raf); if (S) S.running = false; document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', vis); removeEventListener('resize', size); } };
+}
+
+/* ====================================================================== SUDOKU */
+/* Grille de 81 cases (0 = vide). Génération : grille pleine au hasard, puis on retire des chiffres tant que la
+   solution reste unique (solveur à masques de bits, case la plus contrainte d'abord). */
+const SDK = (() => {
+  const box = i => Math.floor(Math.floor(i / 9) / 3) * 3 + Math.floor((i % 9) / 3);
+  const bits = m => { const o = []; for (let d = 1; d <= 9; d++) if (m & (1 << d)) o.push(d); return o; };
+  function masks(g){ const R = Array(9).fill(0), C = Array(9).fill(0), B = Array(9).fill(0); g.forEach((v, i) => { if (v){ const b = 1 << v; R[Math.floor(i / 9)] |= b; C[i % 9] |= b; B[box(i)] |= b; } }); return [R, C, B]; }
+  function solve(g, limit, rand){
+    const [R, C, B] = masks(g); let n = 0, sol = null;
+    (function rec(){
+      let bi = -1, bm = 0, bc = 10;
+      for (let i = 0; i < 81; i++) if (!g[i]){
+        const m = ~(R[Math.floor(i / 9)] | C[i % 9] | B[box(i)]) & 0x3FE, c = bits(m).length;
+        if (c < bc){ bc = c; bi = i; bm = m; if (c <= 1) break; }
+      }
+      if (bi < 0){ n++; if (!sol) sol = g.slice(); return n >= limit; }
+      if (!bc) return false;
+      const ds = bits(bm); if (rand) shuffle(ds);
+      const r = Math.floor(bi / 9), c = bi % 9, b = box(bi);
+      for (const d of ds){
+        const k = 1 << d; g[bi] = d; R[r] |= k; C[c] |= k; B[b] |= k;
+        const stop = rec();
+        g[bi] = 0; R[r] &= ~k; C[c] &= ~k; B[b] &= ~k;
+        if (stop) return true;
+      }
+      return false;
+    })();
+    return { n, sol };
+  }
+  function make(clues){
+    const sol = solve(Array(81).fill(0), 1, true).sol, puz = sol.slice();
+    let left = 81;
+    for (const i of shuffle([...Array(81).keys()])){
+      if (left <= clues) break;
+      const v = puz[i]; puz[i] = 0;
+      if (solve(puz.slice(), 2).n !== 1) puz[i] = v; else left--;
+    }
+    return { puz, sol };
+  }
+  return { make, box };
+})();
+
+function Sudoku(root){
+  const LV = { easy: { n: 'Facile', clues: 40 }, mid: { n: 'Moyen', clues: 32 }, hard: { n: 'Difficile', clues: 26 } };
+  let S, clock, tick, sel = -1, notesMode = false;
+  root.innerHTML = `<div class="gbar"><div class="seg" id="kLv">${Object.entries(LV).map(([k, l]) => `<button data-lv="${k}">${l.n}</button>`).join('')}</div><span class="sp"></span>
+    <span class="stat" title="Erreurs">✕ <span id="kErr">0</span></span><span class="stat" title="Temps">⏱ <span id="kTime">0:00</span></span></div>
+    <div class="sgrid" id="kGrid"></div>
+    <div class="spad" id="kPad">${[1,2,3,4,5,6,7,8,9].map(d => `<button data-d="${d}">${d}<small></small></button>`).join('')}</div>
+    <div class="sact"><button class="btn gbtn" data-k="undo">↶ Annuler</button><button class="btn gbtn" data-k="erase">⌫ Effacer</button>
+      <button class="btn gbtn" data-k="notes">✎ Notes</button><button class="btn gbtn" data-k="hint">💡 Indice</button><button class="btn gbtn" data-k="new">↻ Nouvelle</button></div>
+    <p class="hint">Choisir une case, puis un chiffre. ✎ Notes : petits chiffres pour les candidats. Au clavier : 1-9, flèches, Retour arrière, N pour les notes.</p>`;
+  const grid = root.querySelector('#kGrid');
+  grid.innerHTML = Array.from({ length: 81 }, (_, i) => `<button class="sc" data-i="${i}"></button>`).join('');
+  function fresh(lv){
+    const { puz, sol } = SDK.make(LV[lv].clues);
+    played('sudoku', lv);
+    return { lv, puz, sol, val: puz.slice(), notes: Array(81).fill(0), err: 0, hints: 0, t: 0, done: false, hist: [] };
+  }
+  function start(s){
+    S = s; sel = -1; clock = Clock(S.t); if (!S.done) clock.run();
+    root.querySelectorAll('#kLv button').forEach(b => b.classList.toggle('on', b.dataset.lv === S.lv));
+    const o = grid.querySelector('.over'); if (o) o.remove();
+    setPref('sudoku.lv', S.lv); paint();
+  }
+  const peers = i => { const r = Math.floor(i / 9), c = i % 9, b = SDK.box(i), o = []; for (let j = 0; j < 81; j++) if (j !== i && (Math.floor(j / 9) === r || j % 9 === c || SDK.box(j) === b)) o.push(j); return o; };
+  function paint(){
+    const sv = sel >= 0 ? S.val[sel] : 0, pe = sel >= 0 ? new Set(peers(sel)) : new Set();
+    for (let i = 0; i < 81; i++){
+      const e = grid.children[i], v = S.val[i];
+      let cls = 'sc' + (S.puz[i] ? ' g' : '') + (i === sel ? ' sel' : sv && v === sv ? ' same' : pe.has(i) ? ' h' : '') + (v && !S.puz[i] && v !== S.sol[i] ? ' bad' : '');
+      e.className = cls;
+      if (v) e.textContent = v;
+      else if (S.notes[i]) e.innerHTML = `<span class="nt">${[1,2,3,4,5,6,7,8,9].map(d => `<i>${S.notes[i] & (1 << d) ? d : ''}</i>`).join('')}</span>`;
+      else e.textContent = '';
+    }
+    root.querySelectorAll('#kPad button').forEach(b => {
+      const d = +b.dataset.d, left = 9 - S.val.filter((v, i) => v === d && v === S.sol[i]).length;
+      b.disabled = left <= 0 || S.done; b.querySelector('small').textContent = left > 0 ? left : '';
+    });
+    root.querySelector('[data-k=notes]').classList.toggle('on', notesMode);
+    root.querySelector('#kErr').textContent = S.err;
+    if (!S.done) putSave('sudoku', Object.assign({}, S, { t: clock.get(), hist: S.hist.slice(-60) }));
+  }
+  const snap = () => { S.hist.push([S.val.slice(), S.notes.slice()]); if (S.hist.length > 200) S.hist.shift(); };
+  function input(d){
+    if (sel < 0 || S.done || S.puz[sel]) return;
+    if (notesMode && !S.val[sel]){ snap(); S.notes[sel] ^= (1 << d); return paint(); }
+    if (S.val[sel] === d) return;
+    snap(); S.val[sel] = d; S.notes[sel] = 0;
+    if (d !== S.sol[sel]){ S.err++; if (navigator.vibrate) navigator.vibrate([20, 40, 20]); }
+    else peers(sel).forEach(j => S.notes[j] &= ~(1 << d));
+    paint(); win();
+  }
+  function win(){
+    if (!S.val.every((v, i) => v === S.sol[i])) return;
+    S.done = true; clock.stop(); S.t = clock.get(); putSave('sudoku', null);
+    const rec = S.hints ? false : recordTime('sudoku', S.lv, Math.round(S.t));
+    if (S.hints) setBest(b => { const g = b.sudoku || (b.sudoku = {}); const s = g[S.lv] || (g[S.lv] = { best: null, wins: 0 }); s.wins++; });
+    sel = -1; paint();
+    overlay(grid, rec ? '🏆 Nouveau record !' : '🎉 Bravo !', `${LV[S.lv].n} en ${fmt(S.t)} · ${S.err} erreur${S.err > 1 ? 's' : ''}${S.hints ? ` · ${S.hints} indice${S.hints > 1 ? 's' : ''} (pas de record)` : ''}`, 'Nouvelle grille', () => start(fresh(S.lv)));
+  }
+  grid.addEventListener('click', e => { const b = e.target.closest('.sc'); if (!b || S.done) return; sel = +b.dataset.i; paint(); });
+  root.querySelector('#kPad').addEventListener('click', e => { const b = e.target.closest('button'); if (b) input(+b.dataset.d); });
+  root.querySelector('.sact').addEventListener('click', e => {
+    const b = e.target.closest('[data-k]'); if (!b) return;
+    const k = b.dataset.k;
+    if (k === 'notes'){ notesMode = !notesMode; paint(); }
+    if (k === 'new') askNew(S.lv);
+    if (S.done) return;
+    if (k === 'undo' && S.hist.length){ const [v, n] = S.hist.pop(); S.val = v; S.notes = n; paint(); }
+    if (k === 'erase' && sel >= 0 && !S.puz[sel] && (S.val[sel] || S.notes[sel])){ snap(); S.val[sel] = 0; S.notes[sel] = 0; paint(); }
+    if (k === 'hint'){
+      let i = sel >= 0 && S.val[sel] !== S.sol[sel] ? sel : -1;
+      if (i < 0){ const c = []; for (let j = 0; j < 81; j++) if (S.val[j] !== S.sol[j]) c.push(j); if (!c.length) return; i = c[rnd(c.length)]; }
+      snap(); S.val[i] = S.sol[i]; S.notes[i] = 0; S.hints++; sel = i; peers(i).forEach(j => S.notes[j] &= ~(1 << S.sol[i])); paint(); win();
+    }
+  });
+  function askNew(lv){
+    const started = !S.done && S.val.some((v, i) => v && !S.puz[i]);
+    const go = () => { grid.style.opacity = .5; setTimeout(() => { start(fresh(lv)); grid.style.opacity = ''; }, 20); };
+    if (!started) return go();
+    openDlg(`<h2>Nouvelle grille ?</h2><p>La partie en cours sera perdue.</p><div class="btns"><button class="btn" data-a="no">Continuer</button><button class="btn primary" data-a="yes">Nouvelle grille (${LV[lv].n})</button></div>`,
+      a => { closeDlg(); if (a === 'yes') go(); });
+  }
+  root.querySelector('#kLv').onclick = e => { const b = e.target.closest('button'); if (b) askNew(b.dataset.lv); };
+  function onKey(e){
+    if (dlg.open || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (/^[1-9]$/.test(e.key)){ input(+e.key); return; }
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0'){ root.querySelector('[data-k=erase]').click(); return; }
+    if (e.key.toLowerCase() === 'n'){ notesMode = !notesMode; paint(); return; }
+    const mv = { ArrowUp: -9, ArrowDown: 9, ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if (mv){ e.preventDefault(); sel = sel < 0 ? 40 : (sel + mv + 81) % 81; paint(); }
+  }
+  document.addEventListener('keydown', onKey);
+  tick = setInterval(() => { root.querySelector('#kTime').textContent = fmt(clock.get()); }, 250);
+  const vis = () => { if (S.done) return; if (document.hidden){ clock.stop(); paint(); } else clock.run(); };
+  document.addEventListener('visibilitychange', vis);
+  const sv = loadSave('sudoku');
+  start(sv && LV[sv.lv] && sv.sol ? sv : fresh(pref('sudoku.lv', 'easy')));
+  return { destroy(){ clearInterval(tick); clock.stop(); if (!S.done){ S.t = clock.get(); putSave('sudoku', Object.assign({}, S, { hist: S.hist.slice(-60) })); } document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', vis); } };
+}
+
+/* ====================================================================== SOLITAIRE (Klondike) */
+function Solitaire(root){
+  const SUITS = ['♠', '♥', '♦', '♣'], RANKS = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'V', 'D', 'R'];
+  const red = c => c.s === 1 || c.s === 2;
+  let S, clock, tick, hist = [], els = {}, L = {}, drag = null, auto = 0;
+  let draw3 = pref('sol.draw3', false);
+  root.innerHTML = `<div class="gbar kbar"><div class="seg" id="oDraw"><button data-n="1">1 carte</button><button data-n="3">3 cartes</button></div><span class="sp"></span>
+    <span class="stat" title="Coups">↔ <span id="oMoves">0</span></span><span class="stat" title="Temps">⏱ <span id="oTime">0:00</span></span></div>
+    <div class="kwrap" id="oBoard"></div>
+    <div class="gbar" style="margin-top:10px"><button class="btn gbtn" id="oUndo">↶ Annuler</button><button class="btn gbtn" id="oHint">💡 Indice</button><span class="sp"></span>
+      <button class="btn gbtn primary" id="oAuto" hidden>⚡ Terminer</button><button class="btn gbtn" id="oNew">↻ Nouvelle donne</button></div>
+    <p class="hint">Toucher une carte : elle va au meilleur endroit. On peut aussi la glisser. Toucher la pioche : tirer ; pioche vide : retourner le talon.</p>`;
+  const board = root.querySelector('#oBoard');
+  function deal(){
+    const deck = []; let id = 0;
+    for (let s = 0; s < 4; s++) for (let r = 1; r <= 13; r++) deck.push({ id: id++, s, r, up: false });
+    shuffle(deck);
+    const tab = [];
+    for (let i = 0; i < 7; i++){ tab.push(deck.splice(0, i + 1)); tab[i][i].up = true; }
+    played('solitaire', draw3 ? 'd3' : 'd1');
+    return { draw3, stock: deck, waste: [], found: [[], [], [], []], tab, moves: 0, t: 0, done: false };
+  }
+  function start(s){
+    S = s; hist = []; clock = Clock(S.t); draw3 = S.draw3;
+    root.querySelectorAll('#oDraw button').forEach(b => b.classList.toggle('on', (b.dataset.n === '3') === draw3));
+    board.innerHTML = ''; els = {};
+    const o = board.querySelector('.over'); if (o) o.remove();
+    layout(); build(); render(false);
+  }
+  /* ---- géométrie ---- */
+  function layout(){
+    const W = board.clientWidth || Math.min(main.clientWidth - 24, 760), gap = Math.max(4, Math.round(W * .014));
+    const cw = Math.floor((W - gap * 8) / 7), ch = Math.round(cw * 1.4);
+    L = { W, gap, cw, ch, x: i => gap + i * (cw + gap), top: gap, ty: gap * 2 + ch };
+    board.style.setProperty('--cw', cw + 'px');
+    const availH = Math.max(innerHeight - board.getBoundingClientRect().top - 120, ch * 4);
+    L.H = availH; board.style.height = availH + 'px';
+  }
+  function build(){
+    const slots = [['stock', 0, L.top, '↻'], ['waste', 1, L.top, ''], ...[0, 1, 2, 3].map(f => ['f' + f, 3 + f, L.top, SUITS[f]]), ...[0, 1, 2, 3, 4, 5, 6].map(t => ['t' + t, t, L.ty, ''])];
+    for (const [id, col, y, txt] of slots){
+      const d = document.createElement('div'); d.className = 'slot'; d.dataset.slot = id; d.textContent = txt;
+      Object.assign(d.style, { left: L.x(col) + 'px', top: y + 'px', width: L.cw + 'px', height: L.ch + 'px' });
+      board.appendChild(d);
+    }
+    const all = [...S.stock, ...S.waste, ...S.found.flat(), ...S.tab.flat()];
+    for (const c of all){
+      const e = document.createElement('div'); e.className = 'card-k' + (red(c) ? ' red' : ''); e.dataset.id = c.id;
+      e.innerHTML = `<span class="cr">${RANKS[c.r]}<small>${SUITS[c.s]}</small></span><span class="cs">${SUITS[c.s]}</span>`;
+      board.appendChild(e); els[c.id] = e;
+    }
+  }
+  function tabOffsets(p){
+    const avail = L.H - L.ty - L.ch - L.gap, down = p.filter(c => !c.up).length, up = p.length - down;
+    let dO = L.ch * .12, uO = L.ch * .27;
+    const need = down * dO + Math.max(0, up - 1) * uO;
+    if (need > avail && need > 0){ const k = avail / need; dO *= k; uO *= k; }
+    return [dO, uO];
+  }
+  function render(anim = true){
+    let z = 1;
+    const put = (c, x, y, up) => { const e = els[c.id]; c.up = up; e.classList.toggle('down', !up); e.style.left = x + 'px'; e.style.top = y + 'px'; e.style.zIndex = z++; if (!anim) e.style.transition = 'none'; };
+    S.stock.forEach(c => put(c, L.x(0), L.top, false));
+    const wv = S.waste.length, show = draw3 ? 3 : 1;
+    S.waste.forEach((c, i) => { const k = Math.max(0, i - (wv - show)); put(c, L.x(1) + (i >= wv - show ? k * L.cw * .28 : 0), L.top, true); });
+    S.found.forEach((f, s) => f.forEach(c => put(c, L.x(3 + s), L.top, true)));
+    S.tab.forEach((p, t) => {
+      const [dO, uO] = tabOffsets(p); let y = L.ty;
+      p.forEach(c => { put(c, L.x(t), y, c.up); y += c.up ? uO : dO; });
+    });
+    if (!anim) requestAnimationFrame(() => Object.values(els).forEach(e => e.style.transition = ''));
+    root.querySelector('#oMoves').textContent = S.moves;
+    const canAuto = !S.done && !S.stock.length && !S.waste.length && S.tab.every(p => p.every(c => c.up));
+    root.querySelector('#oAuto').hidden = !canAuto;
+    if (!S.done && S.moves) putSave('solitaire', Object.assign({}, S, { t: clock.get() }));
+  }
+  /* ---- règles ---- */
+  const top = a => a[a.length - 1];
+  const canFound = c => S.found[c.s].length === c.r - 1;
+  const canTab = (c, t) => { const p = S.tab[t], h = top(p); return h ? h.up && red(h) !== red(c) && h.r === c.r + 1 : c.r === 13; };
+  function where(c){
+    if (S.waste.includes(c)) return { from: 'waste' };
+    for (let s = 0; s < 4; s++) if (S.found[s].includes(c)) return { from: 'f', i: s };
+    for (let t = 0; t < 7; t++){ const k = S.tab[t].indexOf(c); if (k >= 0) return { from: 't', i: t, k }; }
+    return { from: 'stock' };
+  }
+  function take(w, c){
+    if (w.from === 'waste') return [S.waste.pop()];
+    if (w.from === 'f') return [S.found[w.i].pop()];
+    return S.tab[w.i].splice(w.k);
+  }
+  const snap = () => { hist.push(JSON.stringify(S)); if (hist.length > 300) hist.shift(); };
+  function after(){
+    S.moves++; clock.run();
+    S.tab.forEach(p => { const h = top(p); if (h && !h.up) h.up = true; });
+    render();
+    if (S.found.every(f => f.length === 13)) win();
+  }
+  function moveTo(c, dest){       // dest : 'f' ou numéro de colonne
+    const w = where(c);
+    if (w.from === 'stock') return false;
+    const isTop = w.from === 'waste' ? top(S.waste) === c : w.from === 'f' ? top(S.found[w.i]) === c : true;
+    if (!isTop || (w.from === 't' && !S.tab[w.i][w.k].up)) return false;
+    if (dest === 'f'){
+      if (w.from === 't' && w.k !== S.tab[w.i].length - 1) return false;
+      if (w.from === 'f' || !canFound(c)) return false;
+      snap(); S.found[c.s].push(...take(w, c)); after(); return true;
+    }
+    if ((w.from === 't' && w.i === dest) || !canTab(c, dest)) return false;
+    snap(); S.tab[dest].push(...take(w, c)); after(); return true;
+  }
+  function smart(c){
+    const w = where(c);
+    if (w.from === 't' && !c.up) return false;
+    if (moveTo(c, 'f')) return true;
+    const order = [0, 1, 2, 3, 4, 5, 6].filter(t => S.tab[t].length).concat([0, 1, 2, 3, 4, 5, 6].filter(t => !S.tab[t].length));
+    for (const t of order){
+      if (!S.tab[t].length && w.from === 't' && w.k === 0) continue;   // un roi déjà seul : inutile
+      if (moveTo(c, t)) return true;
+    }
+    return false;
+  }
+  function drawStock(){
+    snap();
+    if (!S.stock.length){ if (!S.waste.length){ hist.pop(); return; } S.stock = S.waste.reverse(); S.waste = []; }
+    else { const n = draw3 ? 3 : 1; for (let i = 0; i < n && S.stock.length; i++) S.waste.push(S.stock.pop()); }
+    after();
+  }
+  function shakeEl(c){ const e = els[c.id]; e.classList.remove('shake'); void e.offsetWidth; e.classList.add('shake'); }
+  function win(){
+    S.done = true; clock.stop(); S.t = clock.get(); putSave('solitaire', null);
+    const rec = recordTime('solitaire', draw3 ? 'd3' : 'd1', Math.round(S.t));
+    setTimeout(() => overlay(board, rec ? '🏆 Nouveau record !' : '🎉 Gagné !', `${fmt(S.t)} · ${S.moves} coups`, 'Nouvelle donne', () => start(deal())), 450);
+  }
+  function autoFinish(){
+    clearInterval(auto);
+    auto = setInterval(() => {
+      let moved = false;
+      for (let t = 0; t < 7 && !moved; t++){ const c = top(S.tab[t]); if (c && canFound(c)){ snap(); S.found[c.s].push(S.tab[t].pop()); S.moves++; moved = true; } }
+      render(); if (!moved || S.found.every(f => f.length === 13)){ clearInterval(auto); if (S.found.every(f => f.length === 13)) win(); }
+    }, 90);
+  }
+  function hint(){
+    const cands = [];
+    if (S.waste.length) cands.push(top(S.waste));
+    S.tab.forEach(p => { const k = p.findIndex(c => c.up); if (k >= 0) cands.push(p[k]); if (p.length) cands.push(top(p)); });
+    for (const c of cands){
+      const w = where(c);
+      if ((w.from === 'waste' || (w.from === 't' && w.k === S.tab[w.i].length - 1)) && canFound(c)) return flash(c);
+      for (let t = 0; t < 7; t++){ if (w.from === 't' && (w.i === t || (w.k === 0 && !S.tab[t].length))) continue; if (canTab(c, t)) return flash(c); }
+    }
+    if (S.stock.length || S.waste.length) { const e = board.querySelector('[data-slot=stock]'); e.classList.add('shake'); setTimeout(() => e.classList.remove('shake'), 300); toast('Rien à jouer : pioche.'); }
+    else toast('Plus aucun coup possible.');
+  }
+  function flash(c){ const e = els[c.id]; e.classList.add('hint'); setTimeout(() => e.classList.remove('hint'), 900); }
+  /* ---- pointeurs : toucher = coup automatique, glisser = coup choisi ---- */
+  board.addEventListener('pointerdown', e => {
+    if (S.done || e.target.closest('.over')) return;
+    const ce = e.target.closest('.card-k'), slot = e.target.closest('.slot');
+    if ((slot && slot.dataset.slot === 'stock') || (ce && S.stock.some(c => c.id === +ce.dataset.id))){ drawStock(); return; }
+    if (!ce) return;
+    const c = [...S.waste, ...S.found.flat(), ...S.tab.flat()].find(x => x.id === +ce.dataset.id); if (!c || !c.up) return;
+    const w = where(c);
+    if (w.from === 'waste' && top(S.waste) !== c) return;
+    const group = w.from === 't' ? S.tab[w.i].slice(w.k) : [c];
+    drag = { c, group, x: e.clientX, y: e.clientY, moved: false, id: e.pointerId };
+    try { board.setPointerCapture(e.pointerId); } catch(_){}
+  });
+  board.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+    drag.moved = true;
+    drag.group.forEach((c, i) => { const el = els[c.id]; el.classList.add('drag'); el.style.transform = `translate(${dx}px,${dy}px)`; el.style.zIndex = 500 + i; });
+  });
+  function endDrag(e){
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag; drag = null;
+    d.group.forEach(c => { const el = els[c.id]; el.classList.remove('drag'); el.style.transform = ''; });
+    if (!d.moved){ if (!smart(d.c)) shakeEl(d.c); return; }
+    // cible : la colonne ou la fondation sous le centre de la carte tirée
+    const r = els[d.c.id].getBoundingClientRect(), br = board.getBoundingClientRect();
+    const cx = r.left - br.left + L.cw / 2 + (e.clientX - d.x), cy = r.top - br.top + L.ch / 2 + (e.clientY - d.y);
+    const col = Math.max(0, Math.min(6, Math.floor((cx - L.gap / 2) / (L.cw + L.gap))));
+    let ok = false;
+    if (cy < L.ty - L.gap / 2){ if (col >= 3) ok = moveTo(d.c, 'f'); }
+    else ok = moveTo(d.c, col);
+    if (!ok) render();
+  }
+  board.addEventListener('pointerup', endDrag); board.addEventListener('pointercancel', endDrag);
+  root.querySelector('#oUndo').onclick = () => { if (!hist.length || S.done) return; clearInterval(auto); const t = clock.get(); S = JSON.parse(hist.pop()); S.moves++; render(); };
+  root.querySelector('#oHint').onclick = () => { if (!S.done) hint(); };
+  root.querySelector('#oAuto').onclick = autoFinish;
+  function askNew(d3){
+    const go = () => { draw3 = d3; setPref('sol.draw3', d3); clearInterval(auto); start(deal()); };
+    if (S.done || !S.moves) return go();
+    openDlg(`<h2>Nouvelle donne ?</h2><p>La partie en cours sera perdue.</p><div class="btns"><button class="btn" data-a="no">Continuer</button><button class="btn primary" data-a="yes">Nouvelle donne</button></div>`,
+      a => { closeDlg(); if (a === 'yes') go(); });
+  }
+  root.querySelector('#oNew').onclick = () => askNew(draw3);
+  root.querySelector('#oDraw').onclick = e => { const b = e.target.closest('button'); if (b && (b.dataset.n === '3') !== draw3) askNew(b.dataset.n === '3'); };
+  function onResize(){ if (!S) return; const keep = S; board.innerHTML = ''; els = {}; layout(); build(); render(false); }
+  addEventListener('resize', onResize);
+  tick = setInterval(() => { root.querySelector('#oTime').textContent = fmt(clock.get()); }, 250);
+  const vis = () => { if (S.done || !S.moves) return; if (document.hidden){ clock.stop(); render(); } else clock.run(); };
+  document.addEventListener('visibilitychange', vis);
+  const sv = loadSave('solitaire');
+  start(sv && sv.tab ? sv : deal());
+  if (sv && sv.tab && sv.moves) clock.run();
+  return { destroy(){ clearInterval(tick); clearInterval(auto); clock.stop(); if (!S.done && S.moves){ S.t = clock.get(); putSave('solitaire', S); } removeEventListener('resize', onResize); document.removeEventListener('visibilitychange', vis); } };
+}
+
+/* ====================================================================== accueil, navigation */
+const GAMES = {
+  mines:     { name: 'Démineur', ic: '💣', desc: 'Trouver toutes les mines sans en toucher une.', start: Mines,
+               best: b => bestLine(b, { easy: 'Facile', mid: 'Moyen', hard: 'Difficile' }) },
+  snake:     { name: 'Snake', ic: '🐍', desc: 'Manger, grandir, ne pas se mordre la queue.', start: Snake,
+               best: b => { const s = b.walls && b.walls.best, w = b.wrap && b.wrap.best; return s || w ? `🏆 ${[s ? `murs ${s}` : '', w ? `traversée ${w}` : ''].filter(Boolean).join(' · ')}` : ''; } },
+  sudoku:    { name: 'Sudoku', ic: '🔢', desc: 'Grilles générées, trois niveaux, notes et indices.', start: Sudoku,
+               best: b => bestLine(b, { easy: 'Facile', mid: 'Moyen', hard: 'Difficile' }) },
+  solitaire: { name: 'Solitaire', ic: '🃏', desc: 'Klondike, pioche par 1 ou par 3.', start: Solitaire,
+               best: b => bestLine(b, { d1: 'par 1', d3: 'par 3' }) },
+};
+function bestLine(b, names){
+  const parts = Object.entries(names).filter(([k]) => b[k] && b[k].best != null).map(([k, n]) => `${n} ${fmt(b[k].best)}`);
+  return parts.length ? '🏆 ' + parts.join(' · ') : '';
+}
+let cur = null;
+function home(){
+  const B = best();
+  main.innerHTML = `<div class="ggrid">${Object.entries(GAMES).map(([id, g]) => {
+    const live = loadSave(id), bl = g.best(B[id] || {});
+    return `<a class="gcard" href="#${id}">${live ? '<span class="live">en cours</span>' : ''}<span class="ge">${g.ic}</span><b>${g.name}</b><small>${g.desc}</small>${bl ? `<span class="best">${esc(bl)}</span>` : ''}</a>`;
+  }).join('')}
+    <div class="gcard soon" aria-disabled="true"><span class="ge">👾</span><b>Émulateurs</b><small>Bientôt : NES, Game Boy, Mega Drive… avec tes propres ROMs.</small></div></div>
+    <p class="hint">Les parties en cours sont gardées sur cet appareil ; les records se synchronisent avec tes autres appareils (menu ⋯).</p>`;
+}
+function route(){
+  if (cur){ try { cur.destroy(); } catch(e){} cur = null; }
+  closeDlg();
+  const id = location.hash.slice(1), g = GAMES[id];
+  $('#back').hidden = !g;
+  $('#sub').textContent = g ? `${g.ic} ${g.name}` : 'Démineur, snake, sudoku, solitaire';
+  document.title = g ? `${g.name} · Jeux` : 'Jeux';
+  main.innerHTML = '';
+  if (g){ const r = document.createElement('div'); main.appendChild(r); cur = g.start(r); }
+  else home();
+  scrollTo(0, 0);
+}
+$('#back').onclick = () => { location.hash = ''; };
+addEventListener('hashchange', route);
+// Les autres onglets du même jeu ne doivent pas se marcher dessus : on garde la partie à la fermeture.
+addEventListener('pagehide', () => { if (cur){ try { cur.destroy(); } catch(e){} cur = null; } });
+
+$('#btnMenu').onclick = () => openDlg(`<h2>Jeux</h2>
+  <button class="item" data-a="sync"><span class="ic">☁</span> Synchronisation<span class="sw" id="syncSw">${pb.connected ? esc(pb.email) : 'non connecté'}</span></button>
+  <button class="item" data-theme-toggle><span class="ic" data-theme-icon></span> Thème<span class="sw" data-theme-name></span></button>
+  <button class="item" data-a="reset"><span class="ic">🗑</span> Effacer les records</button>`, a => {
+  if (a === 'sync'){ closeDlg(); sync.open(); }
+  if (a === 'reset') openDlg(`<h2>Effacer les records ?</h2><p>Meilleurs temps, scores et nombre de parties de tous les jeux, sur tous tes appareils synchronisés.</p>
+    <div class="btns"><button class="btn" data-a="no">Annuler</button><button class="btn primary" data-a="yes">Effacer</button></div>`, b => { closeDlg(); if (b === 'yes'){ pb.set('best', {}); toast('Records effacés.'); if (!cur) home(); } });
+});
+
+const sync = PBSync.init(pb, {
+  adopt: ['best'],
+  summary: 'Les records des jeux sont synchronisés sur le serveur, sans chiffrement. Les parties en cours restent sur chaque appareil.',
+  note: 'Records : la version la plus récente l\'emporte.',
+  onChange(key){ if (key === 'best' && !cur) home(); return null; },
+  toast,
+  onStatus(t){ const e = document.getElementById('syncSw'); if (e) e.textContent = t; },
+});
+route();
+</script>
+</body>
+</html>
