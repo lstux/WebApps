@@ -9,6 +9,14 @@ Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main. Li
 - **+ Projet** : nom, emoji, couleur. ✎ dans un projet : renommer, changer l'emoji ou la couleur, **épingler** en tête, **archiver** (rangé dans « 🗄 Archives » en bas de l'accueil), supprimer.
 - L'adresse suit le projet ouvert (`#p/<id>`) : le bouton retour du téléphone ramène à l'accueil.
 
+### Où j'en suis
+
+- ✎ sur le projet (ou le cadre d'infos en haut du projet) : **description courte**, **statut** (💡 Idée, 🚧 En cours, ⏸ En pause, ✅ Terminé, ou aucun) et **prochaine étape** (une phrase : ce qu'il reste à faire tout de suite). Tous facultatifs.
+- **Avancement** calculé tout seul : toutes les lignes des ☑️ listes à cocher et des ✅ listes TODO liées du projet, en barre rouge → vert. Pas de liste, pas de barre.
+- **Dernière activité** : la date de la dernière modification du projet (« il y a 3 j »). Épingler ou rafraîchir un dépôt GitHub ne compte pas.
+- Les cartes de l'accueil montrent tout ça : statut, description, → prochaine étape, nombre d'éléments, %, dernière activité, barre.
+- **Filtrer par statut** : pastilles en haut de l'accueil (seuls les statuts utilisés apparaissent). **Trier** : le bouton à droite bascule entre « Ordre manuel » et « Récents d'abord » (les épinglés restent en tête ; réglage propre à l'appareil).
+
 ## Éléments
 
 **+ Ajouter** dans un projet, puis ✎ sur un élément pour le modifier, le **déplacer** vers un autre projet ou le supprimer. La poignée ⋮⋮ réordonne au doigt.
@@ -61,11 +69,11 @@ Une page à dessiner, en plein écran. Les traits sont gardés en vecteurs (`ske
 
 ## Données
 
-- Stockage local (`localStorage`) : une clé par projet, `notebook.p.<id>` = `{id, name, emoji, color, pinned, archived, pos, items: […]}`.
+- Stockage local (`localStorage`) : une clé par projet, `notebook.p.<id>` = `{id, name, emoji, color, pinned, archived, pos, desc, status, next, t, items: […]}` (`status` : `idea`, `wip`, `pause`, `done` ou vide ; `t` : dernière activité, en ms). Les projets plus anciens s'ouvrent tels quels, champs vides.
 - **Exporter** : ✎ du projet → « Exporter ce projet… », ou menu ⋯ → « Exporter tout… ».
   - **JSON** (`notebook-<projet>.json` : `{app: "notebook", version: 1, projects: […], refs}`), réimportable.
   - **HTML** (`.html`) : le même contenu que le Markdown, mis en page dans une seule page autonome (styles intégrés, clair ou sombre selon le système, imprimable, sans script).
-  - **Markdown** (`.md`), à lire ou à partager : liens et références en tête (un groupe de liens devient une sous-liste), puis listes (`- [x]`), achats (tableau et totaux), notes et croquis, chacun sous son titre. Un croquis est recopié en image SVG intégrée (`data:`) : visible dans l'export HTML et la plupart des lecteurs, pas sur GitHub.
+  - **Markdown** (`.md`), à lire ou à partager : description, statut, avancement et prochaine étape sous le titre, puis liens et références en tête (un groupe de liens devient une sous-liste), puis listes (`- [x]`), achats (tableau et totaux), notes et croquis, chacun sous son titre. Un croquis est recopié en image SVG intégrée (`data:`) : visible dans l'export HTML et la plupart des lecteurs, pas sur GitHub.
   - Option **« Embarquer les listes TODO, cartes et circuits liés »**, cochée par défaut. En JSON, ils sont copiés dans `refs` (`todo`, `map`, `pbd` par identifiant) et recréés à l'import. En Markdown, l'arbre de la liste TODO et les points de la carte (liens OpenStreetMap) sont ajoutés.
   - Option **« Inclure le contenu des documents »**, décochée par défaut, pour Markdown et HTML : chaque 📖 Document est téléchargé au moment de l'export (un lien GitHub `blob/…` est lu sur raw.githubusercontent.com). Son contenu est recopié sous son titre, avec ses titres décalés et ses liens et images relatifs rendus absolus. Un document qu'on n'arrive pas à télécharger garde son lien, et un message le signale. Le JSON ne garde que le lien.
 - **Importer** (menu ⋯) : un export d'un projet ou de tous. Si un projet existe déjà, on choisit :

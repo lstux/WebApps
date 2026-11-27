@@ -38,6 +38,21 @@ button.tag { cursor: pointer; }
 .proj .ct { color: var(--mut); font-size: 13px; }
 .proj .pin { position: absolute; right: 10px; top: 8px; font-size: 13px; }
 .proj.arch { opacity: .6; }
+.proj { align-items: flex-start; }
+.proj > span:nth-child(2) { flex: 1; }
+.proj .ds { font-size: 13px; color: var(--fg); opacity: .85; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.proj .nx { font-size: 13px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj .st, .pinfo .st { display: inline-block; font-size: 12px; font-weight: 650; padding: 1px 7px; border-radius: 99px; background: var(--ac-soft); margin-right: 4px; }
+.proj .pbar, .pinfo .pbar { display: block; height: 4px; border-radius: 2px; background: var(--line); margin-top: 6px; overflow: hidden; }
+.proj .pbar i, .pinfo .pbar i { display: block; height: 100%; }
+.homebar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0 0 8px; }
+.homebar .chips { margin: 0; flex: 1; }
+.pinfo { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-m); padding: 8px 12px; margin: 0 0 10px; cursor: pointer; font-size: 14px; }
+.pinfo .ds { color: var(--mut); }
+.pinfo .nx { margin-top: 2px; }
+.stats { display: flex; flex-wrap: wrap; gap: 6px; }
+.stats button { border: 1px solid var(--line); background: var(--card); color: inherit; border-radius: 99px; padding: 5px 10px; font: inherit; font-size: 14px; cursor: pointer; }
+.stats button.on { background: var(--ac-soft); border-color: var(--ac); font-weight: 650; }
 .sect { margin: 18px 4px 8px; color: var(--mut); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 
 /* En-tête de projet */
@@ -186,7 +201,8 @@ body:has(.edit) .fab, body:has(main input:not([type=checkbox]):focus, main texta
 'use strict';
 /* ---------- données ----------
    Un projet = une clé « notebook.p.<id> » (synchronisée à part : deux appareils peuvent modifier deux
-   projets différents sans conflit). Un projet : {id, name, emoji, color, pinned, archived, pos, items:[…]}.
+   projets différents sans conflit). Un projet : {id, name, emoji, color, pinned, archived, pos, desc, status, next, t, items:[…]}
+   (desc : description courte, status : clé de STATUS ou '', next : prochaine étape, t : dernière activité en ms).
    Éléments : link {url,title,note} · links {title,note,rows:[{id,t,url,n}]} · sketch {title,sk:{v,bg,s:[…]}} (voir sketch.js) · gh {url,owner,repo,note,info} · note {title,md} · check {title,rows:[{id,t,done}]}
    · buy {title,rows:[{id,t,qty,price,url,done}]} · pbd {cid,name,note} · todo {lid,name,note} · map {mid,name,note}
    · doc {url,title,note}. Tous : id, tags[]. pbd, todo et map référencent un élément d'une autre app (même navigateur). */
@@ -209,6 +225,12 @@ const TYPES = {
   map:   { ic: '🗺️', name: 'Carte', help: 'une carte de « Mes cartes »' },
   doc:   { ic: '📖', name: 'Document', help: 'un Markdown à lire dans la Liseuse' },
 };
+const STATUS = {
+  idea:  { ic: '💡', name: 'Idée' },
+  wip:   { ic: '🚧', name: 'En cours' },
+  pause: { ic: '⏸', name: 'En pause' },
+  done:  { ic: '✅', name: 'Terminé' },
+};
 const EMOJIS = ['📁','🤖','🛰️','🚗','🔌','💡','🌱','🎮','⌚','📟','🖥️','🧪','🔧','📡','🎛️','🏠','📚','✈️','🎵','⭐'];
 const COLORS = ['#7c5cff','#e0457b','#ff9f43','#f5c518','#1fbf8f','#0a7c9c','#3b82f6','#8b5e3c','#6b7280'];
 
@@ -224,15 +246,22 @@ function loadAll(){
 function norm(p){
   if (!p || typeof p !== 'object' || !p.id) return null;
   return { id: String(p.id), name: String(p.name || 'Projet'), emoji: p.emoji || '📁', color: p.color || COLORS[0], pinned: !!p.pinned, archived: !!p.archived,
-    pos: +p.pos || 0, items: (Array.isArray(p.items) ? p.items : []).filter(it => it && TYPES[it.type]).map(it => ({ ...it, id: it.id || uid(), tags: Array.isArray(it.tags) ? it.tags : [] })) };
+    pos: +p.pos || 0, desc: String(p.desc || ''), status: STATUS[p.status] ? p.status : '', next: String(p.next || ''), t: +p.t || 0, items: (Array.isArray(p.items) ? p.items : []).filter(it => it && TYPES[it.type]).map(it => ({ ...it, id: it.id || uid(), tags: Array.isArray(it.tags) ? it.tags : [] })) };
 }
 let projects = loadAll();
 const getP = id => projects.find(p => p.id === id);
-function save(p){ pb.set(PK(p.id), p); }
-function sorted(list){ return list.slice().sort((a, b) => (b.pinned - a.pinned) || (a.pos - b.pos) || a.name.localeCompare(b.name)); }
+// touch = false : ne compte pas comme une activité (épingler, rafraîchir les infos GitHub…)
+function save(p, touch = true){ if (touch) p.t = Date.now(); pb.set(PK(p.id), p); }
+const SORT_KEY = 'notebook-home-sort';   // réglage de l'appareil (hors préfixe « notebook. » : pas synchronisé)
+let homeSort = localStorage.getItem(SORT_KEY) === 'recent' ? 'recent' : 'manual';
+function sorted(list){
+  return list.slice().sort(homeSort === 'recent' && !ui.pid
+    ? (a, b) => (b.pinned - a.pinned) || (b.t - a.t) || a.name.localeCompare(b.name)
+    : (a, b) => (b.pinned - a.pinned) || (a.pos - b.pos) || a.name.localeCompare(b.name));
+}
 
 /* ---------- état de l'affichage (adresse : #p/<id>, pour le bouton retour du téléphone) ---------- */
-const ui = { pid: null, editing: null, q: '', tag: null, archived: false, open: new Set(), exp: new Set() };
+const ui = { pid: null, editing: null, q: '', tag: null, st: null, archived: false, open: new Set(), exp: new Set() };
 function route(){
   const m = location.hash.match(/^#p\/([\w-]+)/);
   ui.pid = m && getP(m[1]) ? m[1] : null; ui.editing = null;
@@ -368,7 +397,7 @@ async function ghFetch(it){
     prs, branch: d.default_branch, archived: !!d.archived, fork: !!d.fork, at: Date.now() };
 }
 async function ghRefresh(p, it, quiet){
-  try { it.info = await ghFetch(it); save(p); render(); if (!quiet) toast('Infos GitHub mises à jour.'); }
+  try { it.info = await ghFetch(it); save(p, false); render(); if (!quiet) toast('Infos GitHub mises à jour.'); }
   catch (e) { if (!quiet) toast(e.message || 'GitHub injoignable', true); }
 }
 
@@ -392,8 +421,8 @@ function homeHTML(){
   return `<div class="search"><input type="search" id="q" placeholder="Chercher dans tous les projets…" value="${esc(ui.q)}" autocomplete="off"></div><div id="hbody">${homeBody()}</div>`;
 }
 function homeBody(){
-  const q = ui.q.trim().toLowerCase(), pool = projects.filter(p => !p.archived);
-  let h = tagChips(allTags(pool));
+  const q = ui.q.trim().toLowerCase(), all = projects.filter(p => !p.archived), pool = all.filter(p => !ui.st || p.status === ui.st);
+  let h = homeBar(all) + tagChips(allTags(pool));
   if (q || ui.tag){   // résultats : éléments de tous les projets (non archivés)
     const res = [];
     pool.forEach(p => p.items.forEach(it => { if ((!ui.tag || it.tags.includes(ui.tag)) && (!q || itemText(it).includes(q))) res.push([p, it]); }));
@@ -403,24 +432,52 @@ function homeBody(){
     h += res.length ? `<div class="items">${res.map(([p, it]) => itemHTML(p, it, true)).join('')}</div>` : '<p class="muted" style="margin:4px">Aucun élément trouvé.</p>';
     return h;
   }
+  if (projects.length && !pool.length) h += '<p class="muted" style="margin:4px">Aucun projet avec ce statut.</p>';
   if (!projects.length) return h + `<div class="empty"><b class="bob">📒</b>Aucun projet pour l'instant.<br>« + Projet » pour commencer.</div>`;
   h += `<div class="projects" id="plist">${sorted(pool).map(projCard).join('')}</div>`;
-  const arch = projects.filter(p => p.archived);
+  const arch = projects.filter(p => p.archived && (!ui.st || p.status === ui.st));
   if (arch.length){
     h += `<div class="sect"><button class="chip ${ui.archived ? 'on' : ''}" data-a="showarch">🗄 Archives (${arch.length})</button></div>`;
     if (ui.archived) h += `<div class="projects">${sorted(arch).map(projCard).join('')}</div>`;
   }
   return h;
 }
+/* Avancement d'un projet : toutes les lignes de ses listes à cocher et de ses listes TODO liées. */
+function projProgress(p){
+  let done = 0, total = 0;
+  for (const it of p.items){
+    if (it.type === 'check'){ total += it.rows.length; done += it.rows.filter(r => r.done).length; }
+    else if (it.type === 'todo'){ const l = todoList(it.lid); if (l){ total += l.total; done += l.done; } }
+  }
+  return total ? { done, total, f: done / total } : null;
+}
+const progColor = f => `hsl(${Math.round(f * 120)} 70% 45%)`;   // rouge → vert, comme la TODO
+const pbar = pr => pr ? `<span class="pbar" title="${pr.done} / ${pr.total} · ${Math.round(pr.f * 100)} %"><i style="width:${(pr.f * 100).toFixed(1)}%;background:${progColor(pr.f)}"></i></span>` : '';
+const stBadge = p => p.status ? `<span class="st">${STATUS[p.status].ic} ${STATUS[p.status].name}</span>` : '';
+function homeBar(all){
+  const n = k => all.filter(p => p.status === k).length;
+  const used = Object.keys(STATUS).filter(n);
+  const chips = used.length ? `<div class="chips">${used.map(k => `<button class="chip ${ui.st === k ? 'on' : ''}" data-a="st" data-v="${k}">${STATUS[k].ic} ${STATUS[k].name} (${n(k)})</button>`).join('')}</div>` : '<span style="flex:1"></span>';
+  return `<div class="homebar">${chips}<button class="chip" data-a="sort" title="Ordre des projets">${homeSort === 'recent' ? '🕒 Récents d\'abord' : '↕ Ordre manuel'}</button></div>`;
+}
 function projCard(p){
-  const n = p.items.length;
+  const n = p.items.length, pr = projProgress(p);
+  const meta = [n ? n + ' élément' + (n > 1 ? 's' : '') : 'vide', pr && Math.round(pr.f * 100) + ' %', p.t && ago(p.t)].filter(Boolean).join(' · ');
   return `<button class="proj ${p.archived ? 'arch' : ''}" style="--c:${esc(p.color)}" data-a="open" data-id="${p.id}">
-    <span class="em">${esc(p.emoji)}</span><span style="min-width:0"><div class="nm">${esc(p.name)}</div><div class="ct">${n ? n + ' élément' + (n > 1 ? 's' : '') : 'vide'}</div></span>
+    <span class="em">${esc(p.emoji)}</span><span style="min-width:0"><div class="nm">${esc(p.name)}</div>
+    ${p.status || p.desc ? `<div class="ds">${stBadge(p)}${esc(p.desc)}</div>` : ''}
+    ${p.next ? `<div class="nx">→ ${esc(p.next)}</div>` : ''}
+    <div class="ct">${meta}</div>${pbar(pr)}</span>
     ${p.pinned ? '<span class="pin" title="Épinglé">📌</span>' : ''}</button>`;
 }
 function projectHTML(p){
   let h = `<div class="phead" style="--c:${esc(p.color)}"><button class="mini" data-a="home" aria-label="Retour aux projets">‹</button><span class="bar"></span><span class="em">${esc(p.emoji)}</span><h2>${esc(p.name)}</h2>
     <button class="mini" data-a="pedit" aria-label="Modifier le projet" title="Nom, emoji, couleur, épingler, archiver">✎</button></div>`;
+  const pr = projProgress(p);
+  if (p.status || p.desc || p.next || pr) h += `<div class="pinfo" data-a="pedit" title="Modifier">
+    ${p.status || p.desc ? `<div class="ds">${stBadge(p)}${esc(p.desc)}</div>` : ''}
+    ${p.next ? `<div class="nx">→ <b>${esc(p.next)}</b></div>` : ''}
+    ${pr ? `<div class="ds" style="margin-top:4px">${pr.done} / ${pr.total} fait · ${Math.round(pr.f * 100)} %${p.t ? ' · modifié ' + ago(p.t) : ''}</div>${pbar(pr)}` : p.t ? `<div class="ds" style="margin-top:4px">modifié ${ago(p.t)}</div>` : ''}</div>`;
   const tags = allTags([p]);
   h += tagChips(tags);
   const list = p.items.filter(it => !ui.tag || it.tags.includes(ui.tag));
@@ -672,6 +729,8 @@ document.addEventListener('click', e => {
     case 'goto': if (p){ go(p.id); setTimeout(() => { const el = document.querySelector(`.it[data-id="${it.id}"]`); if (el){ el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); } }, 50); } break;
     case 'showarch': ui.archived = !ui.archived; render(); break;
     case 'tag': ui.tag = ui.tag === b.dataset.v ? null : b.dataset.v; render(); break;
+    case 'st': ui.st = ui.st === b.dataset.v ? null : b.dataset.v; render(); break;
+    case 'sort': homeSort = homeSort === 'recent' ? 'manual' : 'recent'; try { localStorage.setItem(SORT_KEY, homeSort); } catch {} render(); break;
     case 'pedit': sheetProject(getP(ui.pid)); break;
     case 'edit':
       if (ui.editing !== it.id && it.type === 'note') return openNote(p.id, it.id);
@@ -810,6 +869,9 @@ function sheetProject(p, isNew){
       <input type="text" id="pName" value="${esc(isNew ? '' : p.name)}" placeholder="Nom du projet" autocomplete="off">
       <div class="emojis">${EMOJIS.map(x => `<button data-a="em" data-v="${x}" class="${x === p.emoji ? 'on' : ''}">${x}</button>`).join('')}</div>
       <div class="colors">${COLORS.map(c => `<button data-a="col" data-v="${c}" style="--c:${c}" class="${c === p.color ? 'on' : ''}" aria-label="Couleur ${c}"></button>`).join('')}</div>
+      <textarea id="pDesc" rows="2" style="min-height:0;height:auto;resize:vertical;font:inherit" placeholder="Description courte (facultatif)">${esc(p.desc)}</textarea>
+      <div class="stats">${Object.entries(STATUS).map(([k, v]) => `<button type="button" data-a="pst" data-v="${k}" class="${p.status === k ? 'on' : ''}">${v.ic} ${v.name}</button>`).join('')}</div>
+      <input type="text" id="pNext" value="${esc(p.next)}" placeholder="Prochaine étape : où j'en suis (facultatif)" autocomplete="off">
     </div>
     ${isNew ? '' : `<button class="item" data-a="pin"><span class="ic">📌</span> ${p.pinned ? 'Désépingler' : 'Épingler en tête'}</button>
     <button class="item" data-a="arch"><span class="ic">🗄</span> ${p.archived ? 'Sortir des archives' : 'Archiver'}</button>
@@ -817,16 +879,19 @@ function sheetProject(p, isNew){
     <button class="item" data-a="pdel"><span class="ic">🗑</span> Supprimer le projet<span class="sw">${p.items.length} élément(s)</span></button>`}
     <div class="btns"><button class="btn primary" data-a="ok">${isNew ? 'Créer' : 'Enregistrer'}</button></div>`, (a, b) => {
     const name = () => $('#pName').value.trim();
+    // nom, description, prochaine étape (le statut est pris au clic)
+    const read = () => { if (name()) p.name = name(); p.desc = $('#pDesc').value.trim(); p.next = $('#pNext').value.trim(); };
+    if (a === 'pst'){ p.status = p.status === b.dataset.v ? '' : b.dataset.v; $$('.stats button').forEach(x => x.classList.toggle('on', x.dataset.v === p.status)); }
     if (a === 'em'){ p.emoji = b.dataset.v; $$('.emojis button').forEach(x => x.classList.toggle('on', x === b)); }
     if (a === 'col'){ p.color = b.dataset.v; $$('.colors button').forEach(x => x.classList.toggle('on', x === b)); }
-    if (a === 'pin'){ p.pinned = !p.pinned; if (name()) p.name = name(); save(p); closeDlg(); render(); }
-    if (a === 'arch'){ p.archived = !p.archived; if (name()) p.name = name(); save(p); closeDlg(); if (p.archived) go(null); render(); toast(p.archived ? 'Projet archivé.' : 'Projet sorti des archives.'); }
-    if (a === 'pexp'){ if (name()) p.name = name(); save(p); sheetExport([p]); }
+    if (a === 'pin'){ p.pinned = !p.pinned; read(); save(p, false); closeDlg(); render(); }
+    if (a === 'arch'){ p.archived = !p.archived; read(); save(p); closeDlg(); if (p.archived) go(null); render(); toast(p.archived ? 'Projet archivé.' : 'Projet sorti des archives.'); }
+    if (a === 'pexp'){ read(); save(p, false); sheetExport([p]); }
     if (a === 'pdel'){
       if (!b.dataset.armed){ b.dataset.armed = 1; b.lastChild.textContent = ' Confirmer : supprimer définitivement'; return; }
       projects = projects.filter(x => x !== p); pb.remove(PK(p.id)); closeDlg(); go(null); render(); toast('Projet supprimé.');
     }
-    if (a === 'ok'){ p.name = name() || p.name; save(p); closeDlg(); if (isNew) go(p.id); else render(); }
+    if (a === 'ok'){ read(); save(p); closeDlg(); if (isNew) go(p.id); else render(); }
   });
   setTimeout(() => $('#pName') && $('#pName').focus(), 50);
 }
@@ -929,7 +994,7 @@ function sheetExport(list){
 }
 /* Markdown lisible d'un projet. Avec refs : l'arbre des listes TODO et les points des cartes. */
 function projectMD(p, refs, docs){
-  const out = [`# ${p.emoji} ${p.name}`], tg = it => it.tags.length ? ' ' + it.tags.map(t => '#' + t.replace(/\s+/g, '-')).join(' ') : '';
+  const out = [`# ${p.emoji} ${p.name}`], pr0 = projProgress(p), tg = it => it.tags.length ? ' ' + it.tags.map(t => '#' + t.replace(/\s+/g, '-')).join(' ') : '';
   const lk = (t, u) => `[${t.replace(/[[\]]/g, '\\$&')}](${safeUrl(u).replace(/[()\s]/g, encodeURIComponent)})`;
   const nt = (it, ind = '  ') => it.note ? '\n' + it.note.split('\n').map(x => ind + '> ' + x).join('\n') : '';
   // Les éléments d'une ligne (liens, dépôts, cartes…) sont regroupés en tête ; les listes et notes suivent, chacune sous son titre.
@@ -972,6 +1037,10 @@ function projectMD(p, refs, docs){
         block(`## ✅ ${t}${l && l.total ? ` (${l.done} / ${l.total})` : ''}${tg(it)}\n\n${tree(d.nodes || [], '')}`); break; }
     }
   }
+  const head = [p.status && `**${STATUS[p.status].ic} ${STATUS[p.status].name}**`, pr0 && `${pr0.done} / ${pr0.total} fait (${Math.round(pr0.f * 100)} %)`].filter(Boolean).join(' · ');
+  if (p.desc) out.push('', p.desc);
+  if (head) out.push('', head);
+  if (p.next) out.push('', '**Prochaine étape :** ' + p.next);
   if (bullets.length) out.push('', '## 🔗 Liens et références', '', ...bullets);
   for (const x of blocks) out.push('', x);
   return out.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
