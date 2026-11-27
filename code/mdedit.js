@@ -1,4 +1,4 @@
-/* mdedit.js — éditeur Markdown plein écran, partagé par les pages (Notebook ; la Liseuse pourra s'en servir).
+/* mdedit.js — éditeur Markdown plein écran, partagé par les pages (Notebook, Liseuse). Mode texte brut pour le reste.
 
      <script src="mdedit.js"></script>   (après common.js ; styles injectés ici, couleurs de common.css)
 
@@ -9,6 +9,9 @@
      onSave(text, title){ … },         // appelé en tapant (après une courte pause) et à la fermeture
      onClose(text, title){ … },        // après la fermeture (bouton ‹, Échap, retour du téléphone)
      menu: [{ label: '⚙ Propriétés', fn(){ … } }],          // boutons de plus (facultatif)
+     label: 'nom.txt',                 // avec title:null : un nom affiché, non modifiable
+     plain: true,                      // texte brut (code, config…) : ni barre d'outils, ni aperçu, police fixe
+     mode: 'write',                    // ouvrir en écriture même sur téléphone (sinon : aperçu si le texte existe)
    });
    ed.close();
 
@@ -43,6 +46,8 @@
     ".mde-pv input[type=checkbox]{width:18px;height:18px;vertical-align:-3px;margin:0 6px 0 0;cursor:pointer}",
     ".mde-pv li:has(>input[type=checkbox]){list-style:none;margin-left:-1.2em}",
     ".mde[data-mode=write] .mde-pv{display:none}",
+    ".mde[data-plain] .mde-tb,.mde[data-plain] .mde-seg,.mde[data-plain] .mde-pv{display:none!important}",
+    ".mde[data-plain] .mde-ta{white-space:pre;overflow:auto;font-size:14px;tab-size:4}",
     ".mde[data-mode=preview] .mde-ta,.mde[data-mode=preview] .mde-tb{display:none}",
     "@media (min-width:900px){.mde[data-mode=write] .mde-pv{display:block;border-left:1px solid var(--line)}.mde-seg [data-m=preview]{display:none}}",
     ".mde-menu{position:absolute;right:10px;top:calc(56px + env(safe-area-inset-top,0px));z-index:2;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px #0003;padding:6px;display:grid;min-width:220px}",
@@ -70,11 +75,12 @@
     var wide = function () { return matchMedia("(min-width:900px)").matches; };
     var root = document.createElement("div");
     root.className = "mde"; root.setAttribute("role", "dialog"); root.setAttribute("aria-modal", "true");
-    root.dataset.mode = (o.text || "").trim() && !wide() ? "preview" : "write";
+    root.dataset.mode = o.plain || o.mode === "write" ? "write" : (o.text || "").trim() && !wide() ? "preview" : "write";
+    if (o.plain) root.dataset.plain = "1";
     var hasTitle = o.title !== null;
     root.innerHTML =
       '<div class="mde-hd"><button class="mde-b" data-k="close" aria-label="Fermer" title="Fermer (enregistré)">‹</button>' +
-      (hasTitle ? '<input class="mde-ti" type="text" autocomplete="off" placeholder="' + esc(o.titlePlaceholder || "Titre") + '" value="' + esc(o.title || "") + '">' : '<span class="sp"></span>') +
+      (hasTitle ? '<input class="mde-ti" type="text" autocomplete="off" placeholder="' + esc(o.titlePlaceholder || "Titre") + '" value="' + esc(o.title || "") + '">' : o.label ? '<span class="sp" style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;padding:0 6px">' + esc(o.label) + '</span>' : '<span class="sp"></span>') +
       '<span class="mde-st" aria-live="polite"></span>' +
       '<div class="mde-seg"><button data-m="write">Écrire</button><button data-m="preview">Aperçu</button></div>' +
       (o.menu && o.menu.length ? '<button class="mde-b" data-k="menu" aria-label="Plus">⋯</button>' : "") + "</div>" +
@@ -88,6 +94,7 @@
     document.documentElement.classList.add("mde-on");
     var ta = root.querySelector(".mde-ta"), pv = root.querySelector(".mde-pv"), ti = root.querySelector(".mde-ti"), st = root.querySelector(".mde-st");
     ta.value = o.text || "";
+    if (o.plain) { ta.spellcheck = false; ta.placeholder = ""; ta.setAttribute("wrap", "off"); ta.setAttribute("autocapitalize", "off"); ta.setAttribute("autocorrect", "off"); }
     var title = function () { return ti ? ti.value.trim() : undefined; };
 
     var saved = ta.value + "\u0000" + (ti ? ti.value : ""), timer = null;
@@ -103,7 +110,7 @@
       if (now) go(); else { st.textContent = "…"; timer = setTimeout(go, 600); }
     }
     function preview() {
-      if (root.dataset.mode === "write" && !wide()) return;
+      if (o.plain || (root.dataset.mode === "write" && !wide())) return;
       pv.innerHTML = ta.value.trim() ? o.render(ta.value) : '<p class="empty-pv">Rien à afficher pour l\'instant.</p>';
       pv.querySelectorAll("input[type=checkbox]").forEach(function (c, i) { c.disabled = false; c.dataset.n = i; });
     }
@@ -168,7 +175,7 @@
     /* Entrée dans une liste : nouvelle puce (case décochée, numéro suivant) ; sur une puce vide, fin de la liste. */
     ta.addEventListener("keydown", function (e) {
       if (e.key === "Tab") { e.preventDefault(); if (e.shiftKey) lines(function (l) { return l.replace(/^ {1,2}/, ""); }); else if (ta.selectionStart !== ta.selectionEnd) lines(function (l) { return "  " + l; }); else insert("  "); return; }
-      if (e.key !== "Enter" || e.shiftKey || e.isComposing || ta.selectionStart !== ta.selectionEnd) return;
+      if (o.plain || e.key !== "Enter" || e.shiftKey || e.isComposing || ta.selectionStart !== ta.selectionEnd) return;
       var v = ta.value, s = ta.selectionStart, ls = v.lastIndexOf("\n", s - 1) + 1, line = v.slice(ls, s), m = line.match(LIST);
       if (!m) return;
       e.preventDefault();
@@ -228,7 +235,7 @@
 
     setMode(root.dataset.mode);
     if (hasTitle && !ti.value && !ta.value) setTimeout(function () { ti.focus(); }, 30);
-    else if (root.dataset.mode === "write") setTimeout(function () { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 30);
+    else if (root.dataset.mode === "write") setTimeout(function () { ta.focus(); if (o.plain || o.mode === "write") { ta.setSelectionRange(0, 0); ta.scrollTop = 0; } else ta.setSelectionRange(ta.value.length, ta.value.length); }, 30);
     return api;
   }
 

@@ -49,7 +49,7 @@ Les éléments référencés sont lus dans le stockage du navigateur : ils doive
 - Dans l'aperçu, les cases se cochent (le texte suit).
 - **‹**, Échap ou le bouton retour du téléphone ferment l'éditeur. ⋯ → « Étiquettes, déplacer, supprimer… » ouvre le formulaire habituel.
 - Une nouvelle note fermée sans titre ni texte est supprimée.
-- L'éditeur est dans `code/mdedit.js`, partagé : la Liseuse pourra s'en servir.
+- L'éditeur est dans `code/mdedit.js`, partagé avec la Liseuse.
 
 ## Croquis
 

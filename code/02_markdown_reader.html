@@ -10,6 +10,7 @@
 <script src="common.js"></script>
 <script src="pbstore.js"></script>
 <script src="pbsync.js"></script>
+<script src="mdedit.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&display=swap">
 <style>
 /* Mise en page : bandeau fin en haut, volet de documents à gauche, colonne de lecture étroite au centre, plan de la section à droite sur grand écran. */
@@ -156,6 +157,20 @@ svg.i{flex:none;display:block}
 .hljs-comment,.hljs-quote{color:var(--syn-com);font-style:italic}
 .hljs-title,.hljs-section,.hljs-built_in,.hljs-type,.hljs-attr,.hljs-attribute,.hljs-selector-class,.hljs-selector-id{color:var(--syn-fn)}
 .hljs-deletion{color:var(--err)}
+/* Fichiers texte et code : pleine largeur, numéros de ligne */
+.app.wide .col{max-width:none;font-size:calc(var(--fs) * .9)}
+.srcview{display:flex;align-items:flex-start;overflow-x:auto;font-family:var(--f-mono)}
+.srcview pre{margin:0;padding:13px 0;line-height:1.55;background:none;font-size:.82em}
+.srcview .gut{flex:none;padding:13px 10px 13px 12px;text-align:right;color:var(--mut);opacity:.6;user-select:none;-webkit-user-select:none;border-right:1px solid var(--line)}
+.srcview .src{flex:1;padding-left:14px;padding-right:16px}
+.srcview code{background:none;padding:0;white-space:pre;overflow-wrap:normal;font-size:1em}
+.csvtable td,.csvtable th{white-space:nowrap}
+.draftbar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:0 0 1.2em;padding:8px 14px;border-radius:12px;background:var(--ac-soft);font-family:var(--f-ui);font-size:13px}
+.draftbar b{margin-right:auto}
+.draftbar button{border:0;background:none;color:var(--ac);font:inherit;font-weight:600;padding:2px 0;cursor:pointer}
+.draftbar button:hover{text-decoration:underline}
+.allbtn{border:1px solid var(--line);background:var(--card);color:var(--mut);font:inherit;font-size:11px;letter-spacing:0;text-transform:none;border-radius:99px;padding:1px 8px;cursor:pointer;flex:none}
+.allbtn[aria-pressed="true"]{color:var(--ac);border-color:var(--ac);background:var(--ac-soft)}
 
 .pager{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:3.2em;padding-top:1.4em;border-top:1px solid var(--line);font-family:var(--f-ui)}
 .pager:empty{display:none}
@@ -243,6 +258,7 @@ body.is-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
     <div class="crumb" id="ls-crumb"></div>
     <span class="stats" id="ls-stats"></span>
     <div class="ring" id="ls-ring" hidden><span id="ls-ring-txt"></span></div>
+    <button type="button" class="btn icon" id="ls-edit" aria-label="Modifier ce fichier" title="Modifier ce fichier"></button>
     <button type="button" class="btn icon" id="ls-fav" aria-pressed="false"></button>
     <div class="grp">
       <button type="button" class="btn icon" id="ls-smaller" aria-label="Réduire le texte">A−</button>
@@ -259,8 +275,8 @@ body.is-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
         <button type="button" class="btn primary" id="ls-open-folder"></button>
       </div>
       <form class="urlrow" id="ls-url-form" autocomplete="off">
-        <label class="sr" for="ls-url">Adresse d’un fichier Markdown ou d’un dépôt GitHub</label>
-        <input class="field" id="ls-url" type="text" inputmode="url" spellcheck="false" placeholder="Adresse .md ou GitHub">
+        <label class="sr" for="ls-url">Adresse d’un fichier texte ou d’un dépôt GitHub</label>
+        <input class="field" id="ls-url" type="text" inputmode="url" spellcheck="false" placeholder="Adresse d’un fichier ou dépôt GitHub">
         <button type="submit" class="btn">Charger</button>
       </form>
       <label class="sr" for="ls-q">Rechercher dans les documents</label>
@@ -271,7 +287,7 @@ body.is-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
       <button type="button" class="tab" id="ls-tab-favs" aria-pressed="true"></button>
       <button type="button" class="tab" id="ls-tab-docs" aria-pressed="false"></button>
     </div>
-    <div class="srcline"><span id="ls-src"></span><span id="ls-count"></span></div>
+    <div class="srcline"><span id="ls-src"></span><button type="button" class="allbtn" id="ls-all" aria-pressed="false" hidden title="Afficher aussi les fichiers texte et le code, pas seulement le Markdown">Tous les fichiers</button><span id="ls-count"></span></div>
     <nav class="tree" id="ls-tree" aria-label="Arborescence des documents"></nav>
   </aside>
 
@@ -286,9 +302,9 @@ body.is-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
   </main>
 
   <div class="scrim" id="ls-scrim"></div>
-  <div class="drop" id="ls-drop" hidden>Dépose un fichier .md ou un dossier</div>
+  <div class="drop" id="ls-drop" hidden>Dépose un fichier ou un dossier</div>
   <div class="toast" id="ls-toast" role="status" aria-live="polite" hidden></div>
-  <input type="file" id="ls-file-in" accept=".md,.markdown,.mdown,.mkd,.mdx,text/markdown" multiple hidden>
+  <input type="file" id="ls-file-in" multiple hidden>
   <input type="file" id="ls-folder-in" webkitdirectory multiple hidden>
 </div>
 
@@ -296,19 +312,24 @@ body.is-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
 <script type="text/markdown" data-path="Bienvenue.md">
 # Liseuse Markdown
 
-Une page unique qui affiche des fichiers Markdown comme on lit un livre : colonne étroite, typographie soignée, liste des documents à gauche, plan de la section à droite.
+Une page unique qui affiche des fichiers Markdown comme on lit un livre : colonne étroite, typographie soignée, liste des documents à gauche, plan de la section à droite. Elle lit aussi les autres fichiers texte (code, configuration, JSON, CSV…) et permet de les modifier.
 
 > Les favoris, dans le volet de gauche, gardent tes documents et tes dépôts GitHub sous la main.
 
 ## Ouvrir des documents
 
-- **Fichiers** : un ou plusieurs fichiers `.md` de ton ordinateur.
+- **Fichiers** : un ou plusieurs fichiers texte de ton ordinateur (`.md`, `.txt`, `.json`, `.csv`, code…).
 - **Dossier** : tous les `.md` du dossier et de ses sous-dossiers apparaissent dans l’arborescence. Les images et les liens relatifs entre documents fonctionnent.
-- **Adresse** : l’URL d’un fichier `.md`, ou celle d’un dépôt GitHub (`https://github.com/utilisateur/depot`) pour parcourir tous ses documents.
+- **Adresse** : l’URL d’un fichier, ou celle d’un dépôt GitHub (`https://github.com/utilisateur/depot`) pour parcourir tous ses documents.
+- **Tous les fichiers** : pour un dossier ou un dépôt, ce bouton (au-dessus de l’arborescence) ajoute les autres fichiers texte au Markdown.
 - **Glisser-déposer** : dépose un fichier ou un dossier n’importe où sur la page.
 - **Coller** : `Ctrl`+`V` affiche le Markdown présent dans le presse-papiers.
 
 Rien n’est envoyé nulle part : les fichiers sont lus dans le navigateur.
+
+## Modifier un fichier
+
+Le crayon du bandeau (ou la touche `E`) ouvre l’éditeur : celui des notes pour le Markdown, un éditeur de texte simple pour le reste. Les modifications sont gardées dans ce navigateur et retrouvées à la réouverture du fichier, marquées « Modifié dans ce navigateur ». De là : **Télécharger** la copie modifiée, **Revenir à l’original**, ou, pour un fichier GitHub, **Modifier sur GitHub**.
 
 ## Favoris
 
@@ -414,6 +435,28 @@ Fin du document.
 /* ---------- Constantes et petits utilitaires ---------- */
 const MD_RE=/\.(md|markdown|mdown|mkd|mdx)$/i;
 const IMG_RE=/\.(png|jpe?g|gif|svg|webp|avif|bmp)$/i;
+/* Fichiers texte reconnus, avec le langage de coloration (highlight.js) */
+const LANGS={txt:'',text:'',log:'',csv:'csv',tsv:'tsv',json:'json',geojson:'json',jsonc:'json',json5:'json',webmanifest:'json',ipynb:'json',
+  yaml:'yaml',yml:'yaml',toml:'ini',ini:'ini',cfg:'ini',conf:'ini',properties:'ini',env:'ini',xml:'xml',svg:'xml',html:'xml',htm:'xml',xhtml:'xml',vue:'xml',
+  js:'javascript',mjs:'javascript',cjs:'javascript',jsx:'javascript',ts:'typescript',tsx:'typescript',css:'css',scss:'scss',less:'less',
+  py:'python',pyw:'python',php:'php',rb:'ruby',pl:'perl',lua:'lua',go:'go',rs:'rust',java:'java',kt:'kotlin',kts:'kotlin',swift:'swift',
+  c:'c',h:'c',cpp:'cpp',cc:'cpp',cxx:'cpp',hpp:'cpp',hh:'cpp',ino:'cpp',cs:'csharp',m:'objectivec',r:'r',sql:'sql',
+  sh:'bash',bash:'bash',zsh:'bash',ksh:'bash',ps1:'',bat:'',cmd:'',mk:'makefile',cmake:'cmake',diff:'diff',patch:'diff',
+  gitignore:'',gitattributes:'',editorconfig:'ini',dockerignore:'',tex:'latex',bib:'',srt:'',vtt:'',rst:'',adoc:'',org:'',
+  gpx:'xml',kml:'xml',plist:'xml',csproj:'xml',gradle:'',graphql:'graphql',proto:'',scad:'',gcode:'',nfo:''};
+const NAMES={makefile:'makefile',dockerfile:'dockerfile',license:'',licence:'',readme:'',changelog:'',authors:'',copying:'',notice:'',procfile:'',vagrantfile:'ruby',gemfile:'ruby',rakefile:'ruby',cmakelists:'cmake'};
+const extOf=p=>{const n=p.split('/').pop(), i=n.lastIndexOf('.');return i<0?'':n.slice(i+1).toLowerCase()};
+function fileKind(p){
+  if(MD_RE.test(p)) return {kind:'md'};
+  const n=p.split('/').pop().toLowerCase(), e=extOf(p);
+  if(e==='csv'||e==='tsv') return {kind:e};
+  if(e in LANGS) return {kind:LANGS[e]==='json'?'json':'code',lang:LANGS[e]};
+  const base=n.replace(/\.[^.]*$/,'').replace(/\.txt$/,'');
+  if(n in NAMES||base in NAMES) return {kind:'code',lang:NAMES[n in NAMES?n:base]};
+  return null;
+}
+const isText=p=>!!fileKind(p);
+const shortName=f=>MD_RE.test(f.name)?f.name.replace(MD_RE,''):f.name;
 const IGNORE=new Set(['.git','node_modules','.obsidian','.trash']);
 const natural=new Intl.Collator('fr',{numeric:true,sensitivity:'base'});
 const $=id=>document.getElementById(id);
@@ -453,7 +496,7 @@ const ICON={
 
 const el={
   app:$('ls-app'),menu:$('ls-menu'),crumb:$('ls-crumb'),stats:$('ls-stats'),smaller:$('ls-smaller'),bigger:$('ls-bigger'),
-  fav:$('ls-fav'),tabFavs:$('ls-tab-favs'),tabDocs:$('ls-tab-docs'),side:$('ls-side'),openFiles:$('ls-open-files'),openFolder:$('ls-open-folder'),urlForm:$('ls-url-form'),
+  fav:$('ls-fav'),edit:$('ls-edit'),all:$('ls-all'),tabFavs:$('ls-tab-favs'),tabDocs:$('ls-tab-docs'),side:$('ls-side'),openFiles:$('ls-open-files'),openFolder:$('ls-open-folder'),urlForm:$('ls-url-form'),
   url:$('ls-url'),q:$('ls-q'),src:$('ls-src'),count:$('ls-count'),tree:$('ls-tree'),stage:$('ls-stage'),doc:$('ls-doc'),
   pager:$('ls-pager'),toc:$('ls-toc'),ring:$('ls-ring'),ringTxt:$('ls-ring-txt'),read:$('ls-read'),toast:$('ls-toast'),drop:$('ls-drop'),scrim:$('ls-scrim'),fileIn:$('ls-file-in'),folderIn:$('ls-folder-in')
 };
@@ -461,6 +504,7 @@ document.documentElement.lang='fr';
 el.menu.innerHTML=ICON.menu;
 el.openFiles.innerHTML=ICON.file+'Fichiers';
 el.openFolder.innerHTML=ICON.folder+'Dossier';
+el.edit.innerHTML=ICON.edit;
 
 /* ---------- État ---------- */
 let nextId=1;
@@ -502,8 +546,9 @@ function explain(e,ctx){
     if(e.status===403||e.status===429) return ctx==='gh'?'GitHub refuse la requête (limite de 60 appels par heure sans compte, ou dépôt privé). Réessaie plus tard.':'Accès refusé ('+e.status+').';
     return 'Le serveur a répondu '+e.status+'.';
   }
-  if(e&&e.message==='html') return 'Cette adresse renvoie une page web, pas un fichier Markdown. Pour GitHub, utilise l’adresse du dépôt, d’un dossier ou d’un fichier .md.';
-  if(e&&e.message==='empty') return 'Aucun fichier Markdown trouvé à cette adresse.';
+  if(e&&e.message==='html') return 'Cette adresse renvoie une page web, pas un fichier texte. Pour GitHub, utilise l’adresse du dépôt, d’un dossier ou d’un fichier.';
+  if(e&&e.message==='bin') return 'Cette adresse renvoie une image ou un fichier binaire : la liseuse n’affiche que du texte.';
+  if(e&&e.message==='empty') return 'Aucun fichier texte trouvé à cette adresse.';
   return 'Impossible de lire cette adresse. Le site doit autoriser les requêtes venant d’une autre origine (CORS), et l’aperçu intégré à Claude bloque le réseau : ouvre la page .html depuis ton ordinateur pour charger des adresses.';
 }
 
@@ -538,7 +583,7 @@ function treeHtml(n,depth){
   }
   for(const f of n.files){
     const on=f===state.current;
-    h+='<li><button type="button" class="row file-row'+(on?' on':'')+'" data-id="'+f.id+'" style="--d:'+depth+'"'+(on?' aria-current="true"':'')+'>'+ICON.file+'<span class="nm">'+esc(f.name.replace(MD_RE,''))+'</span></button></li>';
+    h+='<li><button type="button" class="row file-row'+(on?' on':'')+'" data-id="'+f.id+'" style="--d:'+depth+'"'+(on?' aria-current="true"':'')+'>'+ICON.file+'<span class="nm">'+esc(shortName(f))+'</span></button></li>';
   }
   return h;
 }
@@ -559,7 +604,7 @@ function resultsHtml(q){
   return (state.kind==='github'?'<p class="hint">Les documents pas encore ouverts ne sont cherchés que par leur nom.</p>':'')+
     '<ul>'+hits.map(({f,snip})=>{
       const on=f===state.current;
-      return '<li><button type="button" class="hit'+(on?' on':'')+'" data-id="'+f.id+'"'+(on?' aria-current="true"':'')+'><span class="t">'+esc(f.name.replace(MD_RE,''))+'</span><span class="p">'+esc(dirname(f.path)||'/')+'</span>'+(snip?'<span class="s">'+snip+'</span>':'')+'</button></li>';
+      return '<li><button type="button" class="hit'+(on?' on':'')+'" data-id="'+f.id+'"'+(on?' aria-current="true"':'')+'><span class="t">'+esc(shortName(f))+'</span><span class="p">'+esc(dirname(f.path)||'/')+'</span>'+(snip?'<span class="s">'+snip+'</span>':'')+'</button></li>';
     }).join('')+'</ul>';
 }
 function renderSide(){
@@ -570,6 +615,7 @@ function renderSide(){
   el.tabDocs.setAttribute('aria-pressed',String(state.tab==='docs'));
   if(state.tab==='favs'){ renderFavs(); return }
   el.src.textContent=state.label; el.count.textContent=n+(n>1?' documents':' document');
+  el.all.hidden=!state.mixed; el.all.setAttribute('aria-pressed',String(showAll));
   el.tree.innerHTML=q?resultsHtml(q):'<ul>'+treeHtml(state.tree,0)+'</ul>';
   const on=el.tree.querySelector('[aria-current="true"]');
   if(on) on.scrollIntoView({block:'nearest'});
@@ -598,7 +644,22 @@ el.tree.addEventListener('click',e=>{
 el.q.addEventListener('input',()=>{ if(el.q.value.trim()&&state.tab==='favs') state.tab='docs'; renderSide() });
 
 /* ---------- Source de documents ---------- */
+/* Dossiers et dépôts : Markdown seulement, ou tous les fichiers texte (bouton « Tous les fichiers », retenu).
+   Une sélection explicite (fichiers choisis, adresse d'un fichier, collage) montre toujours tout. */
+let showAll=store.get('all','0')==='1';
+el.all.onclick=()=>{
+  showAll=!showAll; store.set('all',showAll?'1':'0');
+  if(state.src) setSource(Object.assign({},state.src,{start:state.current&&state.current.path,tab:'docs',quiet:true}));
+};
 function setSource(o){
+  const mdOnly=o.files.filter(f=>MD_RE.test(f.path));
+  state.mixed=!o.explicit&&mdOnly.length>0&&mdOnly.length<o.files.length;
+  let files=o.files;
+  if(!o.explicit&&!showAll){
+    if(mdOnly.length) files=mdOnly;
+    else if(o.files.length&&!o.quiet) toast('Pas de Markdown ici : tous les fichiers texte sont affichés.');
+  }
+  state.src=o; o={...o,files};
   for(const u of state.blobUrls.values()) URL.revokeObjectURL(u);
   state.blobUrls.clear();
   state.label=o.label; state.kind=o.kind; state.files=o.files; state.assets=o.assets||new Map();
@@ -618,15 +679,67 @@ function setSource(o){
   openFile(start,'');
 }
 async function loadText(f){
-  if(f.text!=null) return f.text;
-  if(f.file) return f.text=await f.file.text();
-  if(f.url){
+  if(f.text!=null) return applyDraft(f);
+  if(f.file) f.text=await f.file.text();
+  else if(f.url){
     const r=await fetch(f.url);
     if(!r.ok) throw httpErr(r);
-    return f.text=await r.text();
-  }
-  return f.text='';
+    f.text=await r.text();
+  }else f.text='';
+  return applyDraft(f);
 }
+
+/* ---------- Brouillons : les modifications restent dans ce navigateur (localStorage), par source et chemin ---------- */
+const draftKey=f=>'draft.'+(state.key||(state.kind+':'+state.label))+'|'+f.path;
+function applyDraft(f){
+  if(f.dchk) return f.text;
+  f.dchk=true;
+  const d=store.getJSON(draftKey(f),null);
+  if(d&&typeof d.t==='string'){f.orig=f.text;f.text=d.t;f.draft=true}
+  return f.text;
+}
+function saveDraft(f,text){
+  if(f.orig==null) f.orig=f.text;
+  f.text=text;
+  if(text===f.orig){ try{localStorage.removeItem('liseuse.'+draftKey(f))}catch(e){} f.draft=false; return }
+  localStorage.setItem('liseuse.'+draftKey(f),JSON.stringify({t:text,at:Date.now()}));   // peut échouer (trop gros) : l'éditeur l'affiche
+  f.draft=true;
+}
+function revertDraft(f){
+  if(f.orig!=null) f.text=f.orig;
+  try{localStorage.removeItem('liseuse.'+draftKey(f))}catch(e){}
+  f.draft=false;
+  if(state.current===f) render(f,'');
+  toast('Version d’origine rétablie.');
+}
+function download(f){
+  const k=fileKind(f.name)||{kind:'code'};
+  const type=k.kind==='md'?'text/markdown':k.kind==='json'?'application/json':k.kind==='csv'?'text/csv':'text/plain';
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([f.text],{type:type+';charset=utf-8'}));
+  a.download=f.name.includes('.')||k.kind!=='md'?f.name:f.name+'.md'; document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+async function copyText(t){
+  try{await navigator.clipboard.writeText(t);toast('Copié dans le presse-papiers.')}catch(e){toast('Copie impossible dans ce navigateur.','err')}
+}
+/* Fichier d'un dépôt GitHub : lien vers son éditeur sur github.com (pas de token dans la page) */
+function ghEditUrl(f){
+  const g=f.gh; if(!g) return '';
+  return 'https://github.com/'+g.owner+'/'+g.repo+'/edit/'+g.branch.split('/').map(encodeURIComponent).join('/')+'/'+g.path.split('/').map(encodeURIComponent).join('/');
+}
+function openEditor(){
+  const f=state.current; if(!f||f.text==null||!window.WebAppsMD) return;
+  const isMd=MD_RE.test(f.path)||!fileKind(f.path)&&state.kind==='paste';
+  const menu=[{label:'⬇ Télécharger',fn:()=>download(f)},{label:'⧉ Tout copier',fn:()=>copyText(f.text)}];
+  if(f.gh) menu.push({label:'↗ Modifier sur GitHub',fn:()=>window.open(ghEditUrl(f),'_blank','noopener')});
+  menu.push({label:'↺ Revenir à l’original',fn:ed=>{ed.close();revertDraft(f)}});
+  WebAppsMD.open({title:null,label:f.name,text:f.text,plain:!isMd,mode:'write',
+    render:t=>window.marked&&window.DOMPurify?DOMPurify.sanitize(marked.parse(t,{gfm:true})):'<pre>'+esc(t)+'</pre>',
+    onSave:t=>saveDraft(f,t),
+    onClose:()=>{ if(state.current===f){const y=el.stage.scrollTop;render(f,'');el.stage.scrollTop=y} },
+    menu});
+}
+el.edit.onclick=openEditor;
 async function openFile(f,anchor){
   state.current=f; expandTo(f); renderSide(); updateBar(f); setNav(false); saveLast(); updateStar();
   if(f.text==null){
@@ -641,7 +754,7 @@ async function openFile(f,anchor){
 }
 function updateBar(f){
   const dirs=f.path.split('/').slice(0,-1);
-  el.crumb.innerHTML='<span>'+esc(state.label)+'</span>'+dirs.map(d=>'<span class="sep">/</span><span>'+esc(d)+'</span>').join('')+'<span class="sep">/</span><strong>'+esc(f.name.replace(MD_RE,''))+'</strong>';
+  el.crumb.innerHTML='<span>'+esc(state.label)+'</span>'+dirs.map(d=>'<span class="sep">/</span><span>'+esc(d)+'</span>').join('')+'<span class="sep">/</span><strong>'+esc(shortName(f))+'</strong>';
   el.stats.textContent='';
 }
 
@@ -784,7 +897,77 @@ function updateProgress(){
   const s=el.stage, max=s.scrollHeight-s.clientHeight;
   el.read.firstElementChild.style.width=(max>0?Math.min(100,s.scrollTop/max*100):0)+'%';
 }
+function draftBar(f){
+  if(!f.draft) return null;
+  const d=document.createElement('div'); d.className='draftbar';
+  d.innerHTML='<b>✎ Modifié dans ce navigateur</b><button type="button" data-k="dl">Télécharger</button>'+(f.gh?'<button type="button" data-k="gh">Modifier sur GitHub</button>':'')+'<button type="button" data-k="rv">Revenir à l’original</button>';
+  d.addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(!b) return;
+    if(b.dataset.k==='dl') download(f); else if(b.dataset.k==='gh') window.open(ghEditUrl(f),'_blank','noopener'); else revertDraft(f)});
+  return d;
+}
+/* CSV / TSV : guillemets doublés, séparateur détecté (virgule, point-virgule ou tabulation) */
+function parseCSV(text,sep){
+  const rows=[]; let row=[], cell='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cell+='"';i++} else q=false } else cell+=c; continue }
+    if(c==='"'&&cell==='') q=true;
+    else if(c===sep){row.push(cell);cell=''}
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n') i++; row.push(cell);rows.push(row);row=[];cell='' }
+    else cell+=c;
+  }
+  if(cell!==''||row.length){row.push(cell);rows.push(row)}
+  return rows;
+}
+function codeView(text,lang){
+  const lines=text.replace(/\n$/,'').split('\n');
+  let html=esc(text.replace(/\n$/,''));
+  if(lang&&window.hljs&&hljs.getLanguage(lang)&&text.length<300000){
+    try{html=hljs.highlight(text.replace(/\n$/,''),{language:lang,ignoreIllegals:true}).value}catch(e){}
+  }
+  const w=document.createElement('div'); w.className='codewrap';
+  w.innerHTML='<div class="codebar"><span class="lang">'+esc(lang||'texte')+' · '+lines.length.toLocaleString('fr-FR')+' ligne'+(lines.length>1?'s':'')+'</span><button type="button" class="copy">Copier</button></div>'+
+    '<div class="srcview"><pre class="gut">'+lines.map((_,i)=>i+1).join('\n')+'</pre><pre class="src"><code class="hljs">'+html+'</code></pre></div>';
+  w.querySelector('.copy').onclick=()=>copyText(text);
+  return {node:w,lines:lines.length};
+}
+function renderPlain(f,k){
+  let text=f.text, note='';
+  const root=document.createDocumentFragment();
+  const bar=draftBar(f); if(bar) root.append(bar);
+  const h=document.createElement('h1'); h.textContent=f.name; h.style.fontSize='1.3em'; root.append(h);
+  let lines=0;
+  if(/\u0000/.test(text.slice(0,8000))){
+    const p=document.createElement('p'); p.className='notice'; p.textContent='Ce fichier n’est pas du texte : il ne peut pas être affiché.'; root.append(p);
+  }else if(k.kind==='csv'||k.kind==='tsv'){
+    const first=text.split(/\r?\n/,1)[0], sep=k.kind==='tsv'?'\t':(first.split(';').length>first.split(',').length?';':first.includes('\t')&&!first.includes(',')?'\t':',');
+    const rows=parseCSV(text,sep).filter(r=>r.length>1||r[0]!==''), max=2000;
+    lines=rows.length;
+    const tw=document.createElement('div'); tw.className='tablewrap';
+    const head=rows[0]||[];
+    tw.innerHTML='<table class="csvtable"><thead><tr>'+head.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr></thead><tbody>'+
+      rows.slice(1,max+1).map(r=>'<tr>'+r.map(c=>'<td>'+esc(c)+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
+    const info=document.createElement('p'); info.className='muted'; info.style.fontSize='.8em'; info.style.fontFamily='var(--f-ui)';
+    info.textContent=(rows.length-1).toLocaleString('fr-FR')+' ligne(s) · '+head.length+' colonne(s) · séparateur « '+(sep==='\t'?'tabulation':sep)+' »'+(rows.length-1>max?' · '+max+' premières lignes affichées':'');
+    root.append(info,tw);
+  }else{
+    if(k.kind==='json'&&text.trim()){
+      try{const j=JSON.parse(text);const pretty=JSON.stringify(j,null,2);if(pretty.length<2000000) text=pretty}
+      catch(e){note='JSON invalide : '+e.message+'. Le texte est affiché tel quel.'}
+    }
+    if(note){const p=document.createElement('p');p.className='notice';p.textContent=note;root.append(p)}
+    const cv=codeView(text,k.lang||(k.kind==='json'?'json':'')); lines=cv.lines; root.append(cv.node);
+  }
+  el.doc.replaceChildren(root);
+  renderToc([]); renderPager(f); docTasks={done:0,total:0}; updateRing();
+  el.stats.textContent=lines?lines.toLocaleString('fr-FR')+' ligne'+(lines>1?'s':''):'';
+  el.stage.scrollTop=0; updateProgress();
+}
 function render(f,anchor){
+  const k=fileKind(f.path)||(state.kind==='paste'?{kind:'md'}:{kind:'code',lang:''});
+  el.app.classList.toggle('wide',k.kind!=='md');
+  el.edit.hidden=false;
+  if(k.kind!=='md') return renderPlain(f,k);
   const text=f.text;
   let body=text, fm='';
   const m=/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
@@ -800,6 +983,7 @@ function render(f,anchor){
     root.prepend(d);
   }
   const heads=decorate(root,f);
+  const db=draftBar(f); if(db) root.prepend(db);
   el.doc.replaceChildren(root);
   renderToc(heads);
   renderPager(f);
@@ -853,7 +1037,7 @@ el.toc.addEventListener('click',e=>{
 function renderPager(f){
   if(state.order.length<2){el.pager.innerHTML='';return}
   const i=state.order.indexOf(f), prev=state.order[i-1], next=state.order[i+1];
-  const b=(x,dir)=>x?'<button type="button" class="pg '+dir+'" data-id="'+x.id+'"><small>'+(dir==='prev'?'← Précédent':'Suivant →')+'</small><span>'+esc(x.name.replace(MD_RE,''))+'</span></button>':'';
+  const b=(x,dir)=>x?'<button type="button" class="pg '+dir+'" data-id="'+x.id+'"><small>'+(dir==='prev'?'← Précédent':'Suivant →')+'</small><span>'+esc(shortName(x))+'</span></button>':'';
   el.pager.innerHTML=b(prev,'prev')+b(next,'next');
 }
 el.pager.addEventListener('click',e=>{
@@ -875,17 +1059,18 @@ async function ingest(list,label,explicit){
   const md=[], assets=new Map(), seen=new Set();
   for(const {file,path} of list){
     if(path.split('/').some(s=>IGNORE.has(s))) continue;
-    if(explicit||MD_RE.test(path)){
+    if(explicit||isText(path)){
       let p=path,n=1; while(seen.has(p)){p=n+'-'+path;n++} seen.add(p);
       md.push(mk({path:p,file}));
     }else if(IMG_RE.test(path)) assets.set(path,file);
   }
-  if(!md.length){toast('Aucun fichier Markdown trouvé.','err');return}
+  if(!md.length){toast('Aucun fichier texte trouvé.','err');return}
   toast('Chargement…','',0);
   try{
-    await Promise.all(md.map(async f=>{f.text=await f.file.text()}));
+    // lus tout de suite (pour la recherche) : le Markdown et les petits fichiers ; les autres à l'ouverture
+    await Promise.all(md.filter(f=>MD_RE.test(f.path)||f.file.size<262144).map(async f=>{f.text=await f.file.text()}));
     hideToast();
-    setSource({label,kind:'local',files:md,assets});
+    setSource({label,kind:'local',files:md,assets,explicit});
   }catch(e){toast('Lecture impossible : '+(e&&e.message||'erreur inconnue'),'err')}
 }
 function stripRoot(list){
@@ -943,7 +1128,7 @@ document.addEventListener('drop',async e=>{
 document.addEventListener('paste',e=>{
   if(e.target.closest&&e.target.closest('input,textarea')) return;
   const t=e.clipboardData&&e.clipboardData.getData('text/plain');
-  if(t&&t.trim()){e.preventDefault();setSource({label:'Presse-papiers',kind:'paste',files:[mk({path:'Texte collé.md',text:t})]})}
+  if(t&&t.trim()){e.preventDefault();setSource({label:'Presse-papiers',kind:'paste',explicit:true,files:[mk({path:'Texte collé.md',text:t})]})}
 });
 
 /* ---------- Ouverture par adresse (fichier ou dépôt GitHub) ---------- */
@@ -956,7 +1141,7 @@ function parseGithub(u){
   if(s[2]==='tree'&&s[3]) return {kind:'tree',owner,repo,branch:s[3],sub:s.slice(4).join('/')};
   if(s[2]==='blob'&&s[3]&&s.length>4){
     const path=s.slice(4);
-    return {kind:'blob',raw:'https://raw.githubusercontent.com/'+owner+'/'+repo+'/'+s[3].split('/').map(encodeURIComponent).join('/')+'/'+path.map(encodeURIComponent).join('/')};
+    return {kind:'blob',owner,repo,branch:s[3],path:path.join('/'),raw:'https://raw.githubusercontent.com/'+owner+'/'+repo+'/'+s[3].split('/').map(encodeURIComponent).join('/')+'/'+path.map(encodeURIComponent).join('/')};
   }
   return null;
 }
@@ -972,8 +1157,8 @@ async function loadGithubTree(gh,ctx){
   const prefix=gh.sub?gh.sub.replace(/\/$/,'')+'/':'';
   const rawBase='https://raw.githubusercontent.com/'+gh.owner+'/'+gh.repo+'/'+branch.split('/').map(encodeURIComponent).join('/')+'/';
   const files=(data.tree||[])
-    .filter(t=>t.type==='blob'&&t.path.startsWith(prefix)&&MD_RE.test(t.path)&&!t.path.split('/').some(s=>IGNORE.has(s)))
-    .map(t=>mk({path:t.path.slice(prefix.length),url:rawBase+t.path.split('/').map(encodeURIComponent).join('/')}));
+    .filter(t=>t.type==='blob'&&t.path.startsWith(prefix)&&isText(t.path)&&!t.path.split('/').some(s=>IGNORE.has(s)))
+    .map(t=>mk({path:t.path.slice(prefix.length),url:rawBase+t.path.split('/').map(encodeURIComponent).join('/'),gh:{owner:gh.owner,repo:gh.repo,branch,path:t.path}}));
   if(!files.length) throw new Error('empty');
   const where='https://github.com/'+gh.owner+'/'+gh.repo+'/tree/'+branch+(gh.sub?'/'+gh.sub:'');
   setSource({label:gh.owner+'/'+gh.repo+(gh.sub?'/'+gh.sub:''),kind:'github',files,key:ctx.key,srcUrl:ctx.srcUrl,
@@ -1002,10 +1187,12 @@ async function loadUrl(raw,opt){
       const url=gh&&gh.kind==='blob'?gh.raw:u.href;
       const r=await fetch(url); if(!r.ok) throw httpErr(r);
       const ct=r.headers.get('content-type')||'', text=await r.text();
-      if(/text\/html/i.test(ct)&&!MD_RE.test(u.pathname)) throw new Error('html');
       const name=decodeSafe(u.pathname.split('/').filter(Boolean).pop()||u.hostname);
+      if(/text\/html/i.test(ct)&&!isText(name)) throw new Error('html');
+      if(/^(image|audio|video)\/|application\/(pdf|zip|octet-stream)/i.test(ct)&&!isText(name)) throw new Error('bin');
       hideToast();
-      setSource({label:u.hostname,kind:'url',files:[mk({path:name,url,text})],key:k.key,srcUrl,resume:u.href,tab:opt.tab});
+      const file=mk({path:name,url,text}); if(gh&&gh.kind==='blob') file.gh={owner:gh.owner,repo:gh.repo,branch:gh.branch,path:gh.path};
+      setSource({label:u.hostname,kind:'url',explicit:true,files:[file],key:k.key,srcUrl,resume:u.href,tab:opt.tab});
     }
     return true;
   }catch(e){toast(explain(e,ctx),'err');return false}
@@ -1284,6 +1471,7 @@ document.addEventListener('keydown',e=>{
   if(typing||e.ctrlKey||e.metaKey||e.altKey) return;
   if(e.key==='/'){e.preventDefault();setNav(true);el.q.focus()}
   else if(e.key==='['||e.key===']') step(e.key===']'?1:-1);
+  else if(e.key==='e'&&!document.querySelector('.mde')){e.preventDefault();openEditor()}
 });
 
 /* ---------- Synchronisation facultative des favoris (PocketBase) ---------- */

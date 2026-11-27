@@ -1,6 +1,6 @@
 # Liseuse Markdown
 
-Une page unique HTML/CSS/JavaScript qui affiche des fichiers Markdown comme on lit un livre.
+Une page unique HTML/CSS/JavaScript qui affiche des fichiers Markdown comme on lit un livre. Elle lit aussi les autres fichiers texte (code, configuration, JSON, CSV…) et permet de les modifier.
 
 ## Caractéristiques
 
@@ -16,14 +16,30 @@ Une page unique HTML/CSS/JavaScript qui affiche des fichiers Markdown comme on l
 
 ## Ouvrir un contenu
 
-- **Fichiers** : un ou plusieurs fichiers `.md` depuis l'ordinateur
+- **Fichiers** : un ou plusieurs fichiers texte depuis l'ordinateur (tous sont affichés ; un fichier binaire est signalé)
 - **Dossier** : tous les `.md` du dossier et sous-dossiers (l'arborescence s'affiche à gauche)
-- **Adresse** : l'URL d'un fichier `.md`, ou celle d'un dépôt GitHub pour parcourir tous ses documents
+- **Adresse** : l'URL d'un fichier texte, ou celle d'un dépôt GitHub pour parcourir tous ses documents
+- **Tous les fichiers** : pour un dossier ou un dépôt qui mélange Markdown et autres fichiers, ce bouton au-dessus de l'arborescence ajoute les fichiers texte reconnus (réglage retenu, `liseuse.all`). S'il n'y a aucun Markdown, tous les fichiers texte sont montrés d'office
 - **Glisser-déposer** : dépose un fichier ou dossier n'importe où sur la page
 - **Coller** : `Ctrl`+`V` pour afficher du Markdown depuis le presse-papiers
 - **Lien direct** : `markdown_reader.html#url=<adresse encodée>` ouvre ce document (utilisé par le Notebook)
 
 Rien n'est envoyé nulle part : tout est lu localement dans le navigateur.
+
+## Autres fichiers texte
+
+- Reconnus par leur extension : txt, log, json, yaml, toml, ini, xml, html, css, js/ts, python, php, shell, C/C++, Go, Rust, Java, SQL, diff… et quelques noms sans extension (`Makefile`, `Dockerfile`, `LICENSE`…).
+- **Code et texte** : pleine largeur, police fixe, numéros de ligne, coloration (highlight.js, jusqu'à 300 Ko), bouton Copier. Le bandeau indique le nombre de lignes.
+- **JSON** : remis en forme (indentation de 2) ; s'il est invalide, l'erreur est signalée et le texte affiché tel quel.
+- **CSV / TSV** : tableau (première ligne en en-tête), séparateur détecté (virgule, point-virgule, tabulation), guillemets gérés ; 2000 lignes affichées au plus.
+- Dans un dossier, le Markdown et les fichiers de moins de 256 Ko sont lus tout de suite (la recherche les couvre) ; les plus gros à l'ouverture.
+
+## Modifier un fichier
+
+- Le **crayon** du bandeau (ou la touche `E`) ouvre l'éditeur plein écran : celui du Notebook (`mdedit.js`, barre d'outils et aperçu) pour le Markdown, un éditeur de texte simple (police fixe, sans retour à la ligne automatique) pour le reste.
+- Enregistrement au fil de la frappe, **dans ce navigateur** : `localStorage`, clé `liseuse.draft.<source>|<chemin>`. Rouvrir le même fichier (même dossier, même dépôt, même adresse) affiche la version modifiée, avec le bandeau « ✎ Modifié dans ce navigateur ».
+- Depuis ce bandeau ou le menu ⋯ de l'éditeur : **Télécharger** la copie modifiée, **Tout copier**, **Revenir à l'original** (supprime le brouillon) et, pour un fichier d'un dépôt GitHub, **Modifier sur GitHub** (ouvre l'éditeur de github.com sur ce fichier ; aucun token dans la page).
+- Le fichier d'origine n'est jamais réécrit : pour un fichier de l'ordinateur, on télécharge la copie. Un fichier trop gros pour `localStorage` (quelques Mo) affiche « ⚠ non enregistré » : télécharge-le.
 
 ## Favoris
 
@@ -44,6 +60,7 @@ L'onglet **Favoris** du volet de gauche remplace l'ancien dossier d'exemple. L'o
 | --- | --- |
 | `/` | Aller à la recherche |
 | `[` ou `]` | Document précédent ou suivant |
+| `E` | Modifier le fichier ouvert |
 | `Échap` | Effacer la recherche |
 
 ## Bibliothèques utilisées
@@ -82,7 +99,7 @@ Les couleurs viennent du style commun `code/common.css` (voir [STYLE.md](STYLE.m
 
 ## Fichier unique
 
-La page est un fichier `.html` autonome, qui dépend seulement de `common.css` (placé à côté d'elle) et des CDN. Tu peux:
+La page est un fichier `.html` autonome, qui dépend seulement de `common.css`, `common.js`, `pbstore.js`, `pbsync.js` et `mdedit.js` (placés à côté d'elle) et des CDN. Tu peux:
 - L'ouvrir directement dans le navigateur
 - La servir avec un serveur web simple
 - L'intégrer dans une autre page (bien que ce soit moins recommandé)

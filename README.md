@@ -15,6 +15,8 @@ Une liseuse pour fichiers Markdown avec:
 - Listes de tâches avec progression
 - Taille de texte et thème (auto, clair, sombre) ajustables
 - Support de liens relatifs et d'images
+- Lit aussi les autres fichiers texte : code et config colorés avec numéros de ligne, JSON remis en forme, CSV en tableau
+- Modification de n'importe quel fichier : brouillon gardé dans le navigateur, copie à télécharger, lien vers l'éditeur de GitHub
 
 📄 **[Documentation](docs/LISEUSE.md)** · 📦 **[02_markdown_reader.html](code/02_markdown_reader.html)**
 
@@ -195,7 +197,7 @@ La structure du repo:
 ├── code/                          # Pages HTML
 │   ├── common.css                 # Style partagé par tous les outils
 │   ├── common.js                  # Thème clair / sombre / auto, partagé
-│   ├── mdedit.js                  # Éditeur Markdown plein écran, partagé (Notebook)
+│   ├── mdedit.js                  # Éditeur plein écran (Markdown ou texte brut), partagé (Notebook, Liseuse)
 │   ├── sketch.js                  # Croquis à main levée, partagé (Notebook)
 │   ├── icons/                     # Une icône SVG par outil (favicon, en-tête, index) + webapps.svg
 │   ├── protoboard/components/     # Composants de ProtoBoardDesigner, un fichier .js par composant
