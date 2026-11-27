@@ -141,7 +141,14 @@ body.dragging { user-select: none; -webkit-user-select: none; }
 .lrow a b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lrow a:hover b { text-decoration: underline; color: var(--ac); }
 .lrow small { color: var(--mut); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lrow .fav { width: 22px; height: 22px; flex: none; border-radius: 6px; background: var(--card2); color: var(--mut); display: grid; place-items: center; font-size: 12px; font-weight: 700; margin-top: 2px; text-transform: uppercase; }
+.lrow .fav { width: 22px; height: 22px; flex: none; border-radius: 6px; background: var(--card2); display: grid; place-items: center; font-size: 14px; margin-top: 2px; }
+.fi { display: inline-grid; place-items: center; }
+.fi img { width: 18px; height: 18px; object-fit: contain; border-radius: 3px; }
+.lrow .fav .fi img { width: 16px; height: 16px; }
+.icrow { display: grid; gap: 6px; }
+.icrow input.icin { width: 4.2em; text-align: center; font-size: 20px; }
+.icrow .emojis button { width: 36px; height: 36px; font-size: 18px; }
+.erow input.ric { flex: 0 0 3.4em; width: 3.4em; text-align: center; }
 .skprev { display: block; width: 100%; height: auto; max-height: 220px; background: var(--card2); color: var(--fg); border-radius: var(--r-m); margin: 4px 0 6px; cursor: pointer; }
 .skempty { display: grid; place-items: center; height: 90px; background: var(--card2); border-radius: var(--r-m); color: var(--mut); margin: 4px 0 6px; cursor: pointer; font-size: 14px; }
 .md input[type=checkbox] { width: 18px; height: 18px; vertical-align: -3px; margin: 0 6px 0 0; cursor: pointer; }
@@ -518,10 +525,60 @@ function itemLink(it){
   if (it.type === 'map' && mapRec(it.mid)) return { href: `${mapPage()}#open=${encodeURIComponent(it.mid)}` };
   return null;
 }
+/* ---------- Icônes des liens : emoji au choix (🔗 par défaut), remplacé par la favicon du site quand on a pu la récupérer ----------
+   On essaie d'abord le site lui-même (/favicon.ico), puis DuckDuckGo ; sinon l'emoji reste. Le résultat est retenu sur l'appareil
+   (hors préfixe « notebook. » : pas synchronisé) ; un échec n'est pas retenté avant 7 jours. */
+const FAV_KEY = 'notebook-fav', FAV_RETRY = 7 * 864e5;
+let favC = {}; try { favC = JSON.parse(localStorage.getItem(FAV_KEY) || '{}') || {}; } catch {}
+function favSave(){
+  const k = Object.keys(favC);
+  if (k.length > 500) k.sort((a, b) => favC[a].t - favC[b].t).slice(0, k.length - 400).forEach(h => delete favC[h]);
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(favC)); } catch {}
+}
+const favLoad = src => new Promise(ok => { const i = new Image(); i.referrerPolicy = 'no-referrer'; i.onload = () => ok(i.naturalWidth > 1 && i.naturalHeight > 1); i.onerror = () => ok(false); i.src = src; });
+const favP = new Map();
+function favFind(h, o){
+  if (!favP.has(h)){
+    const c = favC[h];
+    favP.set(h, c && c.s === 0 && Date.now() - c.t < FAV_RETRY ? Promise.resolve(null) : (async () => {
+      for (const s of c && c.s ? [c.s, 3 - c.s] : [1, 2]){
+        const src = s === 1 ? o + '/favicon.ico' : `https://icons.duckduckgo.com/ip3/${encodeURIComponent(h)}.ico`;
+        if (await favLoad(src)){ favC[h] = { s, t: Date.now() }; favSave(); return src; }
+      }
+      favC[h] = { s: 0, t: Date.now() }; favSave(); return null;
+    })());
+  }
+  return favP.get(h);
+}
+function favScan(){
+  $$('.fi:not([data-d])').forEach(sp => {
+    sp.dataset.d = 1;
+    favFind(sp.dataset.h, sp.dataset.o).then(src => {
+      if (!src || !sp.isConnected) return;
+      const em = sp.textContent, im = new Image();
+      im.alt = ''; im.referrerPolicy = 'no-referrer';
+      im.onload = () => { if (sp.isConnected) sp.replaceChildren(im); };   // l'emoji reste tant que l'image n'est pas prête (ou si elle échoue)
+      im.src = src;
+    });
+  });
+}
+let favT = 0;
+new MutationObserver(() => { cancelAnimationFrame(favT); favT = requestAnimationFrame(favScan); }).observe(document.body, { childList: true, subtree: true });
+function favHTML(url, ic){
+  let u; try { u = new URL(safeUrl(url)); } catch { return esc(ic); }
+  if (!/^https?:$/.test(u.protocol) || !u.hostname) return esc(ic);
+  return `<span class="fi" data-h="${esc(u.hostname)}" data-o="${esc(u.origin)}">${esc(ic)}</span>`;
+}
+const tyIcon = (it, t) => it.type === 'link' ? (it.url ? favHTML(it.url, it.ic || t.ic) : esc(it.ic || t.ic)) : it.type === 'links' && it.ic ? esc(it.ic) : t.ic;
+const oneIc = v => { v = (v || '').trim(); if (!v) return ''; try { return [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(v)][0].segment; } catch { return [...v][0]; } };
+const IC_PICKS = ['🔗','📄','📚','🛒','🎥','💬','🧰','📦','🛠️','💾','📊','🔬','🗺️','🏠','⭐','🎮','📰','💡','🔌','🌐'];
+const icField = (it, def, fav) => `<label>Emoji${fav ? ' <small class="muted">· remplacé par la favicon du site quand elle existe</small>' : ''}</label>
+  <div class="icrow"><input type="text" name="ic" class="icin" value="${esc(it.ic || '')}" placeholder="${def}" maxlength="8" autocomplete="off" aria-label="Emoji">
+  <div class="emojis">${[def, ...IC_PICKS.filter(x => x !== def)].map(x => `<button type="button" data-a="icpick" data-v="${x}">${x}</button>`).join('')}</div></div>`;
 function itemHTML(p, it, withProject){
   const t = TYPES[it.type], ed = ui.editing === it.id, x = ed || ui.exp.has(it.id), ln = itemLink(it), pr = progressOf(it);
   const name = esc(itemTitle(it)) + (ln && !ln.ext ? ' <span class="go">↗</span>' : '');
-  let head = `<div class="ih" data-a="exp">${withProject ? '' : '<span class="dh" data-drag aria-label="Déplacer"></span>'}<span class="ty">${t.ic}</span><span class="tt">`;
+  let head = `<div class="ih" data-a="exp">${withProject ? '' : '<span class="dh" data-drag aria-label="Déplacer"></span>'}<span class="ty">${tyIcon(it, t)}</span><span class="tt">`;
   head += ln ? `<a href="${esc(ln.href)}"${ln.ext ? ' target="_blank" rel="noopener"' : ''}>${name}</a>` : `<span class="nm">${name}</span>`;
   const sum = ed ? '' : summary(it);
   head += `<span class="sum">${withProject ? `${esc(p.emoji)} ${esc(p.name)}${sum ? ' · ' : ''}` : ''}${esc(sum)}</span>`;
@@ -550,7 +607,7 @@ function viewHTML(p, it){
       return `<div class="md ${long && !open ? 'clip' : ''}">${h}</div>${long ? `<button class="more" data-a="toggle">${open ? 'Réduire' : 'Afficher tout'}</button>` : ''}`;
     }
     case 'links':
-      return `<div class="rows">${it.rows.map(r => `<div class="row lrow"><span class="fav" aria-hidden="true">${esc((host(r.url) || '?')[0])}</span><a href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener"><b>${esc(r.t || host(r.url))}</b><small>${esc(host(r.url))}${r.n ? ' · ' + esc(r.n) : ''}</small></a></div>`).join('')}</div>
+      return `<div class="rows">${it.rows.map(r => `<div class="row lrow"><span class="fav" aria-hidden="true">${favHTML(r.url, r.ic || '🔗')}</span><a href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener"><b>${esc(r.t || host(r.url))}</b><small>${esc(host(r.url))}${r.n ? ' · ' + esc(r.n) : ''}</small></a></div>`).join('')}</div>
         <form class="addrow" data-a="addrow"><input type="text" name="t" placeholder="Coller une adresse (ou : titre https://…)" autocomplete="off" inputmode="url"><button class="btn">+</button></form>${note}`;
     case 'sketch': {
       const sv = WebAppsSketch.svg(it.sk, { cls: 'skprev', pad: 14 });
@@ -599,10 +656,10 @@ function editHTML(p, it){
   const note = `<label>Note</label><textarea name="note" style="min-height:4em;font-family:var(--f-ui)" placeholder="Pourquoi ce lien, ce qu'il faut retenir…">${esc(it.note || '')}</textarea>`;
   switch (it.type){
     case 'link': f = `<label>Adresse</label><input type="url" name="url" value="${esc(it.url || '')}" placeholder="https://…" inputmode="url" autocomplete="off">
-      <label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="(par défaut : le nom du site)">${note}
+      <label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="(par défaut : le nom du site)">${icField(it, TYPES.link.ic, true)}${note}
       <div class="btns"><button class="btn" type="button" data-a="group">🔖 Mettre dans un groupe…</button></div>`; break;
-    case 'links': f = `<label>Titre du groupe</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Datasheets, tutos, boutiques…">
-      <label>Liens : titre, adresse, note</label><div class="erows">${it.rows.map(r => `<div class="erow" data-r="${r.id}" style="flex-wrap:wrap"><input type="text" name="rt" value="${esc(r.t || '')}" placeholder="Titre (par défaut : le site)" style="flex:1 1 40%">
+    case 'links': f = `<label>Titre du groupe</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Datasheets, tutos, boutiques…">${icField(it, TYPES.links.ic, false)}
+      <label>Liens : emoji, titre, adresse, note</label><div class="erows">${it.rows.map(r => `<div class="erow" data-r="${r.id}" style="flex-wrap:wrap"><input type="text" name="ric" class="ric" value="${esc(r.ic || '')}" placeholder="🔗" maxlength="8" autocomplete="off" aria-label="Emoji"><input type="text" name="rt" value="${esc(r.t || '')}" placeholder="Titre (par défaut : le site)" style="flex:1 1 40%">
         <input type="url" name="ru" value="${esc(r.url || '')}" placeholder="https://…" inputmode="url" style="flex:1 1 50%"><input type="text" name="rn" value="${esc(r.n || '')}" placeholder="Note" style="flex:1 1 60%">
         <button class="mini" type="button" data-a="rup" aria-label="Monter" title="Monter">↑</button><button class="mini" type="button" data-a="rout" aria-label="Sortir du groupe" title="Sortir du groupe (redevient un lien seul)">⇱</button><button class="mini" type="button" data-a="rdel" aria-label="Retirer">✕</button></div>`).join('')}</div>${note}`; break;
     case 'sketch': f = `<label>Titre</label><input type="text" name="title" value="${esc(it.title || '')}" placeholder="Schéma, idée…">
@@ -687,7 +744,7 @@ function readForm(form, p, it){
   const v = n => { const e = form.elements[n]; return e ? e.value.trim() : ''; };
   it.tags = parseTags(v('tags'));
   if ('note' in form.elements) it.note = v('note');
-  if (it.type === 'link'){ it.url = safeUrl(v('url')); it.title = v('title'); }
+  if (it.type === 'link'){ it.url = safeUrl(v('url')); it.title = v('title'); it.ic = oneIc(v('ic')); }
   if (it.type === 'gh'){
     const g = ghParse(v('url'));
     if (!g){ toast('Adresse GitHub attendue : github.com/propriétaire/dépôt', true); return false; }
@@ -697,10 +754,10 @@ function readForm(form, p, it){
   }
   if (it.type === 'note' || it.type === 'sketch') it.title = v('title');
   if (it.type === 'links'){
-    it.title = v('title');
+    it.title = v('title'); it.ic = oneIc(v('ic'));
     it.rows = [...form.querySelectorAll('.erow')].map(row => {
       const g = n => { const e = row.querySelector(`[name=${n}]`); return e ? e.value.trim() : ''; };
-      return { id: row.dataset.r, t: g('rt'), url: g('ru') ? safeUrl(g('ru')) : '', n: g('rn') };
+      return { id: row.dataset.r, t: g('rt'), url: g('ru') ? safeUrl(g('ru')) : '', n: g('rn'), ic: oneIc(g('ric')) };
     }).filter(r => r.url);
   }
   if (it.type === 'check' || it.type === 'buy'){
@@ -740,11 +797,12 @@ document.addEventListener('click', e => {
     case 'opensk': { const f = b.closest('form'); if (f) readForm(f, p, it); ui.editing = null; save(p); openSketch(p.id, it.id); break; }
     case 'mdtick': e.preventDefault(); it.md = WebAppsMD.toggleTask(it.md || '', [...b.closest('.md').querySelectorAll('input[type=checkbox]')].indexOf(b)); save(p); render(); break;
     case 'group': { const f = b.closest('form'); if (f && !readForm(f, p, it)) return; sheetGroup(p, it); break; }
+    case 'icpick': { const i = b.closest('form').elements.ic; if (i){ i.value = b.dataset.v; i.focus(); } break; }
     case 'rup': { const r = b.closest('.erow'), pr = r.previousElementSibling; if (pr) r.parentNode.insertBefore(r, pr); break; }
     case 'rout': {
       const f = b.closest('form'), row = b.closest('.erow'), g = n => row.querySelector(`[name=${n}]`).value.trim();
       if (!g('ru')){ row.remove(); break; }
-      const solo = { id: uid(), type: 'link', url: safeUrl(g('ru')), title: g('rt'), note: g('rn'), tags: [...it.tags] };
+      const solo = { id: uid(), type: 'link', url: safeUrl(g('ru')), title: g('rt'), ic: oneIc(g('ric')), note: g('rn'), tags: [...it.tags] };
       row.remove(); readForm(f, p, it); p.items.splice(p.items.indexOf(it) + 1, 0, solo); save(p); render(); toast('Sorti du groupe : c\'est de nouveau un lien seul.'); break;
     }
     case 'ecancel': ui.editing = null; render(); break;
@@ -851,7 +909,7 @@ function sheetGroup(p, it){
     <div class="pick">${groups.map(g => `<button class="btn" data-a="g" data-id="${g.id}">🔖 ${esc(itemTitle(g))} <small class="muted">· ${g.rows.length} lien(s)</small></button>`).join('')}
     <button class="btn" data-a="new">＋ Nouveau groupe</button></div>
     <div id="gNew" hidden style="margin-top:10px"><input type="text" id="gName" placeholder="Nom du groupe (datasheets, tutos…)" autocomplete="off"><div class="btns"><button class="btn primary" data-a="mk">Créer</button></div></div>`, (a, b) => {
-    const row = { id: uid(), t: it.title || '', url: it.url, n: it.note || '' };
+    const row = { id: uid(), t: it.title || '', url: it.url, n: it.note || '', ic: it.ic || '' };
     if (a === 'new'){ $('#gNew').hidden = false; $('#gName').focus(); return; }
     let g;
     if (a === 'g') g = p.items.find(x => x.id === b.dataset.id);
@@ -1004,7 +1062,7 @@ function projectMD(p, refs, docs){
     const t = itemTitle(it);
     switch (it.type){
       case 'link': bullet(`- 🔗 ${it.url ? lk(t, it.url) : t}${tg(it)}${nt(it)}`); break;
-      case 'links': bullet(`- 🔖 **${t}**${tg(it)}${nt(it)}${it.rows.map(r => `\n  - ${lk(r.t || host(r.url), r.url)}${r.n ? ' — ' + r.n : ''}`).join('')}`); break;
+      case 'links': bullet(`- ${it.ic || '🔖'} **${t}**${tg(it)}${nt(it)}${it.rows.map(r => `\n  - ${lk(r.t || host(r.url), r.url)}${r.n ? ' — ' + r.n : ''}`).join('')}`); break;
       case 'sketch': {
         const sv = WebAppsSketch.svg(it.sk, { ink: '#1d1b2e', bg: '#ffffff', pad: 16 });
         block(`## ✏️ ${t}${tg(it)}\n\n${sv ? `![${t.replace(/[[\]]/g, '')}](data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(sv)))})` : '*(croquis vide)*'}`); break; }

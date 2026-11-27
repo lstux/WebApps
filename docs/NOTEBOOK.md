@@ -9,6 +9,13 @@ Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main. Li
 - **+ Projet** : nom, emoji, couleur. ✎ dans un projet : renommer, changer l'emoji ou la couleur, **épingler** en tête, **archiver** (rangé dans « 🗄 Archives » en bas de l'accueil), supprimer.
 - L'adresse suit le projet ouvert (`#p/<id>`) : le bouton retour du téléphone ramène à l'accueil.
 
+### Icône des liens
+
+- Chaque lien (et chaque ligne d'un groupe) a un **emoji** : 🔗 par défaut, au choix dans le formulaire (✎) : une vingtaine de propositions, ou n'importe quel emoji tapé avec le clavier du téléphone. Un groupe a le sien (🔖 par défaut).
+- Quand la **favicon du site** peut être récupérée, elle remplace l'emoji ; sinon l'emoji reste (site sans icône, hors ligne…). L'emoji choisi est donc toujours là en repli.
+- Récupération : d'abord l'icône du site lui-même (`/favicon.ico`), puis, si elle n'existe pas, DuckDuckGo (`icons.duckduckgo.com`, qui reçoit alors le nom du site). Aucun cookie ni adresse complète n'est envoyé (pas de référent).
+- Le résultat est retenu sur l'appareil (`notebook-fav`, non synchronisé) pour ne pas redemander à chaque affichage ; un site sans icône n'est réessayé qu'au bout de 7 jours. L'emoji, lui, fait partie du projet et se synchronise.
+
 ### Où j'en suis
 
 - ✎ sur le projet (ou le cadre d'infos en haut du projet) : **description courte**, **statut** (💡 Idée, 🚧 En cours, ⏸ En pause, ✅ Terminé, ou aucun) et **prochaine étape** (une phrase : ce qu'il reste à faire tout de suite). Tous facultatifs.
@@ -25,8 +32,8 @@ Chaque élément tient sur une ligne : titre et résumé (avancement, prochaine 
 
 | Type | Contenu |
 |------|---------|
-| 🔗 Lien | adresse (`https://` ajouté si besoin), titre (le nom du site par défaut), note |
-| 🔖 Groupe de liens | un titre et plusieurs adresses (titre, adresse, note). Sous le groupe, coller une adresse l'ajoute, éventuellement précédée d'un titre (`Datasheet LD06 https://…`). ✎ : modifier, monter ↑, **sortir du groupe** ⇱ (redevient un 🔗 Lien seul), retirer. Depuis un 🔗 Lien : ✎ → « Mettre dans un groupe… » (un groupe du projet, ou un nouveau à sa place) |
+| 🔗 Lien | adresse (`https://` ajouté si besoin), titre (le nom du site par défaut), **emoji** (🔗 par défaut), note |
+| 🔖 Groupe de liens | un titre, un **emoji** (🔖 par défaut) et plusieurs adresses (emoji, titre, adresse, note). Sous le groupe, coller une adresse l'ajoute, éventuellement précédée d'un titre (`Datasheet LD06 https://…`). ✎ : modifier, monter ↑, **sortir du groupe** ⇱ (redevient un 🔗 Lien seul), retirer. Depuis un 🔗 Lien : ✎ → « Mettre dans un groupe… » (un groupe du projet, ou un nouveau à sa place) |
 | 🐙 Dépôt GitHub | `github.com/propriétaire/dépôt` : description, langage, étoiles, date du dernier push, PR et issues ouvertes. ↻ rafraîchit (API publique de GitHub, sans compte : environ 60 requêtes par heure, dépôts publics seulement ; les infos sont gardées avec l'élément) |
 | 📝 Note | titre et texte Markdown (même rendu que la Liseuse : marked + DOMPurify). ✎ ouvre l'**éditeur plein écran** (voir plus bas). Les cases `- [ ]` se cochent directement dans la note dépliée. Les notes longues sont repliées |
 | ✏️ Croquis | page blanche à dessiner à main levée (voir plus bas). Aperçu dans la note dépliée : le toucher rouvre le croquis |

@@ -65,6 +65,7 @@ Un plan de câblage sur plaque à pastilles (pas 2,54 mm), façon feuille à pet
 ### 📒 Notebook
 
 Un carnet de projets : pour chaque projet, ce qu'il faut garder sous la main.
+- Liens avec emoji au choix, remplacé par la favicon du site quand elle existe
 - Vue d'ensemble : statut (idée, en cours, en pause, terminé), description, prochaine étape, avancement et dernière activité sur chaque carte ; filtre par statut, tri par activité
 - Liens et groupes de liens, dépôts GitHub (description, activité, PR et issues), listes à cocher, listes d'achat avec totaux
 - Notes Markdown dans un éditeur plein écran, croquis à main levée (stylet, surligneur, gomme, zoom à deux doigts)
