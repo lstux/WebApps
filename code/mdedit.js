@@ -1,6 +1,6 @@
 /* mdedit.js — éditeur Markdown plein écran, partagé par les pages (Notebook, Liseuse). Mode texte brut pour le reste.
 
-     <script src="mdedit.js"></script>   (après common.js ; styles injectés ici, couleurs de common.css)
+     charger mdedit.js avec une balise script (après common.js ; styles injectés ici, couleurs de common.css)
 
    const ed = WebAppsMD.open({
      title: 'Titre',  titlePlaceholder: 'Titre de la note',   // champ titre (facultatif : title:null le masque)
